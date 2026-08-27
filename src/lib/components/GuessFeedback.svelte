@@ -1,19 +1,9 @@
 <script>
   /** Per-property feedback for one guess (spec §3). */
-  import { onMount } from 'svelte';
-  import { fetchSymbology, tokenizeManaCost, isManaCost } from '../api/symbology.js';
+  import { tokenizeManaCost, isManaCost } from '../api/symbology.js';
 
   export let entry; // { card, results }
-
-  let symbols = null;
-
-  onMount(async () => {
-    try {
-      symbols = await fetchSymbology();
-    } catch {
-      symbols = null; // fall back to ascii placeholders
-    }
-  });
+  export let symbols = null; // Scryfall symbol → svg_uri map (fetched & cached by the background loader)
 
   /** Render a value as symbol images when it is a pure mana cost. */
   function manaParts(value) {
@@ -46,7 +36,7 @@
             {#if symbols && manaParts(v)}
               <span class="val mana wrong">
                 {#each manaParts(v) as p (p.token)}
-                  <img class="mana-icon" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
+                  <img class="mana-img" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
                 {/each}
               </span>
             {:else}
@@ -113,10 +103,27 @@
     gap: 0.15rem;
     padding: 0.15rem 0.3rem;
   }
-  .mana-icon {
+  .mana-img {
     width: 1em;
     height: 1em;
     display: block;
+  }
+  /* Mana symbol <img>s ignore text-decoration, so strike wrong answers with an
+     overlay line spanning the row. */
+  .val.wrong.mana {
+    position: relative;
+    overflow: hidden;
+  }
+  .val.wrong.mana::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 0.1em;
+    background: var(--bad-fg);
+    transform: translateY(-50%);
+    pointer-events: none;
   }
   .line.partial .val.correct {
     background: var(--partial-bg);
