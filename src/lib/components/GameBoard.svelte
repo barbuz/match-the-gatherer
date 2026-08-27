@@ -37,25 +37,37 @@
     return () => unsubscribe?.();
   });
 
+  let loadStep = '';
+  const mark = (s) => {
+    loadStep = s;
+  };
+
   async function setup() {
     phase = 'loading';
     error = '';
     try {
+      mark('loading names');
       names = await ensureData();
+      mark('names loaded, picking target');
       targetName =
         mode === 'daily'
           ? pickDailyCardName(names)
           : names[Math.floor(Math.random() * names.length)];
       if (!targetName) throw new Error('no card names available');
+      mark(`fetching target: ${targetName}`);
       targetCard = await fetchCardByName(targetName);
       if (!targetCard) throw new Error(`target card not found: ${targetName}`);
+      mark('target fetched, starting game');
       game = createGame({ mode, dayKey, targetName, targetCard });
       unsubscribe?.();
       unsubscribe = game.subscribe((s) => (state = s));
+      mark('loading saved game…');
       await game.load();
+      mark('ready');
       phase = 'ready';
     } catch (e) {
       error = String(e?.message ?? e);
+      mark(`error: ${error}`);
       phase = 'error';
     }
   }
@@ -79,7 +91,7 @@
 
 <div class="game">
   {#if phase === 'loading'}
-    <p class="status">{$dataStatus.detail || 'Loading game…'}</p>
+    <p class="status">{$dataStatus.detail || loadStep || 'Loading game…'}</p>
   {:else if phase === 'error'}
     <p class="status error-msg">{error}</p>
   {:else}
