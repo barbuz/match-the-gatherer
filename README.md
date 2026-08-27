@@ -4,7 +4,7 @@ A Wordle-style daily guessing game for Magic: The Gathering cards, built as a
 Svelte Progressive Web App with no backend server. All data comes directly from
 the [Scryfall](https://scryfall.com) public API.
 
-See `match-the-gatherer-spec.md` for the full specification.
+[Try it live!](https://barbuz.github.io/match-the-gatherer)
 
 ## Gameplay
 
