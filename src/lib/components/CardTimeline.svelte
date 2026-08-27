@@ -24,7 +24,7 @@
   <div class="timeline" aria-label="Guessed cards ordered by release date">
     {#each groups as group}
       {#if group.key !== 'older'}
-        <div class="separator" title={group.key === 'same' ? `Target first released: ${targetReleasedAt}` : ''}>
+        <div class="separator">
           <span class="sep-label" class:left={group.key === 'same'}>{group.key === 'same' ? 'older ↑' : 'newer ↓'}</span>
         </div>
       {/if}
@@ -61,7 +61,7 @@
   .separator {
     align-self: stretch;
     border-left: 2px dashed var(--accent);
-    margin: 0 0.15rem;
+    margin: 0 0.9rem;
     position: relative;
     min-width: 2px;
   }
