@@ -144,13 +144,12 @@ export function compareCards(guess, target) {
     target.cmc
   );
 
-  results.push(
-    gDual === tDual
-      ? line('dualfaced', 'Dual-faced', 'correct', [gDual ? 'Yes' : 'No'], [], true)
-      : line('dualfaced', 'Dual-faced', 'wrong', [], [gDual ? 'Yes' : 'No'], true)
-  );
-
   if (gDual) {
+    results.push(
+      tDual
+        ? line('dualfaced', 'Dual-faced', 'correct', ['Yes'], [], true)
+        : line('dualfaced', 'Dual-faced', 'wrong', [], ['Yes'], true)
+    );
     if (tDual) {
       // Back-face properties re-checked against the target's back face (§3)
       compareFace(results, 'back:', 'Back face: ', gFaces[1], tFaces[1], null, null);
@@ -166,19 +165,6 @@ export function compareCards(guess, target) {
       );
     }
   }
-
-  const sameDate = guess.released_at === target.released_at;
-  results.push(
-    line(
-      'released',
-      'First released',
-      sameDate ? 'correct' : 'wrong',
-      sameDate ? [guess.released_at] : [],
-      sameDate ? [] : [guess.released_at],
-      true,
-      sameDate ? undefined : guess.released_at < target.released_at ? 'target is newer' : 'target is older'
-    )
-  );
 
   const gKw = guess.keywords ?? [];
   const tKw = target.keywords ?? [];

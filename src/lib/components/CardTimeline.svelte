@@ -23,19 +23,17 @@
 {#if guesses.length > 0}
   <div class="timeline" aria-label="Guessed cards ordered by release date">
     {#each groups as group}
-      {#if group.items.length > 0}
-        {#if group.key !== 'older'}
-          <div class="separator" title="Target first released: {targetReleasedAt}">
-            <span class="sep-label">{group.key === 'same' ? `target: ${targetReleasedAt}` : 'newer ➔'}</span>
-          </div>
-        {/if}
-        {#each group.items as entry (entry.card.name)}
-          <div class="cell">
-            <CardImage card={entry.card} />
-            <span class="date">{entry.card.released_at ?? ''}</span>
-          </div>
-        {/each}
+      {#if group.key !== 'older'}
+        <div class="separator" title="Target first released: {targetReleasedAt}">
+          <span class="sep-label">{group.key === 'same' ? `target: ${targetReleasedAt}` : 'newer ➔'}</span>
+        </div>
       {/if}
+      {#each group.items as entry (entry.card.name)}
+        <div class="cell">
+          <CardImage card={entry.card} />
+          <span class="date">{entry.card.released_at ?? ''}</span>
+        </div>
+      {/each}
     {/each}
   </div>
 {/if}

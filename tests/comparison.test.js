@@ -158,15 +158,7 @@ describe('compareCards — creature stats applicability', () => {
   });
 });
 
-describe('compareCards — release date and keywords', () => {
-  it('same release date is correct; otherwise wrong with direction note', () => {
-    const target = makeCard({ released_at: '2020-06-01' });
-    const older = compareCards(makeCard({ name: 'A', released_at: '2019-01-01' }), target);
-    expect(byKey(older, 'released')).toMatchObject({ status: 'wrong', note: 'target is newer' });
-    const same = compareCards(makeCard({ name: 'A', released_at: '2020-06-01' }), target);
-    expect(byKey(same, 'released').status).toBe('correct');
-  });
-
+describe('compareCards — keywords', () => {
   it('keywords compare partially when guess has keywords', () => {
     const guess = makeCard({ name: 'A', keywords: ['Flying', 'Cycling', 'Haste'] });
     const target = makeCard({ keywords: ['Flying', 'Cycling'] });
@@ -233,6 +225,11 @@ describe('compareCards — dual-faced cards', () => {
     expect(byKey(resultsMatch, 'dualfaced').status).toBe('correct');
     const resultsMismatch = compareCards(dfc, makeCard());
     expect(byKey(resultsMismatch, 'dualfaced')).toMatchObject({ status: 'wrong', wrong: ['Yes'] });
+  });
+
+  it('no dual-faced line when the guess is single-faced', () => {
+    expect(byKey(compareCards(makeCard(), makeCard()), 'dualfaced')).toBeUndefined();
+    expect(byKey(compareCards(makeCard(), dfc), 'dualfaced')).toBeUndefined();
   });
 
   it('back-face properties are compared for the back face', () => {
