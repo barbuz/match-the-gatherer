@@ -13,9 +13,8 @@ Wordle-style MTG daily guessing game (Svelte PWA, no backend). Spec: `match-the-
 - Scryfall exact-name search (`cards/search?q=!"name" prefer:oldest`) also matches
   **individual face names**, so `lib/api/scryfall.js` prefers a whole-card name
   match, then face-name match, then first result.
-- Oracle tags: `api.scryfall.com/bulk-data/oracle_tags` → `jsonl_download_uri` is
-  **JSONL gz** (one tag object per line, `taggings[].oracle_id`); inverted into
-  `Map<oracle_id, label[]>` via `DecompressionStream` (pako fallback).
+- Keywords come straight from the card object (`card.keywords`) — no otag bulk
+  download (removed).
 - `catalog/card-names` needs `A-` prefix filtering (Alchemy-only cards).
 - Daily pick: FNV-1a(UTC 'YYYY-MM-DD') % names.length → deterministic worldwide.
 - Scryfall rejects browser-less fetches without a User-Agent (Node returns 400);

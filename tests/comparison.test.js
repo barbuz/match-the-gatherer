@@ -158,30 +158,40 @@ describe('compareCards — creature stats applicability', () => {
   });
 });
 
-describe('compareCards — release date and otags', () => {
+describe('compareCards — release date and keywords', () => {
   it('same release date is correct; otherwise wrong with direction note', () => {
     const target = makeCard({ released_at: '2020-06-01' });
-    const older = compareCards(makeCard({ name: 'A', oracle_id: 'g1', released_at: '2019-01-01' }), target);
+    const older = compareCards(makeCard({ name: 'A', released_at: '2019-01-01' }), target);
     expect(byKey(older, 'released')).toMatchObject({ status: 'wrong', note: 'target is newer' });
-    const same = compareCards(makeCard({ name: 'A', oracle_id: 'g1', released_at: '2020-06-01' }), target);
+    const same = compareCards(makeCard({ name: 'A', released_at: '2020-06-01' }), target);
     expect(byKey(same, 'released').status).toBe('correct');
   });
 
-  it('otags compare partially and stay applicable when guess has tags', () => {
-    const otags = new Map([
-      ['g1', ['burn', 'removal', 'draw']],
-      ['oracle-1', ['burn', 'removal']],
-    ]);
-    const results = compareCards(makeCard({ name: 'A', oracle_id: 'g1' }), makeCard(), otags);
-    const line = byKey(results, 'otags');
+  it('keywords compare partially when guess has keywords', () => {
+    const guess = makeCard({ name: 'A', keywords: ['Flying', 'Cycling', 'Haste'] });
+    const target = makeCard({ keywords: ['Flying', 'Cycling'] });
+    const results = compareCards(guess, target);
+    const line = byKey(results, 'keywords');
     expect(line).toMatchObject({ status: 'partial', applicable: true });
-    expect(line.correct).toEqual(['burn', 'removal']);
-    expect(line.wrong).toEqual(['draw']);
+    expect(line.correct).toEqual(['Flying', 'Cycling']);
+    expect(line.wrong).toEqual(['Haste']);
   });
 
-  it('otag line is not applicable when the guess has no tags', () => {
-    const results = compareCards(makeCard({ name: 'A', oracle_id: 'g1' }), makeCard(), new Map());
-    expect(byKey(results, 'otags').applicable).toBe(false);
+  it('keywords line is not applicable when the guess has no keywords', () => {
+    const results = compareCards(makeCard({ name: 'A', keywords: [] }), makeCard({ keywords: ['Flying'] }));
+    expect(byKey(results, 'keywords').applicable).toBe(false);
+  });
+
+  it('both-empty set properties come back correct with the placeholder', () => {
+    const guess = makeCard({ colors: [], type_line: 'Creature', keywords: [] });
+    const target = makeCard({ colors: [], type_line: 'Creature', keywords: [] });
+    const results = compareCards(guess, target);
+    for (const key of ['colors', 'supertypes', 'subtypes', 'keywords']) {
+      const l = byKey(results, key);
+      expect(l.status).toBe('correct');
+      expect(l.correct).toEqual(['—']);
+      expect(l.wrong).toEqual([]);
+    }
   });
 });
 

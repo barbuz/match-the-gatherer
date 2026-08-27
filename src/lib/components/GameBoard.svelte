@@ -23,7 +23,6 @@
   let targetName = '';
   let targetCard = null;
   let names = [];
-  let otags = new Map();
   let game = null;
   let state = { guesses: [], status: 'playing', loaded: false };
   let submitError = '';
@@ -44,7 +43,6 @@
     try {
       const data = await ensureData();
       names = data.names;
-      otags = data.otags;
       targetName =
         mode === 'daily'
           ? pickDailyCardName(names)
@@ -72,7 +70,7 @@
         submitError = `Couldn't find "${name}" on Scryfall.`;
         return;
       }
-      const results = compareCards(card, targetCard, otags);
+      const results = compareCards(card, targetCard);
       game.addGuess({ card, results });
     } catch (err) {
       submitError = `Lookup failed: ${err?.message ?? err}`;

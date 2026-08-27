@@ -1,11 +1,12 @@
 /**
  * Per-property comparison rules (spec §3).
  *
- * compareCards(guess, target, otags) returns an array of result lines:
+ * compareCards(guess, target) returns an array of result lines:
  *   { key, label, status, correct, wrong, applicable, note? }
  * - status: 'correct' | 'partial' | 'wrong'
  * - correct: guessed values that match the target (shown highlighted)
- * - wrong: guessed values that don't match (shown marked wrong)
+ * - wrong: guessed values that don't match the target (shown marked wrong)
+ * - empty properties on both cards report a '—' marker as correct
  * - applicable: whether the property exists on the GUESSED card, so the
  *   share-score denominator never leaks information about the target (§11)
  */
@@ -71,6 +72,10 @@ function line(key, label, status, correct, wrong, applicable, note) {
 }
 
 function setLine(key, label, guessVals, targetVals) {
+  // Both empty: the placeholder '—' renders as a correct (green) value.
+  if (guessVals.length === 0 && targetVals.length === 0) {
+    return line(key, label, 'correct', ['—'], [], true);
+  }
   const targetSet = new Set(targetVals);
   const correct = guessVals.filter((v) => targetSet.has(v));
   const wrong = guessVals.filter((v) => !targetSet.has(v));
@@ -120,9 +125,8 @@ function compareFace(results, keyPrefix, labelPrefix, guessFace, targetFace, gue
  * Compare a guessed card against the target card.
  * @param {object} guess  Scryfall card object
  * @param {object} target Scryfall card object
- * @param {Map<string, string[]>} otags oracle_id -> tag labels (optional)
  */
-export function compareCards(guess, target, otags = new Map()) {
+export function compareCards(guess, target) {
   const results = [];
   const gFaces = getFaces(guess);
   const tFaces = getFaces(target);
@@ -176,11 +180,11 @@ export function compareCards(guess, target, otags = new Map()) {
     )
   );
 
-  const gTags = otags.get(guess.oracle_id) ?? [];
-  const tTags = otags.get(target.oracle_id) ?? [];
-  const tagLine = setLine('otags', 'Oracle tags', gTags, tTags);
-  tagLine.applicable = gTags.length > 0;
-  results.push(tagLine);
+  const gKw = guess.keywords ?? [];
+  const tKw = target.keywords ?? [];
+  const kwLine = setLine('keywords', 'Keywords', gKw, tKw);
+  kwLine.applicable = gKw.length > 0;
+  results.push(kwLine);
 
   return results;
 }

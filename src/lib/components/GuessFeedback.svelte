@@ -16,9 +16,6 @@
           {#each r.wrong as v}
             <span class="val wrong">{v}</span>
           {/each}
-          {#if r.correct.length === 0 && r.wrong.length === 0}
-            <span class="val empty">—</span>
-          {/if}
         </span>
         {#if r.note}
           <span class="note">{r.note}</span>
@@ -72,9 +69,6 @@
     background: var(--bad-bg);
     color: var(--bad-fg);
     text-decoration: line-through;
-  }
-  .val.empty {
-    color: var(--muted);
   }
   .line.partial .val.correct {
     background: var(--partial-bg);
