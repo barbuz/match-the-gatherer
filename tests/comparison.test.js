@@ -158,7 +158,15 @@ describe('compareCards — creature stats applicability', () => {
   });
 });
 
-describe('compareCards — keywords', () => {
+describe('compareCards — release date and keywords', () => {
+  it('same release date is correct; otherwise wrong with direction note', () => {
+    const target = makeCard({ released_at: '2020-06-01' });
+    const older = compareCards(makeCard({ name: 'A', released_at: '2019-01-01' }), target);
+    expect(byKey(older, 'released')).toMatchObject({ status: 'wrong', note: 'target is newer' });
+    const same = compareCards(makeCard({ name: 'A', released_at: '2020-06-01' }), target);
+    expect(byKey(same, 'released').status).toBe('correct');
+  });
+
   it('keywords compare partially when guess has keywords', () => {
     const guess = makeCard({ name: 'A', keywords: ['Flying', 'Cycling', 'Haste'] });
     const target = makeCard({ keywords: ['Flying', 'Cycling'] });

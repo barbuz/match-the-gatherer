@@ -166,6 +166,19 @@ export function compareCards(guess, target) {
     }
   }
 
+  const sameDate = guess.released_at === target.released_at;
+  results.push(
+    line(
+      'released',
+      'First released',
+      sameDate ? 'correct' : 'wrong',
+      sameDate ? [guess.released_at] : [],
+      sameDate ? [] : [guess.released_at],
+      true,
+      sameDate ? undefined : guess.released_at < target.released_at ? 'target is newer' : 'target is older'
+    )
+  );
+
   const gKw = guess.keywords ?? [];
   const tKw = target.keywords ?? [];
   const kwLine = setLine('keywords', 'Keywords', gKw, tKw);
