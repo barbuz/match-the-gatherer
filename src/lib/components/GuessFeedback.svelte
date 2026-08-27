@@ -32,7 +32,7 @@
         <span class="prop-label">{r.label}</span>
         <span class="values">
           {#each r.correct as v}
-            {#if manaParts(v)}
+            {#if symbols && manaParts(v)}
               <span class="val mana correct">
                 {#each manaParts(v) as p (p.token)}
                   <img class="mana-icon" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
@@ -43,7 +43,7 @@
             {/if}
           {/each}
           {#each r.wrong as v}
-            {#if manaParts(v)}
+            {#if symbols && manaParts(v)}
               <span class="val mana wrong">
                 {#each manaParts(v) as p (p.token)}
                   <img class="mana-icon" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
