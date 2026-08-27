@@ -13,14 +13,6 @@
 
 const SUPERTYPES = new Set(['Basic', 'Legendary', 'Snow', 'World', 'Ongoing']);
 
-const DUAL_FACED_LAYOUTS = new Set([
-  'transform',
-  'modal_dfc',
-  'double_faced_token',
-  'reversible_card',
-  'prepare',
-]);
-
 export function parseTypeLine(typeLine = '') {
   const dash = typeLine.indexOf('—');
   const left = (dash === -1 ? typeLine : typeLine.slice(0, dash)).trim();
@@ -33,16 +25,9 @@ export function parseTypeLine(typeLine = '') {
   };
 }
 
-export function isDualFaced(card) {
-  return (
-    DUAL_FACED_LAYOUTS.has(card?.layout) &&
-    Array.isArray(card?.card_faces) &&
-    card.card_faces.length > 1
-  );
-}
-
-/** Normalized view of one face of a card (falls back to card-level fields). */
-function faceView(card, face) {
+/** Normalized view of a card's primary face (falls back to card-level fields). */
+function faceView(card) {
+  const face = Array.isArray(card?.card_faces) && card.card_faces.length > 0 ? card.card_faces[0] : card;
   const { supertypes, types, subtypes } = parseTypeLine(face.type_line ?? card.type_line ?? '');
   return {
     name: face.name ?? card.name ?? '',
@@ -56,11 +41,6 @@ function faceView(card, face) {
     loyalty: face.loyalty ?? card.loyalty,
     defense: face.defense ?? card.defense,
   };
-}
-
-export function getFaces(card) {
-  if (isDualFaced(card)) return card.card_faces.map((f) => faceView(card, f));
-  return [faceView(card, card)];
 }
 
 export function normalizeManaCost(cost = '') {
@@ -128,43 +108,18 @@ function compareFace(results, keyPrefix, labelPrefix, guessFace, targetFace, gue
  */
 export function compareCards(guess, target) {
   const results = [];
-  const gFaces = getFaces(guess);
-  const tFaces = getFaces(target);
-  const gDual = gFaces.length > 1;
-  const tDual = tFaces.length > 1;
-  const anyDual = gDual || tDual;
 
-  compareFace(
-    results,
-    anyDual ? 'front:' : '',
-    anyDual ? 'Front face: ' : '',
-    gFaces[0],
-    tFaces[0],
-    guess.cmc,
-    target.cmc
-  );
+  compareFace(results, '', '', faceView(guess), faceView(target), guess.cmc, target.cmc);
 
-  results.push(
-    gDual === tDual
-      ? line('dualfaced', 'Dual-faced', 'correct', [gDual ? 'Yes' : 'No'], [], true)
-      : line('dualfaced', 'Dual-faced', 'wrong', [], [gDual ? 'Yes' : 'No'], true)
-  );
-
-  if (gDual) {
-    if (tDual) {
-      // Back-face properties re-checked against the target's back face (§3)
-      compareFace(results, 'back:', 'Back face: ', gFaces[1], tFaces[1], null, null);
-    } else {
-      compareFace(
-        results,
-        'back:',
-        'Back face: ',
-        gFaces[1],
-        { manaCost: '', colors: [], supertypes: [], types: [], subtypes: [] },
-        null,
-        null
-      );
-    }
+  // Layout shown only when the guess is non-normal, never revealing a
+  // normal target's layout.
+  const gLayout = guess.layout ?? 'normal';
+  if (gLayout !== 'normal') {
+    results.push(
+      gLayout === (target.layout ?? 'normal')
+        ? line('layout', 'Layout', 'correct', [gLayout], [], true)
+        : line('layout', 'Layout', 'wrong', [], [gLayout], true)
+    );
   }
 
   const sameDate = guess.released_at === target.released_at;

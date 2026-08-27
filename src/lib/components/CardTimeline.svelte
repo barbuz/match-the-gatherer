@@ -23,19 +23,17 @@
 {#if guesses.length > 0}
   <div class="timeline" aria-label="Guessed cards ordered by release date">
     {#each groups as group}
-      {#if group.items.length > 0}
-        {#if group.key !== 'older'}
-          <div class="separator" title="Target first released: {targetReleasedAt}">
-            <span class="sep-label">{group.key === 'same' ? `target: ${targetReleasedAt}` : 'newer ➔'}</span>
-          </div>
-        {/if}
-        {#each group.items as entry (entry.card.name)}
-          <div class="cell">
-            <CardImage card={entry.card} />
-            <span class="date">{entry.card.released_at ?? ''}</span>
-          </div>
-        {/each}
+      {#if group.key !== 'older'}
+        <div class="separator">
+          <span class="sep-label" class:left={group.key === 'same'}>{group.key === 'same' ? 'older ↑' : 'newer ↓'}</span>
+        </div>
       {/if}
+      {#each group.items as entry (entry.card.name)}
+        <div class="cell">
+          <CardImage card={entry.card} />
+          <span class="date">{entry.card.released_at ?? ''}</span>
+        </div>
+      {/each}
     {/each}
   </div>
 {/if}
@@ -63,7 +61,7 @@
   .separator {
     align-self: stretch;
     border-left: 2px dashed var(--accent);
-    margin: 0 0.15rem;
+    margin: 0 0.9rem;
     position: relative;
     min-width: 2px;
   }
@@ -77,5 +75,9 @@
     writing-mode: vertical-rl;
     transform: rotate(180deg);
     height: 100%;
+  }
+  .sep-label.left {
+    left: auto;
+    right: 0.3rem;
   }
 </style>

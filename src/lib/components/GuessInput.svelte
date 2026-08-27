@@ -10,9 +10,10 @@
   const dispatch = createEventDispatcher();
   let query = '';
   let highlighted = 0;
+  let listEl;
 
   $: excluded = new Set(exclude.map((n) => n.toLowerCase()));
-  $: matches = rank(names, query, excluded).slice(0, 8);
+  $: matches = rank(names, query, excluded).slice(0, 50);
   $: if (highlighted >= matches.length) highlighted = 0;
 
   function rank(names, query, excluded) {
@@ -46,14 +47,24 @@
     dispatch('select', name);
   }
 
+  function scrollHighlightedIntoView() {
+    requestAnimationFrame(() => {
+      listEl
+        ?.querySelector('button.highlighted')
+        ?.scrollIntoView({ block: 'nearest' });
+    });
+  }
+
   function onKeydown(e) {
     if (disabled) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       highlighted = Math.min(highlighted + 1, matches.length - 1);
+      scrollHighlightedIntoView();
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       highlighted = Math.max(highlighted - 1, 0);
+      scrollHighlightedIntoView();
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (matches.length > 0) select(matches[highlighted]);
@@ -72,7 +83,7 @@
     spellcheck="false"
   />
   {#if query.trim() && !disabled}
-    <ul class="matches">
+    <ul class="matches" bind:this={listEl}>
       {#each matches as name, i (name)}
         <li>
           <button class:highlighted={i === highlighted} on:click={() => select(name)}>{name}</button>
@@ -113,6 +124,8 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
+    overflow-y: auto;
+    max-height: 16rem;
     z-index: 10;
   }
   .matches li button {

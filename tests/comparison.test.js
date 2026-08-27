@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   parseTypeLine,
   normalizeManaCost,
-  isDualFaced,
-  getFaces,
   compareCards,
 } from '../src/lib/game/comparison.js';
 
@@ -195,15 +193,7 @@ describe('compareCards — release date and keywords', () => {
   });
 });
 
-describe('compareCards — dual-faced cards', () => {
-  const backFace = {
-    name: 'Beast Side',
-    mana_cost: '',
-    colors: ['G'],
-    type_line: 'Creature — Beast',
-    power: '4',
-    toughness: '4',
-  };
+describe('compareCards — layout', () => {
   const frontFace = {
     name: 'Human Side',
     mana_cost: '{1}{G}',
@@ -211,6 +201,14 @@ describe('compareCards — dual-faced cards', () => {
     type_line: 'Creature — Human',
     power: '2',
     toughness: '2',
+  };
+  const backFace = {
+    name: 'Beast Side',
+    mana_cost: '',
+    colors: ['G'],
+    type_line: 'Creature — Beast',
+    power: '4',
+    toughness: '4',
   };
   const dfc = makeCard({
     name: 'Human Side // Beast Side',
@@ -222,35 +220,29 @@ describe('compareCards — dual-faced cards', () => {
     toughness: undefined,
   });
 
-  it('detects dual-faced layouts', () => {
-    expect(isDualFaced(dfc)).toBe(true);
-    expect(isDualFaced(makeCard())).toBe(false);
-    expect(getFaces(dfc)).toHaveLength(2);
+  it('matching layout is correct; mismatch is wrong', () => {
+    expect(byKey(compareCards(dfc, dfc), 'layout')).toMatchObject({ status: 'correct', correct: ['transform'] });
+    const split = makeCard({ layout: 'split' });
+    const splitVsNormal = compareCards(split, makeCard());
+    expect(byKey(splitVsNormal, 'layout')).toMatchObject({ status: 'wrong', wrong: ['split'] });
   });
 
-  it('matching dual-faced status is correct; mismatch is wrong', () => {
-    const resultsMatch = compareCards(dfc, dfc);
-    expect(byKey(resultsMatch, 'dualfaced').status).toBe('correct');
-    const resultsMismatch = compareCards(dfc, makeCard());
-    expect(byKey(resultsMismatch, 'dualfaced')).toMatchObject({ status: 'wrong', wrong: ['Yes'] });
+  it('no layout line when the guess is normal', () => {
+    expect(byKey(compareCards(makeCard(), makeCard()), 'layout')).toBeUndefined();
+    expect(byKey(compareCards(makeCard(), dfc), 'layout')).toBeUndefined();
   });
 
-  it('back-face properties are compared for the back face', () => {
+  it('only the primary face is compared, ignoring the back face', () => {
     const other = makeCard({
       name: 'Other // Beast Side',
       layout: 'transform',
-      card_faces: [
-        { ...frontFace, name: 'Other' },
-        { ...backFace },
-      ],
+      card_faces: [{ ...frontFace, name: 'Other' }, backFace],
+      power: undefined,
+      toughness: undefined,
     });
     const results = compareCards(dfc, other);
-    expect(byKey(results, 'back:power').status).toBe('correct');
-    expect(byKey(results, 'back:subtypes').status).toBe('correct');
-  });
-
-  it('dual guess vs single target shows back-face lines as wrong', () => {
-    const results = compareCards(dfc, makeCard());
-    expect(byKey(results, 'back:types').status).toBe('wrong');
+    expect(results.some((r) => r.key.startsWith('front:') || r.key.startsWith('back:'))).toBe(false);
+    expect(byKey(results, 'power')).toMatchObject({ status: 'correct', correct: ['2'] });
+    expect(byKey(results, 'subtypes')).toMatchObject({ status: 'correct' });
   });
 });
