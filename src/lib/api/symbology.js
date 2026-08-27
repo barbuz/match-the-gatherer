@@ -2,74 +2,84 @@
  * Scryfall symbol → SVG mapping, used to render mana costs as images
  * instead of their ascii placeholders (e.g. "{2}{R}").
  *
- * The symbology list is fetched exactly once (concurrently with the card-name
- * catalog in the background loader) and persisted to storage, so it remains
- * usable on later visits even when the network fetch fails. Consumers get the
- * map from the in-flight promise / module cache.
+ * On page load we `fetchSymbols()` once (async, fire-and-forget): the map is
+ * saved as a JSON object in localStorage and mirrored in a reactive store, so
+ * `manaParts()` can resolve it synchronously for the rest of the session.
+ * If the map isn't loaded yet, `manaParts()` returns nothing and the ascii
+ * placeholder is shown until the download completes.
  */
-import { dbGet, dbSet } from '../storage/db.js';
+import { writable } from 'svelte/store';
 
 const SYMBOLOGY_URL = 'https://api.scryfall.com/symbology';
 const SYMBOLS_KEY = 'mtg:card-symbols';
 
-let cache = null;
-let inFlight = null;
+/**
+ * Reactive symbol map (symbol → svg_uri). Keeping it in a store lets the UI
+ * re-render as soon as the download lands. Read via `$symbols`.
+ */
+export const symbols = writable(null);
+
+let map = null; // module mirror, also read synchronously by manaParts()
 
 /** Build a Map from the raw symbology JSON array. */
 function buildMap(data) {
-  const map = new Map();
+  const m = new Map();
   for (const s of data ?? []) {
-    if (s?.symbol && s?.svg_uri) map.set(s.symbol, s.svg_uri);
+    if (s?.symbol && s?.svg_uri) m.set(s.symbol, s.svg_uri);
   }
-  return map;
+  return m;
 }
 
-/** Load the persisted symbol map, or null when none has been saved. */
-export async function getCachedSymbols() {
-  const record = await dbGet(SYMBOLS_KEY);
-  if (record?.symbols) {
-    try {
-      return new Map(Object.entries(record.symbols));
-    } catch {
-      return null;
-    }
+function publishSymbols(next) {
+  map = next;
+  symbols.set(next);
+  try {
+    localStorage.setItem(SYMBOLS_KEY, JSON.stringify(next ? Object.fromEntries(next) : {}));
+  } catch {
+    /* storage unavailable — map stays valid for this session */
+  }
+}
+
+/** Load the stored map synchronously from localStorage, if present. */
+function readStoredSymbols() {
+  try {
+    const raw = localStorage.getItem(SYMBOLS_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (obj && typeof obj === 'object') return new Map(Object.entries(obj));
+  } catch {
+    /* malformed storage — treat as missing */
   }
   return null;
 }
 
-/** Persist a symbol map to storage (idb-keyval can't store a Map directly). */
-export function cacheSymbols(map) {
-  return dbSet(SYMBOLS_KEY, {
-    fetchedAt: new Date().toISOString(),
-    symbols: Object.fromEntries(map),
-  });
+/** Assemble the best map currently available (module mirror, else storage). */
+export function getSymbolMap() {
+  if (!map) {
+    const stored = readStoredSymbols();
+    if (stored?.size) {
+      map = stored;
+      symbols.set(map);
+    }
+  }
+  return map;
 }
 
 /**
- * Resolve the symbol map exactly once, sharing the in-flight request across
- * callers. On failure, falls back to the persisted copy so symbols stay
- * available offline/after a failed fetch.
+ * Fetch the symbology list once and persist the map. Fire-and-forget: any
+ * failure keeps the previous map (or none) and is never fatal.
  */
-export function fetchSymbology() {
-  if (cache) return cache;
-  if (inFlight) return inFlight;
-  inFlight = (async () => {
-    const res = await fetch(SYMBOLOGY_URL);
-    if (!res.ok) throw new Error(`symbology fetch failed: HTTP ${res.status}`);
-    const map = buildMap((await res.json()).data);
-    cache = map;
-    await cacheSymbols(map);
-    return cache;
-  })().catch(async (err) => {
-    inFlight = null; // allow retry after a real failure
-    const persisted = await getCachedSymbols();
-    if (persisted?.size) {
-      cache = persisted;
-      return cache;
-    }
-    throw err;
-  });
-  return inFlight;
+export function fetchSymbols() {
+  return fetch(SYMBOLOGY_URL)
+    .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+    .then((json) => {
+      const next = buildMap(json?.data);
+      if (next.size) publishSymbols(next);
+    })
+    .catch(() => {
+      // keep whatever we already had (module map or storage)
+      getSymbolMap();
+    });
 }
 
 /** Split a mana cost like "{2}{R/G}" into its "{…}" symbol tokens. */
@@ -82,3 +92,20 @@ export function isManaCost(cost = '') {
   const tokens = tokenizeManaCost(cost);
   return tokens.length > 0 && tokens.join('') === cost.trim();
 }
+
+/**
+ * Render a value as a list of { token, uri } image parts when it is a pure
+ * mana cost. Returns null when the value isn't mana or the symbol map isn't
+ * loaded yet, in which case callers fall back to the ascii placeholder.
+ */
+export function manaParts(value) {
+  const current = getSymbolMap();
+  if (!current || !isManaCost(value)) return null;
+  return tokenizeManaCost(value)
+    .map((t) => ({ token: t, uri: current.get(t) }))
+    .filter((p) => p.uri);
+}
+
+// Kick off the one-time download on page load. Fire-and-forget: the map is
+// published to `$symbols` whenever it lands, updating any visible feedback.
+fetchSymbols();

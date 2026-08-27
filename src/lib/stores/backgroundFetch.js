@@ -6,7 +6,6 @@
  */
 import { writable } from 'svelte/store';
 import { fetchCardNames } from '../api/cardNames.js';
-import { fetchSymbology, getCachedSymbols } from '../api/symbology.js';
 import { getCachedNames, setCachedNames } from '../storage/dataCache.js';
 
 export const dataStatus = writable({ phase: 'idle', detail: '' });
@@ -25,27 +24,13 @@ async function loadNames() {
   }
 }
 
-/**
- * Load the symbol map. Unlike names, symbols are optional — a failure here
- * falls back to the persisted copy (or ascii placeholders), never blocking
- * the game from starting.
- */
-async function loadSymbols() {
-  try {
-    return await fetchSymbology();
-  } catch (err) {
-    const persisted = await getCachedSymbols();
-    return persisted?.size ? persisted : null;
-  }
-}
-
 export function ensureData() {
   if (inFlight) return inFlight;
   inFlight = (async () => {
     dataStatus.set({ phase: 'loading', detail: 'Loading card data…' });
-    const [names, symbols] = await Promise.all([loadNames(), loadSymbols()]);
+    const names = await loadNames();
     dataStatus.set({ phase: 'ready', detail: '' });
-    return { names, symbols };
+    return names;
   })().catch((err) => {
     inFlight = null; // allow retry after a real failure
     dataStatus.set({ phase: 'error', detail: String(err?.message ?? err) });

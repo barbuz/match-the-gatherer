@@ -23,7 +23,6 @@
   let targetName = '';
   let targetCard = null;
   let names = [];
-  let symbols = null;
   let game = null;
   let state = { guesses: [], status: 'playing', loaded: false };
   let submitError = '';
@@ -42,9 +41,7 @@
     phase = 'loading';
     error = '';
     try {
-      const data = await ensureData();
-      names = data.names;
-      symbols = data.symbols ?? null;
+      names = await ensureData();
       targetName =
         mode === 'daily'
           ? pickDailyCardName(names)
@@ -121,7 +118,7 @@
 
     <div class="feedback-list">
       {#each [...state.guesses].reverse() as entry (entry.card.name)}
-        <GuessFeedback {entry} {symbols} />
+        <GuessFeedback {entry} />
       {/each}
     </div>
   {/if}

@@ -1,17 +1,11 @@
 <script>
   /** Per-property feedback for one guess (spec §3). */
-  import { tokenizeManaCost, isManaCost } from '../api/symbology.js';
+  import { manaParts, symbols } from '../api/symbology.js';
 
   export let entry; // { card, results }
-  export let symbols = null; // Scryfall symbol → svg_uri map (fetched & cached by the background loader)
 
-  /** Render a value as symbol images when it is a pure mana cost. */
-  function manaParts(value) {
-    if (!symbols || !isManaCost(value)) return null;
-    return tokenizeManaCost(value)
-      .map((t) => ({ token: t, uri: symbols.get(t) }))
-      .filter((p) => p.uri);
-  }
+  // `$symbols` is just a reactivity anchor — when the map finishes downloading
+  // the store updates and any already-rendered mana rows re-render as images.
 </script>
 
 <div class="guess-feedback">
@@ -22,7 +16,7 @@
         <span class="prop-label">{r.label}</span>
         <span class="values">
           {#each r.correct as v}
-            {#if symbols && manaParts(v)}
+            {#if $symbols && manaParts(v)}
               <span class="val mana correct">
                 {#each manaParts(v) as p (p.token)}
                   <img class="mana-icon" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
@@ -33,7 +27,7 @@
             {/if}
           {/each}
           {#each r.wrong as v}
-            {#if symbols && manaParts(v)}
+            {#if $symbols && manaParts(v)}
               <span class="val mana wrong">
                 {#each manaParts(v) as p (p.token)}
                   <img class="mana-img" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
