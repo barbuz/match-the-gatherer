@@ -2,17 +2,6 @@ import { writable } from 'svelte/store';
 import { dbGet, dbSet } from '../storage/db.js';
 import { recordDailyResult } from '../storage/statsStore.js';
 
-/** Fall back if a storage read never settles (e.g. blocked sandboxed IndexedDB). */
-function withTimeout(promise, ms) {
-  return new Promise((resolve) => {
-    const t = setTimeout(() => resolve(null), ms);
-    promise.then((v) => {
-      clearTimeout(t);
-      resolve(v);
-    });
-  });
-}
-
 export const MAX_GUESSES = 10;
 
 /**
@@ -38,18 +27,28 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
   return {
     subscribe,
 
-    /** Load any persisted in-progress daily game. Resolves once loading finished. */
+    /**
+     * Load any persisted in-progress daily game. The board is made playable
+     * immediately and never waits on storage: if the IndexedDB read is slow or
+     * never settles (e.g. a sandboxed/background iframe throttles its timers),
+     * the game still starts and simply begins fresh. If a saved game does come
+     * back, it's applied soon after.
+     */
     async load() {
       if (!storageKey) return;
-      // Bound the read: a blocked/never-settling IndexedDB request (e.g. a
-      // sandboxed iframe) must not leave the board stuck — fall back to a
-      // fresh game rather than hang forever.
-      const saved = await withTimeout(dbGet(storageKey), 3000);
-      if (saved && saved.targetName === targetName && Array.isArray(saved.guesses)) {
-        set({ targetName, guesses: saved.guesses, status: saved.status ?? 'playing', loaded: true });
-      } else {
-        update((s) => ({ ...s, loaded: true }));
-      }
+      // The board must never wait on storage: mark playable immediately and
+      // let a saved game hydrate in the background if/when it comes back.
+      update((s) => ({ ...s, loaded: true }));
+      dbGet(storageKey).then((saved) => {
+        if (saved && saved.targetName === targetName && Array.isArray(saved.guesses)) {
+          update(() => ({
+            targetName,
+            guesses: saved.guesses,
+            status: saved.status ?? 'playing',
+            loaded: true,
+          }));
+        }
+      });
     },
 
     /**
