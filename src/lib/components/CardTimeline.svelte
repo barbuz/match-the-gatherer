@@ -25,9 +25,7 @@
     {#each groups as group}
       {#if group.key !== 'older'}
         <div class="separator" title="Target first released: {targetReleasedAt}">
-          {#if group.key !== 'same'}
-            <span class="sep-label">newer ➔</span>
-          {/if}
+          <span class="sep-label">{group.key === 'same' ? '⬅ older' : 'newer ➔'}</span>
         </div>
       {/if}
       {#each group.items as entry (entry.card.name)}
