@@ -66,21 +66,6 @@ export function getSymbolMap() {
 }
 
 /**
- * Reload the map from storage, bypassing the module-mirror memo. Used when a
- * fresh fetch failed so a previously persisted map can take over — `symbols.set`
- * always notifies subscribers, so the UI re-renders even when the data is
- * unchanged.
- */
-export function reloadSymbolMap() {
-  const list = readStoredSymbols();
-  if (list?.size) {
-    map = list;
-    symbols.set(list);
-  }
-  return map;
-}
-
-/**
  * Fetch the symbology list once and persist the map. Fire-and-forget: any
  * failure keeps the previous map (or none) and is never fatal.
  */
@@ -92,8 +77,10 @@ export function fetchSymbols() {
       if (next.size) publishSymbols(next);
     })
     .catch(() => {
-      // keep whatever we already had (module map or storage)
-      reloadSymbolMap();
+      // Cold start / offline: hydrate the mirror from the persisted cache.
+      // No-op once the module mirror is populated, which is all we need —
+      // a failed fetch has nothing newer to refresh *from*.
+      getSymbolMap();
     });
 }
 

@@ -27,24 +27,27 @@ describe('symbology', () => {
     expect(mod.getSymbolMap()).toBeNull();
   });
 
-  it('reloadSymbolMap bypasses the memo and picks up a newly stored map', async () => {
-    // Seed storage, then trigger the memoized read path.
+  it('a failed fetch on cold start hydrates from the persisted cache', async () => {
+    // Simulate offline: reject the fetch. There's a stored map from a
+    // previous session and no in-memory mirror yet.
+    localStorage.setItem('mtg:card-symbols', JSON.stringify({ '{R}': 'https://img/r.svg' }));
+    global.fetch = () => Promise.reject(new Error('offline'));
+
+    await mod.fetchSymbols();
+    expect(mod.manaParts('{R}')).toEqual([{ token: '{R}', uri: 'https://img/r.svg' }]);
+  });
+
+  it('a failed fetch does not clobber an already-populated map', async () => {
+    // After the mirror is populated, a failed fetch must keep the working
+    // in-memory map even if storage has since changed or been cleared.
     localStorage.setItem('mtg:card-symbols', JSON.stringify({ '{R}': 'https://img/r.svg' }));
     mod.getSymbolMap();
     expect(mod.manaParts('{R}')).toEqual([{ token: '{R}', uri: 'https://img/r.svg' }]);
+    global.fetch = () => Promise.reject(new Error('offline'));
+    delete localStorage['mtg:card-symbols'];
 
-    // Now storage changes (e.g. a later session persisted more data). The
-    // memoized getSymbolMap still returns the stale in-memory map…
-    localStorage.setItem('mtg:card-symbols', JSON.stringify({ '{R}': 'https://img/r.svg', '{G}': 'https://img/g.svg' }));
-    expect(mod.getSymbolMap().has('{G}')).toBe(false);
-
-    // …whereas reloadSymbolMap re-reads storage and picks up the new entry.
-    const mapped = mod.reloadSymbolMap();
-    expect(mapped.get('{G}')).toBe('https://img/g.svg');
-    expect(mod.manaParts('{R}{G}')).toEqual([
-      { token: '{R}', uri: 'https://img/r.svg' },
-      { token: '{G}', uri: 'https://img/g.svg' },
-    ]);
+    await mod.fetchSymbols();
+    expect(mod.manaParts('{R}')).toEqual([{ token: '{R}', uri: 'https://img/r.svg' }]);
   });
 
   it('manage cost helpers split and validate mana strings', () => {
