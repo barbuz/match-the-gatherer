@@ -27,28 +27,15 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
   return {
     subscribe,
 
-    /**
-     * Load any persisted in-progress daily game. The board is made playable
-     * immediately and never waits on storage: if the IndexedDB read is slow or
-     * never settles (e.g. a sandboxed/background iframe throttles its timers),
-     * the game still starts and simply begins fresh. If a saved game does come
-     * back, it's applied soon after.
-     */
+    /** Load any persisted in-progress daily game. Resolves once loading finished. */
     async load() {
       if (!storageKey) return;
-      // The board must never wait on storage: mark playable immediately and
-      // let a saved game hydrate in the background if/when it comes back.
-      update((s) => ({ ...s, loaded: true }));
-      dbGet(storageKey).then((saved) => {
-        if (saved && saved.targetName === targetName && Array.isArray(saved.guesses)) {
-          update(() => ({
-            targetName,
-            guesses: saved.guesses,
-            status: saved.status ?? 'playing',
-            loaded: true,
-          }));
-        }
-      });
+      const saved = await dbGet(storageKey);
+      if (saved && saved.targetName === targetName && Array.isArray(saved.guesses)) {
+        set({ targetName, guesses: saved.guesses, status: saved.status ?? 'playing', loaded: true });
+      } else {
+        update((s) => ({ ...s, loaded: true }));
+      }
     },
 
     /**
