@@ -30,7 +30,7 @@ export function ensureData() {
     dataStatus.set({ phase: 'loading', detail: 'Loading card data…' });
     const names = await loadNames();
     dataStatus.set({ phase: 'ready', detail: '' });
-    return { names };
+    return names;
   })().catch((err) => {
     inFlight = null; // allow retry after a real failure
     dataStatus.set({ phase: 'error', detail: String(err?.message ?? err) });

@@ -41,8 +41,7 @@
     phase = 'loading';
     error = '';
     try {
-      const data = await ensureData();
-      names = data.names;
+      names = await ensureData();
       targetName =
         mode === 'daily'
           ? pickDailyCardName(names)
@@ -91,21 +90,6 @@
       {/if}
     </p>
 
-    {#if !gameOver}
-      <GuessInput {names} exclude={guessedNames} disabled={!state.loaded} on:select={onSelect} />
-      {#if submitError}
-        <p class="error-msg">{submitError}</p>
-      {/if}
-    {/if}
-
-    <CardTimeline guesses={state.guesses} targetReleasedAt={targetCard?.released_at ?? null} />
-
-    <div class="feedback-list">
-      {#each [...state.guesses].reverse() as entry (entry.card.name)}
-        <GuessFeedback {entry} />
-      {/each}
-    </div>
-
     {#if gameOver}
       <div class="game-over">
         {#if state.status === 'won'}
@@ -123,7 +107,20 @@
           <p class="muted">Free mode — no stats recorded.</p>
         {/if}
       </div>
+    {:else}
+      <GuessInput {names} exclude={guessedNames} disabled={!state.loaded} on:select={onSelect} />
+      {#if submitError}
+        <p class="error-msg">{submitError}</p>
+      {/if}
     {/if}
+
+    <CardTimeline guesses={state.guesses} targetReleasedAt={targetCard?.released_at ?? null} />
+
+    <div class="feedback-list">
+      {#each [...state.guesses].reverse() as entry (entry.card.name)}
+        <GuessFeedback {entry} />
+      {/each}
+    </div>
   {/if}
 </div>
 

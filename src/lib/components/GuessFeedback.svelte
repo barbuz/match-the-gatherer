@@ -1,6 +1,11 @@
 <script>
   /** Per-property feedback for one guess (spec §3). */
+  import { manaParts, symbols } from '../api/symbology.js';
+
   export let entry; // { card, results }
+
+  // `$symbols` is just a reactivity anchor — when the map finishes downloading
+  // the store updates and any already-rendered mana rows re-render as images.
 </script>
 
 <div class="guess-feedback">
@@ -11,10 +16,26 @@
         <span class="prop-label">{r.label}</span>
         <span class="values">
           {#each r.correct as v}
-            <span class="val correct">{v}</span>
+            {#if $symbols && manaParts(v)}
+              <span class="val mana correct">
+                {#each manaParts(v) as p (p.token)}
+                  <img class="mana-icon" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
+                {/each}
+              </span>
+            {:else}
+              <span class="val correct">{v}</span>
+            {/if}
           {/each}
           {#each r.wrong as v}
-            <span class="val wrong">{v}</span>
+            {#if $symbols && manaParts(v)}
+              <span class="val mana wrong">
+                {#each manaParts(v) as p (p.token)}
+                  <img class="mana-img" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
+                {/each}
+              </span>
+            {:else}
+              <span class="val wrong">{v}</span>
+            {/if}
           {/each}
         </span>
         {#if r.note}
@@ -69,6 +90,34 @@
     background: var(--bad-bg);
     color: var(--bad-fg);
     text-decoration: line-through;
+  }
+  .val.mana {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.15rem 0.3rem;
+  }
+  .mana-img {
+    width: 1em;
+    height: 1em;
+    display: block;
+  }
+  /* Mana symbol <img>s ignore text-decoration, so strike wrong answers with an
+     overlay line spanning the row. */
+  .val.wrong.mana {
+    position: relative;
+    overflow: hidden;
+  }
+  .val.wrong.mana::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 0.1em;
+    background: var(--bad-fg);
+    transform: translateY(-50%);
+    pointer-events: none;
   }
   .line.partial .val.correct {
     background: var(--partial-bg);
