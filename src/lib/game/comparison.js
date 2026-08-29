@@ -87,9 +87,9 @@ function scalarLine(key, label, guessVal, targetVal) {
 function compareFace(results, keyPrefix, labelPrefix, guessFace, targetFace, guessCmc, targetCmc) {
   results.push(manaLine(`${keyPrefix}mana`, `${labelPrefix}Mana cost`, guessFace, targetFace, guessCmc, targetCmc));
   results.push(setLine(`${keyPrefix}colors`, `${labelPrefix}Colors`, guessFace.colors, targetFace.colors));
-  results.push(setLine(`${keyPrefix}supertypes`, `${labelPrefix}Supertypes`, guessFace.supertypes, targetFace.supertypes));
-  results.push(setLine(`${keyPrefix}types`, `${labelPrefix}Types`, guessFace.types, targetFace.types));
-  results.push(setLine(`${keyPrefix}subtypes`, `${labelPrefix}Subtypes`, guessFace.subtypes, targetFace.subtypes));
+  const guessTypeTokens = [...guessFace.supertypes, ...guessFace.types, ...guessFace.subtypes];
+  const targetTypeTokens = [...targetFace.supertypes, ...targetFace.types, ...targetFace.subtypes];
+  results.push(setLine(`${keyPrefix}type`, `${labelPrefix}Type`, guessTypeTokens, targetTypeTokens));
   for (const [key, label, g, t] of [
     ['power', 'Power', guessFace.power, targetFace.power],
     ['toughness', 'Toughness', guessFace.toughness, targetFace.toughness],
