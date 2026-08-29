@@ -114,6 +114,28 @@ describe('compareCards — sets', () => {
     expect(type.correct).toEqual(['Creature', 'Goblin', 'Warrior']);
     expect(type.wrong).toEqual(['Berserker']);
   });
+
+  it('type line segments phrase the card as "Supertypes Types — Subtypes"', () => {
+    const guess = makeCard({ name: 'A', oracle_id: 'g1', type_line: 'Legendary Creature — Hydra Avatar' });
+    const target = makeCard({ name: 'T', oracle_id: 't1', type_line: 'Legendary Creature — Hydra Avatar' });
+    const type = byKey(compareCards(guess, target), 'type');
+    expect(type.status).toBe('correct');
+    expect(type.segments).toEqual([
+      { text: 'Legendary', ok: true },
+      { text: 'Creature', ok: true },
+      { dash: true },
+      { text: 'Hydra', ok: true },
+      { text: 'Avatar', ok: true },
+    ]);
+  });
+
+  it('type line without subtypes has no dash segment', () => {
+    const guess = makeCard({ name: 'A', oracle_id: 'g1', type_line: 'Instant' });
+    const target = makeCard({ name: 'T', oracle_id: 't1', type_line: 'Sorcery' });
+    const type = byKey(compareCards(guess, target), 'type');
+    expect(type.status).toBe('wrong');
+    expect(type.segments).toEqual([{ text: 'Instant', ok: false }]);
+  });
 });
 
 describe('compareCards — creature stats applicability', () => {

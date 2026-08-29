@@ -14,8 +14,19 @@
     {#each entry.results as r (r.key)}
       <div class="line {r.status}">
         <span class="prop-label">{r.label}</span>
-        <span class="values">
-          {#each r.correct as v}
+        {#if r.segments}
+          <span class="values type-line">
+            {#each r.segments as seg (seg.text ?? 'dash')}
+              {#if seg.dash}
+                <span class="dash">—</span>
+              {:else}
+                <span class="val" class:correct={seg.ok} class:wrong={!seg.ok}>{seg.text}</span>
+              {/if}
+            {/each}
+          </span>
+        {:else}
+          <span class="values">
+            {#each r.correct as v}
             {#if $symbols && manaParts(v)}
               <span class="val mana correct">
                 {#each manaParts(v) as p, i (i)}
@@ -38,6 +49,7 @@
             {/if}
           {/each}
         </span>
+        {/if}
         {#if r.note}
           <span class="note">{r.note}</span>
         {/if}
@@ -122,6 +134,18 @@
   .line.partial .val.correct {
     background: var(--partial-bg);
     color: var(--partial-fg);
+  }
+  /* Type line is phrased like on the card: "Supertypes Types — Subtypes". */
+  .values.type-line {
+    gap: 0.3em;
+    align-items: baseline;
+  }
+  .values.type-line .val {
+    padding: 0 0.1rem;
+  }
+  .values.type-line .dash {
+    padding: 0 0.25rem;
+    color: var(--muted);
   }
   .note {
     font-size: 0.7rem;
