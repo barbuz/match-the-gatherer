@@ -70,11 +70,25 @@ function manaLine(key, label, guessFace, targetFace, guessCmc, targetCmc) {
   const g = normalizeManaCost(guessFace.manaCost);
   const t = normalizeManaCost(targetFace.manaCost);
   const shown = guessFace.manaCost || '(no mana cost)';
-  if (g === t) return line(key, label, 'correct', [shown], [], true);
-  if (guessCmc != null && targetCmc != null && guessCmc === targetCmc) {
-    return line(key, label, 'partial', [], [shown], true, `mana value ${guessCmc} matches`);
+  const mv = guessCmc != null ? String(guessCmc) : null;
+  const mvCorrect = mv != null && targetCmc != null && String(guessCmc) === String(targetCmc);
+  const mvStatus = mv == null ? null : mvCorrect ? 'correct' : 'wrong';
+  const mvValue = { text: mv, status: mvStatus };
+  if (g === t) {
+    return { key, label, status: 'correct', correct: [shown], wrong: [], applicable: true, mvValues: [mvValue] };
   }
-  return line(key, label, 'wrong', [], [shown], true);
+  if (guessCmc != null && targetCmc != null && guessCmc === targetCmc) {
+    return {
+      key,
+      label,
+      status: 'partial',
+      correct: [],
+      wrong: [shown],
+      applicable: true,
+      mvValues: [mvValue],
+    };
+  }
+  return { key, label, status: 'wrong', correct: [], wrong: [shown], applicable: true, mvValues: [mvValue] };
 }
 
 function scalarLine(key, label, guessVal, targetVal) {
