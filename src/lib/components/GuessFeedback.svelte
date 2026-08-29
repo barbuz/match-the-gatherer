@@ -18,7 +18,7 @@
           {#each r.correct as v}
             {#if $symbols && manaParts(v)}
               <span class="val mana correct">
-                {#each manaParts(v) as p (p.token)}
+                {#each manaParts(v) as p, i (i)}
                   <img class="mana-icon" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
                 {/each}
               </span>
@@ -29,7 +29,7 @@
           {#each r.wrong as v}
             {#if $symbols && manaParts(v)}
               <span class="val mana wrong">
-                {#each manaParts(v) as p (p.token)}
+                {#each manaParts(v) as p, i (i)}
                   <img class="mana-img" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
                 {/each}
               </span>

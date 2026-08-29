@@ -55,4 +55,11 @@ describe('symbology', () => {
     expect(mod.isManaCost('{2}{R}')).toBe(true);
     expect(mod.isManaCost('2R')).toBe(false);
   });
+
+  it('split mana containing repeated symbols without losing tokens', () => {
+    // A {R}{R} cost must keep both tokens: GuessFeedback.svelte keyed-each
+    // iteration is index-based now, so repeated symbols are safe to render.
+    expect(mod.tokenizeManaCost('{R}{R}')).toEqual(['{R}', '{R}']);
+    expect(mod.isManaCost('{R}{R}')).toBe(true);
+  });
 });
