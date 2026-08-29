@@ -98,8 +98,21 @@
           <h2>Out of guesses!</h2>
         {/if}
         <div class="target-reveal">
-          <CardImage card={targetCard} />
-          <p>The card was <strong>{targetName}</strong></p>
+          <a
+            class="reveal-link"
+            href={targetCard?.scryfall_uri ?? '#'}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`View ${targetName} on Scryfall`}
+          >
+            <CardImage card={targetCard} large />
+          </a>
+          <p>
+            The card was <strong>{targetName}</strong>
+            {#if targetCard?.scryfall_uri}
+              — <a class="outside-link" href={targetCard.scryfall_uri} target="_blank" rel="noopener noreferrer">Scryfall</a>
+            {/if}
+          </p>
         </div>
         {#if mode === 'daily'}
           <ShareSummary guesses={state.guesses} won={state.status === 'won'} {dayKey} />
@@ -159,6 +172,16 @@
     flex-direction: column;
     align-items: center;
     gap: 0.25rem;
+  }
+  .reveal-link {
+    line-height: 0;
+    border-radius: 10px;
+  }
+  .reveal-link:hover {
+    outline: 3px solid var(--accent-soft);
+  }
+  .outside-link {
+    color: var(--accent);
   }
   .muted {
     color: var(--muted);
