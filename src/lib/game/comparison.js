@@ -84,15 +84,41 @@ function scalarLine(key, label, guessVal, targetVal) {
   return line(key, label, 'wrong', [], [shown], true);
 }
 
+/**
+ * Power and toughness are shown together in one P/T row, with each side
+ * colored independently. Absent on the guess (non-creature) → no row, so a
+ * creature target is never leaked.
+ */
+function statsLine(key, label, guessFace, targetFace) {
+  const segments = [];
+  for (const [g, t] of [
+    [guessFace.power, targetFace.power],
+    [guessFace.toughness, targetFace.toughness],
+  ]) {
+    if (g == null) continue;
+    segments.push({
+      text: String(g),
+      status: t != null && String(t) === String(g) ? 'correct' : 'wrong',
+    });
+  }
+  if (segments.length === 0) return null;
+  const status = segments.every((s) => s.status === 'correct')
+    ? 'correct'
+    : segments.some((s) => s.status === 'correct')
+      ? 'partial'
+      : 'wrong';
+  return { key, label, status, correct: [], wrong: [], applicable: true, segments };
+}
+
 function compareFace(results, keyPrefix, labelPrefix, guessFace, targetFace, guessCmc, targetCmc) {
   results.push(manaLine(`${keyPrefix}mana`, `${labelPrefix}Mana cost`, guessFace, targetFace, guessCmc, targetCmc));
   results.push(setLine(`${keyPrefix}colors`, `${labelPrefix}Colors`, guessFace.colors, targetFace.colors));
   results.push(setLine(`${keyPrefix}supertypes`, `${labelPrefix}Supertypes`, guessFace.supertypes, targetFace.supertypes));
   results.push(setLine(`${keyPrefix}types`, `${labelPrefix}Types`, guessFace.types, targetFace.types));
   results.push(setLine(`${keyPrefix}subtypes`, `${labelPrefix}Subtypes`, guessFace.subtypes, targetFace.subtypes));
+  const stats = statsLine(`${keyPrefix}pt`, `${labelPrefix}P/T`, guessFace, targetFace);
+  if (stats) results.push(stats);
   for (const [key, label, g, t] of [
-    ['power', 'Power', guessFace.power, targetFace.power],
-    ['toughness', 'Toughness', guessFace.toughness, targetFace.toughness],
     ['loyalty', 'Loyalty', guessFace.loyalty, targetFace.loyalty],
     ['defense', 'Defense', guessFace.defense, targetFace.defense],
   ]) {

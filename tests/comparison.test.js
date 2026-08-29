@@ -115,14 +115,18 @@ describe('compareCards — sets', () => {
 });
 
 describe('compareCards — creature stats applicability', () => {
-  it('exact power/toughness match is correct', () => {
+  it('exact power/toughness match is a single correct P/T row', () => {
     const guess = makeCard({ name: 'A', oracle_id: 'g1' });
     const results = compareCards(guess, makeCard());
-    expect(byKey(results, 'power').status).toBe('correct');
-    expect(byKey(results, 'toughness').status).toBe('correct');
+    const pt = byKey(results, 'pt');
+    expect(pt).toMatchObject({ status: 'correct', applicable: true });
+    expect(pt.segments).toEqual([
+      { text: '3', status: 'correct' },
+      { text: '2', status: 'correct' },
+    ]);
   });
 
-  it('non-creature guess has no power/toughness lines', () => {
+  it('non-creature guess has no P/T row', () => {
     const guess = makeCard({
       name: 'A',
       oracle_id: 'g1',
@@ -131,14 +135,31 @@ describe('compareCards — creature stats applicability', () => {
       toughness: undefined,
     });
     const results = compareCards(guess, makeCard());
-    expect(byKey(results, 'power')).toBeUndefined();
-    expect(byKey(results, 'toughness')).toBeUndefined();
+    expect(byKey(results, 'pt')).toBeUndefined();
   });
 
-  it('creature guess vs non-creature target marks stats wrong but applicable', () => {
+  it('creature guess vs non-creature target marks both stats wrong but applicable', () => {
     const target = makeCard({ type_line: 'Instant', power: undefined, toughness: undefined });
     const results = compareCards(makeCard({ name: 'A', oracle_id: 'g1' }), target);
-    expect(byKey(results, 'power')).toMatchObject({ status: 'wrong', applicable: true });
+    const pt = byKey(results, 'pt');
+    expect(pt).toMatchObject({ status: 'wrong', applicable: true });
+    expect(pt.segments).toEqual([
+      { text: '3', status: 'wrong' },
+      { text: '2', status: 'wrong' },
+    ]);
+  });
+
+  it('partial P/T match colors each side independently', () => {
+    const results = compareCards(
+      makeCard({ name: 'A', oracle_id: 'g1', power: '3', toughness: '5' }),
+      makeCard()
+    );
+    const pt = byKey(results, 'pt');
+    expect(pt.status).toBe('partial');
+    expect(pt.segments).toEqual([
+      { text: '3', status: 'correct' },
+      { text: '5', status: 'wrong' },
+    ]);
   });
 
   it('loyalty only appears for planeswalker guesses', () => {
@@ -242,7 +263,7 @@ describe('compareCards — layout', () => {
     });
     const results = compareCards(dfc, other);
     expect(results.some((r) => r.key.startsWith('front:') || r.key.startsWith('back:'))).toBe(false);
-    expect(byKey(results, 'power')).toMatchObject({ status: 'correct', correct: ['2'] });
+    expect(byKey(results, 'pt')).toMatchObject({ status: 'correct' });
     expect(byKey(results, 'subtypes')).toMatchObject({ status: 'correct' });
   });
 });
