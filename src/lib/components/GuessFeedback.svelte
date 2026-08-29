@@ -39,7 +39,13 @@
           {/each}
         </span>
         {#if r.note}
-          <span class="note">{r.note}</span>
+          <span class="note">
+            {#if r.noteBold}
+              {r.note.replace(r.noteBold, '')}<strong>{r.noteBold}</strong>
+            {:else}
+              {r.note}
+            {/if}
+          </span>
         {/if}
       </div>
     {/each}

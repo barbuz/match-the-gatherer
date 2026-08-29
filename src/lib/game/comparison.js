@@ -47,8 +47,17 @@ export function normalizeManaCost(cost = '') {
   return cost.replace(/[{}]/g, '').replace(/\s+/g, '').toUpperCase();
 }
 
-function line(key, label, status, correct, wrong, applicable, note) {
-  return { key, label, status, correct, wrong, applicable, ...(note ? { note } : {}) };
+function line(key, label, status, correct, wrong, applicable, note, noteBold) {
+  return {
+    key,
+    label,
+    status,
+    correct,
+    wrong,
+    applicable,
+    ...(note ? { note } : {}),
+    ...(noteBold ? { noteBold } : {}),
+  };
 }
 
 function setLine(key, label, guessVals, targetVals) {
@@ -123,6 +132,7 @@ export function compareCards(guess, target) {
   }
 
   const sameDate = guess.released_at === target.released_at;
+  const direction = sameDate ? undefined : guess.released_at < target.released_at ? 'newer' : 'older';
   results.push(
     line(
       'released',
@@ -131,7 +141,8 @@ export function compareCards(guess, target) {
       sameDate ? [guess.released_at] : [],
       sameDate ? [] : [guess.released_at],
       true,
-      sameDate ? undefined : guess.released_at < target.released_at ? 'target is newer' : 'target is older'
+      direction ? `target is ${direction}` : undefined,
+      direction
     )
   );
 
