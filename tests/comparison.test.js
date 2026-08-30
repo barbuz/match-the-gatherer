@@ -64,21 +64,32 @@ describe('normalizeManaCost', () => {
 describe('compareCards — mana cost tiers', () => {
   const target = makeCard();
 
-  it('exact mana cost match is correct', () => {
+  it('exact mana cost match shows a matching MV beside it', () => {
     const guess = makeCard({ name: 'A', oracle_id: 'g1' });
-    expect(byKey(compareCards(guess, target), 'mana').status).toBe('correct');
+    const mana = byKey(compareCards(guess, target), 'mana');
+    expect(mana.status).toBe('correct');
+    expect(mana.mvValues).toEqual([{ text: '3', status: 'correct' }]);
   });
 
-  it('same mana value but different cost is partial with note', () => {
+  it('same mana value but different cost is partial; MV marked correct', () => {
     const guess = makeCard({ name: 'A', oracle_id: 'g1', mana_cost: '{1}{R}{R}' });
     const mana = byKey(compareCards(guess, target), 'mana');
     expect(mana.status).toBe('partial');
-    expect(mana.note).toContain('mana value');
+    expect(mana.note).toBeUndefined();
+    expect(mana.mvValues).toEqual([{ text: '3', status: 'correct' }]);
   });
 
-  it('different cost and value is wrong', () => {
+  it('different cost and value is wrong with MV marked wrong', () => {
     const guess = makeCard({ name: 'A', oracle_id: 'g1', mana_cost: '{4}{R}', cmc: 5 });
-    expect(byKey(compareCards(guess, target), 'mana').status).toBe('wrong');
+    const mana = byKey(compareCards(guess, target), 'mana');
+    expect(mana.status).toBe('wrong');
+    expect(mana.mvValues).toEqual([{ text: '5', status: 'wrong' }]);
+  });
+
+  it('cards without a mana value still show MV as undefined', () => {
+    const land = makeCard({ name: 'A', oracle_id: 'g1', mana_cost: '', cmc: 0 });
+    const mana = byKey(compareCards(land, target), 'mana');
+    expect(mana.mvValues).toEqual([{ text: '0', status: 'wrong' }]);
   });
 });
 

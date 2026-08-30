@@ -48,6 +48,15 @@
               <span class="val wrong">{v}</span>
             {/if}
           {/each}
+          {#if r.mvValues}
+            {#each r.mvValues as mv, i (i)}
+              {#if i > 0}
+                <span class="pt-sep">,</span>
+              {/if}
+              <span class="prop-label mv-label">MV</span>
+              <span class="val {mv.status}">{mv.text}</span>
+            {/each}
+          {/if}
         </span>
         {/if}
         {#if r.note}
@@ -84,6 +93,10 @@
   .prop-label {
     min-width: 7.5rem;
     color: var(--muted);
+  }
+  .mv-label {
+    min-width: 0;
+    margin-left: 0.5rem;
   }
   .values {
     display: flex;
