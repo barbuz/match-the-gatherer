@@ -1,16 +1,38 @@
 <script>
   /** Per-property feedback for one guess (spec §3). */
   import { manaParts, symbols } from '../api/symbology.js';
+  import { scoreResults } from '../game/scoring.js';
 
   export let entry; // { card, results }
 
   // `$symbols` is just a reactivity anchor — when the map finishes downloading
   // the store updates and any already-rendered mana rows re-render as images.
+
+  const RING_RADIUS = 18;
+  const RING_CIRC = 2 * Math.PI * RING_RADIUS;
+
+  $: score = scoreResults(entry.results);
+  $: pct = Math.round(score.ratio * 100);
+  $: dashOffset = RING_CIRC * (1 - score.ratio);
 </script>
 
 <div class="guess-feedback">
   <h3 class="card-name">{entry.card.name}</h3>
   <div class="lines">
+    <div class="match-badge" title="{pct}% match">
+      <svg viewBox="0 0 44 44" aria-hidden="true">
+        <circle class="ring-bg" cx="22" cy="22" r={RING_RADIUS} />
+        <circle
+          class="ring-fill"
+          cx="22"
+          cy="22"
+          r={RING_RADIUS}
+          stroke-dasharray={RING_CIRC}
+          stroke-dashoffset={dashOffset}
+        />
+      </svg>
+      <span class="match-pct">{pct}%</span>
+    </div>
     {#each entry.results as r (r.key)}
       <div class="line {r.status}">
         <span class="prop-label">{r.label}</span>
@@ -69,6 +91,7 @@
 
 <style>
   .guess-feedback {
+    position: relative;
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 0.6rem 0.8rem;
@@ -163,5 +186,39 @@
     font-size: 0.7rem;
     color: var(--muted);
     font-style: italic;
+  }
+  .match-badge {
+    position: absolute;
+    right: 0.6rem;
+    bottom: 0.6rem;
+    width: 44px;
+    height: 44px;
+  }
+  .match-badge svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+  }
+  .ring-bg {
+    fill: none;
+    stroke: var(--border);
+    stroke-width: 3.5;
+  }
+  .ring-fill {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 3.5;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.3s ease;
+  }
+  .match-pct {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--fg);
   }
 </style>
