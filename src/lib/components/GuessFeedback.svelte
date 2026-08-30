@@ -113,7 +113,7 @@
     left: 0;
     right: 0;
     top: 50%;
-    height: 0.1em;
+    height: 1px;
     background: var(--bad-fg);
     transform: translateY(-50%);
     pointer-events: none;
