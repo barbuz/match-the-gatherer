@@ -47,8 +47,17 @@ export function normalizeManaCost(cost = '') {
   return cost.replace(/[{}]/g, '').replace(/\s+/g, '').toUpperCase();
 }
 
-function line(key, label, status, correct, wrong, applicable, note) {
-  return { key, label, status, correct, wrong, applicable, ...(note ? { note } : {}) };
+function line(key, label, status, correct, wrong, applicable, note, segments) {
+  return {
+    key,
+    label,
+    status,
+    correct,
+    wrong,
+    applicable,
+    ...(note ? { note } : {}),
+    ...(segments ? { segments } : {}),
+  };
 }
 
 function setLine(key, label, guessVals, targetVals) {
@@ -66,15 +75,60 @@ function setLine(key, label, guessVals, targetVals) {
   return line(key, label, status, correct, wrong, true);
 }
 
+/**
+ * Type line rendered like the card: "Supertypes Types — Subtypes".
+ * Matching is still per-token against the target's combined type tokens,
+ * but `segments` preserves the guess's order (supertypes + types before an
+ * em-dash, subtypes after) so the UI can phrase it the way cards do.
+ */
+function typeLine(key, label, guessFace, targetFace) {
+  const gMain = [...guessFace.supertypes, ...guessFace.types];
+  const gSub = [...guessFace.subtypes];
+  const tMain = [...targetFace.supertypes, ...targetFace.types];
+  const tSub = [...targetFace.subtypes];
+  if (gMain.length + gSub.length === 0 && tMain.length + tSub.length === 0) {
+    return line(key, label, 'correct', ['—'], [], true);
+  }
+  const targetSet = new Set([...tMain, ...tSub]);
+  const all = [...gMain, ...gSub];
+  const correct = all.filter((v) => targetSet.has(v));
+  const wrong = all.filter((v) => !targetSet.has(v));
+  const status =
+    wrong.length === 0 && all.length === tMain.length + tSub.length
+      ? 'correct'
+      : correct.length > 0
+        ? 'partial'
+        : 'wrong';
+  const segments = [];
+  for (const t of gMain) segments.push({ text: t, ok: targetSet.has(t) });
+  if (gSub.length > 0) segments.push({ dash: true });
+  for (const t of gSub) segments.push({ text: t, ok: targetSet.has(t) });
+  return line(key, label, status, correct, wrong, true, undefined, segments);
+}
+
 function manaLine(key, label, guessFace, targetFace, guessCmc, targetCmc) {
   const g = normalizeManaCost(guessFace.manaCost);
   const t = normalizeManaCost(targetFace.manaCost);
   const shown = guessFace.manaCost || '(no mana cost)';
-  if (g === t) return line(key, label, 'correct', [shown], [], true);
-  if (guessCmc != null && targetCmc != null && guessCmc === targetCmc) {
-    return line(key, label, 'partial', [], [shown], true, `mana value ${guessCmc} matches`);
+  const mv = guessCmc != null ? String(guessCmc) : null;
+  const mvCorrect = mv != null && targetCmc != null && String(guessCmc) === String(targetCmc);
+  const mvStatus = mv == null ? null : mvCorrect ? 'correct' : 'wrong';
+  const mvValue = { text: mv, status: mvStatus };
+  if (g === t) {
+    return { key, label, status: 'correct', correct: [shown], wrong: [], applicable: true, mvValues: [mvValue] };
   }
-  return line(key, label, 'wrong', [], [shown], true);
+  if (guessCmc != null && targetCmc != null && guessCmc === targetCmc) {
+    return {
+      key,
+      label,
+      status: 'partial',
+      correct: [],
+      wrong: [shown],
+      applicable: true,
+      mvValues: [mvValue],
+    };
+  }
+  return { key, label, status: 'wrong', correct: [], wrong: [shown], applicable: true, mvValues: [mvValue] };
 }
 
 function scalarLine(key, label, guessVal, targetVal) {
@@ -87,9 +141,7 @@ function scalarLine(key, label, guessVal, targetVal) {
 function compareFace(results, keyPrefix, labelPrefix, guessFace, targetFace, guessCmc, targetCmc) {
   results.push(manaLine(`${keyPrefix}mana`, `${labelPrefix}Mana cost`, guessFace, targetFace, guessCmc, targetCmc));
   results.push(setLine(`${keyPrefix}colors`, `${labelPrefix}Colors`, guessFace.colors, targetFace.colors));
-  results.push(setLine(`${keyPrefix}supertypes`, `${labelPrefix}Supertypes`, guessFace.supertypes, targetFace.supertypes));
-  results.push(setLine(`${keyPrefix}types`, `${labelPrefix}Types`, guessFace.types, targetFace.types));
-  results.push(setLine(`${keyPrefix}subtypes`, `${labelPrefix}Subtypes`, guessFace.subtypes, targetFace.subtypes));
+  results.push(typeLine(`${keyPrefix}type`, `${labelPrefix}Type`, guessFace, targetFace));
   for (const [key, label, g, t] of [
     ['power', 'Power', guessFace.power, targetFace.power],
     ['toughness', 'Toughness', guessFace.toughness, targetFace.toughness],
