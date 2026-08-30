@@ -36,8 +36,19 @@
     {#each entry.results as r (r.key)}
       <div class="line {r.status}">
         <span class="prop-label">{r.label}</span>
-        <span class="values">
-          {#each r.correct as v}
+        {#if r.segments}
+          <span class="values type-line">
+            {#each r.segments as seg (seg.text ?? 'dash')}
+              {#if seg.dash}
+                <span class="dash">—</span>
+              {:else}
+                <span class="val" class:correct={seg.ok} class:wrong={!seg.ok}>{seg.text}</span>
+              {/if}
+            {/each}
+          </span>
+        {:else}
+          <span class="values">
+            {#each r.correct as v}
             {#if $symbols && manaParts(v)}
               <span class="val mana correct">
                 {#each manaParts(v) as p, i (i)}
@@ -59,7 +70,17 @@
               <span class="val wrong">{v}</span>
             {/if}
           {/each}
+          {#if r.mvValues}
+            {#each r.mvValues as mv, i (i)}
+              {#if i > 0}
+                <span class="pt-sep">,</span>
+              {/if}
+              <span class="prop-label mv-label">MV</span>
+              <span class="val {mv.status}">{mv.text}</span>
+            {/each}
+          {/if}
         </span>
+        {/if}
         {#if r.note}
           <span class="note">{r.note}</span>
         {/if}
@@ -96,6 +117,10 @@
     min-width: 7.5rem;
     color: var(--muted);
   }
+  .mv-label {
+    min-width: 0;
+    margin-left: 0.5rem;
+  }
   .values {
     display: flex;
     flex-wrap: wrap;
@@ -110,7 +135,6 @@
     color: var(--ok-fg);
   }
   .val.wrong {
-    background: var(--bad-bg);
     color: var(--bad-fg);
     text-decoration: line-through;
   }
@@ -137,7 +161,7 @@
     left: 0;
     right: 0;
     top: 50%;
-    height: 0.1em;
+    height: 1px;
     background: var(--bad-fg);
     transform: translateY(-50%);
     pointer-events: none;
@@ -145,6 +169,18 @@
   .line.partial .val.correct {
     background: var(--partial-bg);
     color: var(--partial-fg);
+  }
+  /* Type line is phrased like on the card: "Supertypes Types — Subtypes". */
+  .values.type-line {
+    gap: 0.3em;
+    align-items: baseline;
+  }
+  .values.type-line .val {
+    padding: 0 0.1rem;
+  }
+  .values.type-line .dash {
+    padding: 0 0.25rem;
+    color: var(--muted);
   }
   .note {
     font-size: 0.7rem;
