@@ -87,7 +87,6 @@
     color: var(--ok-fg);
   }
   .val.wrong {
-    background: var(--bad-bg);
     color: var(--bad-fg);
     text-decoration: line-through;
   }
