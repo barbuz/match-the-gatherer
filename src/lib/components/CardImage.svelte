@@ -1,18 +1,24 @@
 <script>
   export let card;
   export let guessed = false;
+  export let large = false;
 
-  $: src =
-    card?.image_uris?.small ??
-    card?.image_uris?.normal ??
-    card?.card_faces?.[0]?.image_uris?.small ??
-    null;
+  $: src = large
+    ? card?.image_uris?.normal ??
+      card?.image_uris?.large ??
+      card?.card_faces?.[0]?.image_uris?.normal ??
+      card?.card_faces?.[0]?.image_uris?.large ??
+      null
+    : card?.image_uris?.small ??
+      card?.image_uris?.normal ??
+      card?.card_faces?.[0]?.image_uris?.small ??
+      null;
 </script>
 
 {#if src}
-  <img class="card-image" class:guessed {src} alt={card?.name ?? 'card'} title={card?.name ?? ''} loading="lazy" />
+  <img class="card-image" class:guessed class:large {src} alt={card?.name ?? 'card'} title={card?.name ?? ''} loading="lazy" />
 {:else}
-  <div class="card-image placeholder" class:guessed>{card?.name ?? '?'}</div>
+  <div class="card-image placeholder" class:guessed class:large>{card?.name ?? '?'}</div>
 {/if}
 
 <style>
@@ -21,6 +27,10 @@
     border-radius: 6px;
     display: block;
     flex: 0 0 auto;
+  }
+  .card-image.large {
+    width: 240px;
+    max-width: 100%;
   }
   .card-image.guessed {
     outline: 2px solid var(--border);
@@ -35,5 +45,9 @@
     background: var(--surface);
     border: 1px solid var(--border);
     padding: 2px;
+  }
+  .placeholder.large {
+    height: 335px;
+    font-size: 0.9rem;
   }
 </style>
