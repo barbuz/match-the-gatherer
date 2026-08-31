@@ -47,7 +47,7 @@ export function normalizeManaCost(cost = '') {
   return cost.replace(/[{}]/g, '').replace(/\s+/g, '').toUpperCase();
 }
 
-function line(key, label, status, correct, wrong, applicable, note, segments) {
+function line(key, label, status, correct, wrong, applicable, note, noteBold, segments) {
   return {
     key,
     label,
@@ -56,6 +56,7 @@ function line(key, label, status, correct, wrong, applicable, note, segments) {
     wrong,
     applicable,
     ...(note ? { note } : {}),
+    ...(noteBold ? { noteBold } : {}),
     ...(segments ? { segments } : {}),
   };
 }
@@ -103,7 +104,7 @@ function typeLine(key, label, guessFace, targetFace) {
   for (const t of gMain) segments.push({ text: t, ok: targetSet.has(t) });
   if (gSub.length > 0) segments.push({ dash: true });
   for (const t of gSub) segments.push({ text: t, ok: targetSet.has(t) });
-  return line(key, label, status, correct, wrong, true, undefined, segments);
+  return line(key, label, status, correct, wrong, true, undefined, undefined, segments);
 }
 
 function manaLine(key, label, guessFace, targetFace, guessCmc, targetCmc) {
@@ -175,6 +176,7 @@ export function compareCards(guess, target) {
   }
 
   const sameDate = guess.released_at === target.released_at;
+  const direction = sameDate ? undefined : guess.released_at < target.released_at ? 'newer' : 'older';
   results.push(
     line(
       'released',
@@ -183,7 +185,8 @@ export function compareCards(guess, target) {
       sameDate ? [guess.released_at] : [],
       sameDate ? [] : [guess.released_at],
       true,
-      sameDate ? undefined : guess.released_at < target.released_at ? 'target is newer' : 'target is older'
+      direction ? `target is ${direction}` : undefined,
+      direction
     )
   );
 
