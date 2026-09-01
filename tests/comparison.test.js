@@ -64,21 +64,32 @@ describe('normalizeManaCost', () => {
 describe('compareCards — mana cost tiers', () => {
   const target = makeCard();
 
-  it('exact mana cost match is correct', () => {
+  it('exact mana cost match shows a matching MV beside it', () => {
     const guess = makeCard({ name: 'A', oracle_id: 'g1' });
-    expect(byKey(compareCards(guess, target), 'mana').status).toBe('correct');
+    const mana = byKey(compareCards(guess, target), 'mana');
+    expect(mana.status).toBe('correct');
+    expect(mana.mvValues).toEqual([{ text: '3', status: 'correct' }]);
   });
 
-  it('same mana value but different cost is partial with note', () => {
+  it('same mana value but different cost is partial; MV marked correct', () => {
     const guess = makeCard({ name: 'A', oracle_id: 'g1', mana_cost: '{1}{R}{R}' });
     const mana = byKey(compareCards(guess, target), 'mana');
     expect(mana.status).toBe('partial');
-    expect(mana.note).toContain('mana value');
+    expect(mana.note).toBeUndefined();
+    expect(mana.mvValues).toEqual([{ text: '3', status: 'correct' }]);
   });
 
-  it('different cost and value is wrong', () => {
+  it('different cost and value is wrong with MV marked wrong', () => {
     const guess = makeCard({ name: 'A', oracle_id: 'g1', mana_cost: '{4}{R}', cmc: 5 });
-    expect(byKey(compareCards(guess, target), 'mana').status).toBe('wrong');
+    const mana = byKey(compareCards(guess, target), 'mana');
+    expect(mana.status).toBe('wrong');
+    expect(mana.mvValues).toEqual([{ text: '5', status: 'wrong' }]);
+  });
+
+  it('cards without a mana value still show MV as undefined', () => {
+    const land = makeCard({ name: 'A', oracle_id: 'g1', mana_cost: '', cmc: 0 });
+    const mana = byKey(compareCards(land, target), 'mana');
+    expect(mana.mvValues).toEqual([{ text: '0', status: 'wrong' }]);
   });
 });
 
@@ -98,19 +109,43 @@ describe('compareCards — sets', () => {
     expect(colors.wrong).toEqual(['W']);
   });
 
-  it('disjoint subtypes are wrong', () => {
+  it('single type line combines supertypes, types and subtypes', () => {
     const guess = makeCard({ name: 'A', oracle_id: 'g1', type_line: 'Creature — Elf Druid' });
-    const subtypes = byKey(compareCards(guess, target), 'subtypes');
-    expect(subtypes.status).toBe('wrong');
-    expect(subtypes.wrong).toEqual(['Elf', 'Druid']);
+    const target = makeCard({ name: 'T', oracle_id: 't1', type_line: 'Creature — Goblin Warrior' });
+    const type = byKey(compareCards(guess, target), 'type');
+    expect(type.status).toBe('partial');
+    expect(type.correct).toEqual(['Creature']);
+    expect(type.wrong).toEqual(['Elf', 'Druid']);
   });
 
-  it('partial subtype overlap keeps 2 of 3 matching visible', () => {
+  it('type line keeps matching tokens visible in order', () => {
     const guess = makeCard({ name: 'A', oracle_id: 'g1', type_line: 'Creature — Goblin Warrior Berserker' });
-    const subtypes = byKey(compareCards(guess, target), 'subtypes');
-    expect(subtypes.status).toBe('partial');
-    expect(subtypes.correct).toEqual(['Goblin', 'Warrior']);
-    expect(subtypes.wrong).toEqual(['Berserker']);
+    const type = byKey(compareCards(guess, target), 'type');
+    expect(type.status).toBe('partial');
+    expect(type.correct).toEqual(['Creature', 'Goblin', 'Warrior']);
+    expect(type.wrong).toEqual(['Berserker']);
+  });
+
+  it('type line segments phrase the card as "Supertypes Types — Subtypes"', () => {
+    const guess = makeCard({ name: 'A', oracle_id: 'g1', type_line: 'Legendary Creature — Hydra Avatar' });
+    const target = makeCard({ name: 'T', oracle_id: 't1', type_line: 'Legendary Creature — Hydra Avatar' });
+    const type = byKey(compareCards(guess, target), 'type');
+    expect(type.status).toBe('correct');
+    expect(type.segments).toEqual([
+      { text: 'Legendary', ok: true },
+      { text: 'Creature', ok: true },
+      { dash: true },
+      { text: 'Hydra', ok: true },
+      { text: 'Avatar', ok: true },
+    ]);
+  });
+
+  it('type line without subtypes has no dash segment', () => {
+    const guess = makeCard({ name: 'A', oracle_id: 'g1', type_line: 'Instant' });
+    const target = makeCard({ name: 'T', oracle_id: 't1', type_line: 'Sorcery' });
+    const type = byKey(compareCards(guess, target), 'type');
+    expect(type.status).toBe('wrong');
+    expect(type.segments).toEqual([{ text: 'Instant', ok: false }]);
   });
 });
 
@@ -120,7 +155,7 @@ describe('compareCards — creature stats applicability', () => {
     const results = compareCards(guess, makeCard());
     const pt = byKey(results, 'pt');
     expect(pt).toMatchObject({ status: 'correct', applicable: true });
-    expect(pt.segments).toEqual([
+    expect(pt.ptSegments).toEqual([
       { text: '3', status: 'correct' },
       { text: '2', status: 'correct' },
     ]);
@@ -143,7 +178,7 @@ describe('compareCards — creature stats applicability', () => {
     const results = compareCards(makeCard({ name: 'A', oracle_id: 'g1' }), target);
     const pt = byKey(results, 'pt');
     expect(pt).toMatchObject({ status: 'wrong', applicable: true });
-    expect(pt.segments).toEqual([
+    expect(pt.ptSegments).toEqual([
       { text: '3', status: 'wrong' },
       { text: '2', status: 'wrong' },
     ]);
@@ -156,7 +191,7 @@ describe('compareCards — creature stats applicability', () => {
     );
     const pt = byKey(results, 'pt');
     expect(pt.status).toBe('partial');
-    expect(pt.segments).toEqual([
+    expect(pt.ptSegments).toEqual([
       { text: '3', status: 'correct' },
       { text: '5', status: 'wrong' },
     ]);
@@ -205,7 +240,7 @@ describe('compareCards — release date and keywords', () => {
     const guess = makeCard({ colors: [], type_line: 'Creature', keywords: [] });
     const target = makeCard({ colors: [], type_line: 'Creature', keywords: [] });
     const results = compareCards(guess, target);
-    for (const key of ['colors', 'supertypes', 'subtypes', 'keywords']) {
+    for (const key of ['colors', 'keywords']) {
       const l = byKey(results, key);
       expect(l.status).toBe('correct');
       expect(l.correct).toEqual(['—']);
@@ -264,6 +299,6 @@ describe('compareCards — layout', () => {
     const results = compareCards(dfc, other);
     expect(results.some((r) => r.key.startsWith('front:') || r.key.startsWith('back:'))).toBe(false);
     expect(byKey(results, 'pt')).toMatchObject({ status: 'correct' });
-    expect(byKey(results, 'subtypes')).toMatchObject({ status: 'correct' });
+    expect(byKey(results, 'type')).toMatchObject({ status: 'correct' });
   });
 });

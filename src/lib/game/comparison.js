@@ -47,8 +47,18 @@ export function normalizeManaCost(cost = '') {
   return cost.replace(/[{}]/g, '').replace(/\s+/g, '').toUpperCase();
 }
 
-function line(key, label, status, correct, wrong, applicable, note) {
-  return { key, label, status, correct, wrong, applicable, ...(note ? { note } : {}) };
+function line(key, label, status, correct, wrong, applicable, note, noteBold, segments) {
+  return {
+    key,
+    label,
+    status,
+    correct,
+    wrong,
+    applicable,
+    ...(note ? { note } : {}),
+    ...(noteBold ? { noteBold } : {}),
+    ...(segments ? { segments } : {}),
+  };
 }
 
 function setLine(key, label, guessVals, targetVals) {
@@ -66,15 +76,60 @@ function setLine(key, label, guessVals, targetVals) {
   return line(key, label, status, correct, wrong, true);
 }
 
+/**
+ * Type line rendered like the card: "Supertypes Types — Subtypes".
+ * Matching is still per-token against the target's combined type tokens,
+ * but `segments` preserves the guess's order (supertypes + types before an
+ * em-dash, subtypes after) so the UI can phrase it the way cards do.
+ */
+function typeLine(key, label, guessFace, targetFace) {
+  const gMain = [...guessFace.supertypes, ...guessFace.types];
+  const gSub = [...guessFace.subtypes];
+  const tMain = [...targetFace.supertypes, ...targetFace.types];
+  const tSub = [...targetFace.subtypes];
+  if (gMain.length + gSub.length === 0 && tMain.length + tSub.length === 0) {
+    return line(key, label, 'correct', ['—'], [], true);
+  }
+  const targetSet = new Set([...tMain, ...tSub]);
+  const all = [...gMain, ...gSub];
+  const correct = all.filter((v) => targetSet.has(v));
+  const wrong = all.filter((v) => !targetSet.has(v));
+  const status =
+    wrong.length === 0 && all.length === tMain.length + tSub.length
+      ? 'correct'
+      : correct.length > 0
+        ? 'partial'
+        : 'wrong';
+  const segments = [];
+  for (const t of gMain) segments.push({ text: t, ok: targetSet.has(t) });
+  if (gSub.length > 0) segments.push({ dash: true });
+  for (const t of gSub) segments.push({ text: t, ok: targetSet.has(t) });
+  return line(key, label, status, correct, wrong, true, undefined, undefined, segments);
+}
+
 function manaLine(key, label, guessFace, targetFace, guessCmc, targetCmc) {
   const g = normalizeManaCost(guessFace.manaCost);
   const t = normalizeManaCost(targetFace.manaCost);
   const shown = guessFace.manaCost || '(no mana cost)';
-  if (g === t) return line(key, label, 'correct', [shown], [], true);
-  if (guessCmc != null && targetCmc != null && guessCmc === targetCmc) {
-    return line(key, label, 'partial', [], [shown], true, `mana value ${guessCmc} matches`);
+  const mv = guessCmc != null ? String(guessCmc) : null;
+  const mvCorrect = mv != null && targetCmc != null && String(guessCmc) === String(targetCmc);
+  const mvStatus = mv == null ? null : mvCorrect ? 'correct' : 'wrong';
+  const mvValue = { text: mv, status: mvStatus };
+  if (g === t) {
+    return { key, label, status: 'correct', correct: [shown], wrong: [], applicable: true, mvValues: [mvValue] };
   }
-  return line(key, label, 'wrong', [], [shown], true);
+  if (guessCmc != null && targetCmc != null && guessCmc === targetCmc) {
+    return {
+      key,
+      label,
+      status: 'partial',
+      correct: [],
+      wrong: [shown],
+      applicable: true,
+      mvValues: [mvValue],
+    };
+  }
+  return { key, label, status: 'wrong', correct: [], wrong: [shown], applicable: true, mvValues: [mvValue] };
 }
 
 function scalarLine(key, label, guessVal, targetVal) {
@@ -107,15 +162,15 @@ function statsLine(key, label, guessFace, targetFace) {
     : segments.some((s) => s.status === 'correct')
       ? 'partial'
       : 'wrong';
-  return { key, label, status, correct: [], wrong: [], applicable: true, segments };
+  // `ptSegments` (not `segments`) so it doesn't collide with the type-line
+  // segments shape ({ text, ok } / { dash }) in the feedback UI.
+  return { key, label, status, correct: [], wrong: [], applicable: true, ptSegments: segments };
 }
 
 function compareFace(results, keyPrefix, labelPrefix, guessFace, targetFace, guessCmc, targetCmc) {
   results.push(manaLine(`${keyPrefix}mana`, `${labelPrefix}Mana cost`, guessFace, targetFace, guessCmc, targetCmc));
   results.push(setLine(`${keyPrefix}colors`, `${labelPrefix}Colors`, guessFace.colors, targetFace.colors));
-  results.push(setLine(`${keyPrefix}supertypes`, `${labelPrefix}Supertypes`, guessFace.supertypes, targetFace.supertypes));
-  results.push(setLine(`${keyPrefix}types`, `${labelPrefix}Types`, guessFace.types, targetFace.types));
-  results.push(setLine(`${keyPrefix}subtypes`, `${labelPrefix}Subtypes`, guessFace.subtypes, targetFace.subtypes));
+  results.push(typeLine(`${keyPrefix}type`, `${labelPrefix}Type`, guessFace, targetFace));
   const stats = statsLine(`${keyPrefix}pt`, `${labelPrefix}P/T`, guessFace, targetFace);
   if (stats) results.push(stats);
   for (const [key, label, g, t] of [
@@ -149,6 +204,7 @@ export function compareCards(guess, target) {
   }
 
   const sameDate = guess.released_at === target.released_at;
+  const direction = sameDate ? undefined : guess.released_at < target.released_at ? 'newer' : 'older';
   results.push(
     line(
       'released',
@@ -157,7 +213,8 @@ export function compareCards(guess, target) {
       sameDate ? [guess.released_at] : [],
       sameDate ? [] : [guess.released_at],
       true,
-      sameDate ? undefined : guess.released_at < target.released_at ? 'target is newer' : 'target is older'
+      direction ? `target is ${direction}` : undefined,
+      direction
     )
   );
 
