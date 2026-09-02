@@ -9,11 +9,13 @@
   import { pickDailyCardName, utcDateKey } from '../game/dailySeed.js';
   import { compareCards } from '../game/comparison.js';
   import { createGame, MAX_GUESSES } from '../game/gameState.js';
+  import { gatherHints, buildScryfallSearchUrl } from '../game/hints.js';
   import GuessInput from './GuessInput.svelte';
   import GuessFeedback from './GuessFeedback.svelte';
   import CardTimeline from './CardTimeline.svelte';
   import CardImage from './CardImage.svelte';
   import ShareSummary from './ShareSummary.svelte';
+  import HintButton from './HintButton.svelte';
 
   export let mode; // 'daily' | 'free'
 
@@ -27,6 +29,11 @@
   let state = { guesses: [], status: 'playing', loaded: false };
   let submitError = '';
   let unsubscribe = null;
+  let hintsUsed = []; // guess-index of each hint press; appended to share rows later
+  let hintUrl = '';
+  $: hintUrl = state.guesses.length > 0
+    ? buildScryfallSearchUrl(gatherHints(state.guesses))
+    : '';
 
   $: guessedNames = state.guesses.map((g) => g.card.name);
   $: gameOver = state.status !== 'playing';
@@ -75,6 +82,11 @@
       submitError = `Lookup failed: ${err?.message ?? err}`;
     }
   }
+
+  function onHintPress() {
+    if (hintUrl) window.open(hintUrl, '_blank');
+    hintsUsed = [...hintsUsed, state.guesses.length - 1];
+  }
 </script>
 
 <div class="game">
@@ -89,6 +101,10 @@
         · {remaining} {remaining === 1 ? 'guess' : 'guesses'} left
       {/if}
     </p>
+
+    <div class="hint-row">
+      <HintButton disabled={state.guesses.length === 0} on:press={onHintPress} />
+    </div>
 
     {#if gameOver}
       <div class="game-over">
@@ -115,7 +131,7 @@
           </p>
         </div>
         {#if mode === 'daily'}
-          <ShareSummary guesses={state.guesses} won={state.status === 'won'} {dayKey} />
+          <ShareSummary guesses={state.guesses} won={state.status === 'won'} {dayKey} hintsUsed={hintsUsed} />
         {:else}
           <p class="muted">Free mode — no stats recorded.</p>
         {/if}
@@ -147,6 +163,11 @@
     text-align: center;
     color: var(--muted);
     font-size: 0.85rem;
+  }
+  .hint-row {
+    display: flex;
+    justify-content: center;
+    margin: 0.75rem 0 0.25rem;
   }
   .status {
     text-align: center;

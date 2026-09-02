@@ -29,10 +29,14 @@ export function emojiBar(ratio, blocks = SHARE_BLOCKS) {
  * Copy-pasteable share block: one emoji-bar row per guess, ending with the
  * game URL (§11).
  */
-export function buildShareText({ dayKey, guesses, won, maxGuesses, url }) {
+export function buildShareText({ dayKey, guesses, won, maxGuesses, url, hintsUsed = [] }) {
   const header = won
     ? `Match the Gatherer ${dayKey} — ${guesses.length}/${maxGuesses}`
     : `Match the Gatherer ${dayKey} — X/${maxGuesses}`;
-  const rows = guesses.map((g) => emojiBar(scoreResults(g.results).ratio));
+  const used = new Set(hintsUsed ?? []);
+  const rows = guesses.map((g, i) => {
+    const marker = used.has(i) ? '\u{1F52E}' : '';
+    return emojiBar(scoreResults(g.results).ratio) + marker;
+  });
   return [header, ...rows, url].join('\n');
 }

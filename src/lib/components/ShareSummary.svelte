@@ -7,11 +7,12 @@
   export let won = false;
   export let dayKey = '';
   export let label = '';
+  export let hintsUsed = [];
 
   let copied = false;
 
   $: url = typeof location !== 'undefined' ? location.origin + location.pathname : '';
-  $: shareText = buildShareText({ dayKey: dayKey || label, guesses, won, maxGuesses: MAX_GUESSES, url });
+  $: shareText = buildShareText({ dayKey: dayKey || label, guesses, won, maxGuesses: MAX_GUESSES, url, hintsUsed: hintsUsed });
 
   async function copy() {
     try {
