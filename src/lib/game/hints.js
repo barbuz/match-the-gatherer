@@ -28,10 +28,31 @@ function pushUnique(hints, seen, hint) {
 
 /**
  * Collect deduplicated hints from every result line of every guess.
+ *
+ * Two rules keep the Scryfall query from over-constraining:
+ * - once a property line is fully matched ('correct'), hints from later
+ *   partial/wrong lines for the same property carry no extra informationand
+ *   are dropped;
+ * - same-direction release-date bounds collapse to the tightest one
+ *   (e.g. date>2001 AND date>2010 reduces to date>2010).
  * @param {Array<{ card: object, results: Array }>} guesses  game-state entries
  * @returns {Array<{ kind, value, negated?, dir? }>} hint list
  */
 export function gatherHints(guesses,) {
+  // First pass: track which property lines were ever fully matched, so
+  // their partial/wrong counterparts elsewhere can be ignored.
+
+
+
+  const fullyMatched = new Set();
+  for (const entry of guesses ?? []) {
+    for (const r of entry?.results ?? []) {
+      if (r.status === 'correct') fullyMatched.add(r.key);
+    }
+  }
+
+
+
   const hints = [];
   const seen = new Set();
   const push = (hint) => pushUnique(hints, seen, hint);
@@ -45,6 +66,7 @@ export function gatherHints(guesses,) {
 
   for (const entry of guesses ?? []) {
     for (const r of entry?.results ?? []) {
+      if (fullyMatched.has(r.key) && r.status !== 'correct') continue; // fully matched property: partial/wrong values are irrelevant
       switch (r.key) {
         case 'mana': {
           const mv = r.mvValues?.find((m) => m.status === 'correct');
@@ -102,7 +124,27 @@ export function gatherHints(guesses,) {
       }
     }
   }
-  return hints;
+
+  // Fold same-direction date bounds down to the tightest one (rule 1);and
+  // a known exact date subsumes all released hints entirely.
+
+  const released = hints.filter((h) => h.kind === 'released');
+  const exact = released.find((h) => !h.negated && !h.dir);
+  if (exact) {
+    return hints.filter((h) => h.kind !== 'released' || h === exact);
+  }
+  const best = new Map(); // direction ('>' | '<') → tightest hint
+  for (const h of released) {
+    if (h.negated || !h.dir) continue;
+    const cur = best.get(h.dir);
+    if (cur) {
+      const tighter = h.dir === '>' ? h.value > cur.value : h.value < cur.value;
+      if (tighter) best.set(h.dir, h);
+    } else {
+      best.set(h.dir, h);
+    }
+  }
+  return hints.filter((h) => h.kind !== 'released' || h.negated || best.get(h.dir) === h);
 }
 
 const SAFE_TOKEN = /^[A-Za-z0-9'_-]+$/;

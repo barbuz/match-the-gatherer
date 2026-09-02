@@ -131,6 +131,57 @@ describe('gatherHints', () => {
     const older = gatherHints([guessEntry(makeCard({ name: 'A', released_at: '1995-01-01' }), target,)]);
     expect(older).toContainEqual({ kind: 'released', value: '1995-01-01', dir: '>', negated: false }); // target is newer
   });
+  it('drops partial/wrong hints once a property line is fully matched', () => {
+    // First guess fixes the mana value (4) but misses colors/type; the
+    // second guess fixes colors/type but misses the mana value (5) -- those
+    // later mana-value hints are dropped since the value is already pinned.
+
+    const target = makeCard({ cmc: 4, colors: ['U'], type_line: 'Creature - Wizard' });
+    const hints = gatherHints([
+      // Fully matches the mana value;, everything else wrong:
+      guessEntry(makeCard({ name: 'A', cmc: 4, colors: ['R'], type_line: 'Artifact - Golem' }), target),
+      // Matches colors/type but misses the mana value:
+      guessEntry(makeCard({ name: 'B', cmc: 5, colors: ['U'], type_line: 'Creature - Wizard' }), target),
+    ]);
+    expect(hints).toContainEqual({ kind: 'manaValue', value: '4', negated: false });
+    const mv4 = hints.filter((h) => h.kind === 'manaValue');
+    expect(mv4).toHaveLength(1); // no mv=5 / mv!=5 hints survive
+    expect(hints).toContainEqual({ kind: 'color', value: 'U', negated: false });
+    expect(hints).toContainEqual({ kind: 'type', value: 'Creature', negated: false });
+  });
+
+
+  it('keeps only the tightest bound per release-date direction', () => {
+    // Target is 2008-06-01. Guesses: A (2001) => newer-than bound,
+    // B (2010) => older-than bound, C (1995) => looser newer-than,
+    // D (2020) => looser older-than. Only the tightest of each direction stays.
+
+
+
+    const target = makeCard({ released_at: '2008-06-01' });
+    const hints = gatherHints([
+      guessEntry(makeCard({ name: 'A', released_at: '2001-01-01' }), target), // target newer than 2001 -> date>2001
+      guessEntry(makeCard({ name: 'B', released_at: '2010-01-01' }), target), // target older than  2010 -> date<2010
+      guessEntry(makeCard({ name: 'C', released_at: '1995-01-01' }), target), // target newer than  1995 -> date>1995 (looser)
+      guessEntry(makeCard({ name: 'D', released_at: '2020-01-01' }), target), // target older than  2020 -> date<2020 (looser)
+    ]);
+    expect(hints).toContainEqual({ kind: 'released', value: '2001-01-01', dir: '>', negated: false });
+    expect(hints).toContainEqual({ kind: 'released', value: '2010-01-01', dir: '<', negated: false });
+    // Looser same-direction bounds are dropped:
+    expect(hints.filter((h) => h.kind === 'released')).toHaveLength(2);
+  });
+
+
+  it('subsumes all release-date bounds when the exact date is known', () => {
+    const target = makeCard({ released_at: '2008-06-01' });
+    const hints = gatherHints([
+      guessEntry(makeCard({ name: 'A', released_at: '2001-01-01' }), target),
+      guessEntry(makeCard({ name: 'B', released_at: '2010-01-01' }), target),
+      guessEntry(makeCard({ name: 'C', released_at: target.released_at }), target), // exact match
+    ]);
+    expect(hints).toContainEqual({ kind: 'released', value: '2008-06-01', negated: false });
+    expect(hints.filter((h) => h.kind === 'released')).toHaveLength(1);
+  });
 });
 
 describe('hintToClause', () => {
