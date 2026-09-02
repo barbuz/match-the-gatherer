@@ -9,6 +9,10 @@
  * - empty properties on both cards report a '—' marker as correct
  * - applicable: whether the property exists on the GUESSED card, so the
  *   share-score denominator never leaks information about the target (§11)
+ * - absentOnTarget: guess has the property butthe target lacks it entirely
+ *   (e.g. a creature guess against an instant); shown struck-through
+ *   and excluded from hint queries, since no Scryfall operator can
+ *   express "has no power/toughness/loyalty"
  */
 
 const SUPERTYPES = new Set(['Basic', 'Legendary', 'Snow', 'World', 'Ongoing']);
@@ -136,7 +140,9 @@ function scalarLine(key, label, guessVal, targetVal) {
   if (guessVal == null) return null; // property absent on the guess: don't reveal the target has it
   const shown = String(guessVal);
   if (targetVal != null && String(targetVal) === shown) return line(key, label, 'correct', [shown], [], true);
-  return line(key, label, 'wrong', [], [shown], true);
+  const l = line(key, label, 'wrong', [], [shown], true);
+  if (targetVal == null) l.absentOnTarget = true;
+  return l;
 }
 
 /**
@@ -146,11 +152,15 @@ function scalarLine(key, label, guessVal, targetVal) {
  */
 function statsLine(key, label, guessFace, targetFace) {
   const segments = [];
+  let present =  0;
+  let missing =  0;
   for (const [g, t] of [
     [guessFace.power, targetFace.power],
     [guessFace.toughness, targetFace.toughness],
   ]) {
     if (g == null) continue;
+    present += 1;
+    if (t == null) missing += 1;
     segments.push({
       text: String(g),
       status: t != null && String(t) === String(g) ? 'correct' : 'wrong',
@@ -164,7 +174,9 @@ function statsLine(key, label, guessFace, targetFace) {
       : 'wrong';
   // `ptSegments` (not `segments`) so it doesn't collide with the type-line
   // segments shape ({ text, ok } / { dash }) in the feedback UI.
-  return { key, label, status, correct: [], wrong: [], applicable: true, ptSegments: segments };
+  return { key, label, status, correct: [], wrong: [], applicable: true, ptSegments: segments,
+    ...(present === missing ? { absentOnTarget: true } : {}),
+  };
 }
 
 function compareFace(results, keyPrefix, labelPrefix, guessFace, targetFace, guessCmc, targetCmc) {

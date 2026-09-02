@@ -101,6 +101,13 @@ describe('gatherHints', () => {
     expect(count('power', '3')).toBe(1); // identical P/T across both guesses
   });
 
+  it('skips power/toughness/loyalty hints when the target lacks the property', () => {
+    const guess = makeCard({ name: 'A', type_line: 'Creature — Bear', power: '2', toughness: '2' });
+    const target = makeCard({ type_line: 'Instant', power: undefined, toughness: undefined });
+    const hints = gatherHints([guessEntry(guess, target)]);
+    expect(hints.some((h) => h.kind === 'power' || h.kind === 'toughness')).toBe(false);
+  });
+
   it('ignores the empty-hold placeholder and defense stats', () => {
     const bothEmpty = guessEntry(
       makeCard({ name: 'A', colors: [], type_line: '', keywords: [], power: undefined, toughness: undefined, loyalty: undefined }),

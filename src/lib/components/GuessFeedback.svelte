@@ -35,7 +35,7 @@
     </div>
     {#each entry.results as r (r.key)}
       <div class="line {r.status}">
-        <span class="prop-label">{r.label}</span>
+        <span class="prop-label" class:absent={r.absentOnTarget}>{r.label}</span>
         {#if r.segments}
           <span class="values type-line">
             {#each r.segments as seg (seg.text ?? 'dash')}
@@ -130,6 +130,10 @@
   .prop-label {
     min-width: 7.5rem;
     color: var(--muted);
+  }
+  .prop-label.absent {
+    color: var(--bad-fg);
+    text-decoration: line-through;
   }
   .mv-label {
     min-width: 0;
