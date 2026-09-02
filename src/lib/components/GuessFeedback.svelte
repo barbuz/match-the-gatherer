@@ -70,6 +70,14 @@
               <span class="val wrong">{v}</span>
             {/if}
           {/each}
+          {#if r.ptSegments}
+            {#each r.ptSegments as seg, i (i)}
+              {#if i > 0}
+                <span class="pt-sep">/</span>
+              {/if}
+              <span class="val {seg.status}">{seg.text}</span>
+            {/each}
+          {/if}
           {#if r.mvValues}
             {#each r.mvValues as mv, i (i)}
               {#if i > 0}
@@ -154,6 +162,10 @@
     width: 1em;
     height: 1em;
     display: block;
+  }
+  .pt-sep {
+    color: var(--muted);
+    padding: 0 0.1rem;
   }
   /* Mana symbol <img>s ignore text-decoration, so strike wrong answers with an
      overlay line spanning the row. */
