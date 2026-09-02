@@ -53,15 +53,15 @@ describe('buildShareText', () => {
     { results: [line('correct'), line('correct')] },
   ];
 
-  it('shows the guess count on a win and X on a loss, ending with the URL', () => {
-    const win = buildShareText({ dayKey: '2026-08-26', guesses, won: true, maxGuesses: 10, url: 'https://example.com/' });
+  it('shows "Matched in N" on a win and the best "% matched" on a loss, ending with the URL', () => {
+    const win = buildShareText({ dayKey: '2026-08-26', guesses, won: true, url: 'https://example.com/' });
     const rows = win.split('\n');
-    expect(rows[0]).toBe('Match the Gatherer 2026-08-26 — 2/10');
+    expect(rows[0]).toBe('Match the Gatherer 2026-08-26 — Matched in 2');
     expect(rows).toHaveLength(4); // header + 2 bars + url
     expect(rows[rows.length - 1]).toBe('https://example.com/');
 
-    const loss = buildShareText({ dayKey: '2026-08-26', guesses, won: false, maxGuesses: 10, url: 'https://example.com/' });
-    expect(loss.split('\n')[0]).toBe('Match the Gatherer 2026-08-26 — X/10');
+    const loss = buildShareText({ dayKey: '2026-08-26', guesses, won: false, url: 'https://example.com/' });
+    expect(loss.split('\n')[0]).toBe('Match the Gatherer 2026-08-26 — 100% matched');
   });
 
   it('renders one bar row per guess with proportional fill', () => {

@@ -10,6 +10,7 @@
   import { compareCards } from '../game/comparison.js';
   import { createGame, MAX_GUESSES } from '../game/gameState.js';
   import { gatherHints, buildScryfallSearchUrl } from '../game/hints.js';
+  import { scoreResults } from '../game/scoring.js';
   import GuessInput from './GuessInput.svelte';
   import GuessFeedback from './GuessFeedback.svelte';
   import CardTimeline from './CardTimeline.svelte';
@@ -38,6 +39,7 @@
   $: guessedNames = state.guesses.map((g) => g.card.name);
   $: gameOver = state.status !== 'playing';
   $: remaining = MAX_GUESSES - state.guesses.length;
+  $: bestPct = Math.max(0, ...state.guesses.map((g) => Math.round(scoreResults(g.results).ratio * 100)));
 
   onMount(() => {
     setup();
@@ -105,9 +107,9 @@
     {#if gameOver}
       <div class="game-over">
         {#if state.status === 'won'}
-          <h2>🎉 You found it!</h2>
+          <h2>{hintsUsed.length === 0 ? '🔮 Peerless!' : '🎉 You found it!'}</h2>
         {:else}
-          <h2>Out of guesses!</h2>
+          <h2>{bestPct}% matched</h2>
         {/if}
         <div class="target-reveal">
           <a
