@@ -69,4 +69,23 @@ describe('buildShareText', () => {
     expect(rows[1]).toBe('🟩'.repeat(5) + '⬜'.repeat(5));
     expect(rows[2]).toBe('🟩'.repeat(10));
   });
+
+  it('appends a scrying-ball marker to rows where a hint was used', () => {
+    const text = buildShareText({
+      dayKey: 'd',
+      guesses: [
+        { results: [line('correct')] },
+        { results: [line('wrong')] },
+        { results: [line('correct')] },
+      ],
+      won: true,
+      maxGuesses: 10,
+      url: 'u',
+      hintsUsed: [0, 2],
+    });
+    const rows = text.split('\n');
+    expect(rows[1]).toBe('🟩'.repeat(10) + '🔮');
+    expect(rows[2]).toBe('⬜'.repeat(10));
+    expect(rows[3]).toBe('🟩'.repeat(10) + '🔮');
+  });
 });
