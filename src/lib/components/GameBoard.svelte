@@ -102,10 +102,6 @@
       {/if}
     </p>
 
-    <div class="hint-row">
-      <HintButton disabled={state.guesses.length === 0} on:press={onHintPress} />
-    </div>
-
     {#if gameOver}
       <div class="game-over">
         {#if state.status === 'won'}
@@ -138,6 +134,9 @@
       </div>
     {:else}
       <GuessInput {names} exclude={guessedNames} disabled={!state.loaded} on:select={onSelect} />
+      <div class="hint-row">
+        <HintButton disabled={state.guesses.length === 0} on:press={onHintPress} />
+      </div>
       {#if submitError}
         <p class="error-msg">{submitError}</p>
       {/if}
