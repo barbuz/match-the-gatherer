@@ -53,7 +53,7 @@ export function gatherHints(guesses,) {
 
 
 
-  const hints = [];
+  let hints = [];
   const seen = new Set();
   const push = (hint) => pushUnique(hints, seen, hint);
 
@@ -81,8 +81,16 @@ export function gatherHints(guesses,) {
           break;
         }
         case 'colors':
-          pushSetValues(r.correct, 'color');
-          pushSetValues(r.wrong, 'color', true);
+          if (r.status === 'correct') {
+            // The full color set is known exactly: query the exact set,
+            // not a "contains this color" clause (which would also match
+            // supersets like BW for an exact R).
+            const letters = (r.correct ?? []).join('').toLowerCase().split('').filter((c) => 'wubrg'.includes(c)).sort().join('');
+            if (letters) pushValue({ kind: 'colorSet', value: letters });
+          } else {
+            pushSetValues(r.correct, 'color');
+            pushSetValues(r.wrong, 'color', true);
+          }
           break;
         case 'type':
           pushSetValues(r.correct, 'type');
@@ -125,6 +133,18 @@ export function gatherHints(guesses,) {
     }
   }
 
+  // A pinned scalar (exact mana value / power / toughness / loyalty)
+  // already equals the target: negated inequalities for the same property carry
+  // no extra information (rule 1) and are dropped.
+
+  const pinned = new Set();
+  for (const h of hints) {
+    if (!h.negated && !h.dir && (h.kind === 'manaValue' || h.kind === 'power' || h.kind === 'toughness' || h.kind === 'loyalty')) pinned.add(h.kind);
+  }
+  if (pinned.size > 0) {
+    hints = hints.filter((h) => !(h.negated && pinned.has(h.kind)));
+  }
+
   // Fold same-direction date bounds down to the tightest one (rule 1);and
   // a known exact date subsumes all released hints entirely.
 
@@ -162,6 +182,8 @@ export function hintToClause(hint,) {
       return `${negated ? '-' : ''}t:${quoteIfNeeded(String(value).toLowerCase())}`;
     case 'color':
       return `${negated ? '-' : ''}c:${quoteIfNeeded(String(value).toLowerCase())}`;
+    case 'colorSet':
+      return `c=${String(value).toLowerCase()}`;
     case 'keyword':
       return `${negated ? '-' : ''}kw:${quoteIfNeeded(String(value).toLowerCase())}`;
     case 'layout':
