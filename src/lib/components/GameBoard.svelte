@@ -27,10 +27,9 @@
   let targetCard = null;
   let names = [];
   let game = null;
-  let state = { guesses: [], status: 'playing', loaded: false };
+  let state = { guesses: [], hintsUsed: [], status: 'playing', loaded: false };
   let submitError = '';
   let unsubscribe = null;
-  let hintsUsed = []; // guess-index of each hint press; appended to share rows later
   let hintUrl = '';
   $: hintUrl = state.guesses.length > 0
     ? buildScryfallSearchUrl(gatherHints(state.guesses))
@@ -87,7 +86,7 @@
 
   function onHintPress() {
     if (hintUrl) window.open(hintUrl, '_blank');
-    hintsUsed = [...hintsUsed, state.guesses.length - 1];
+    game.markHintUsed();
   }
 </script>
 
@@ -107,7 +106,7 @@
     {#if gameOver}
       <div class="game-over">
         {#if state.status === 'won'}
-          <h2>{hintsUsed.length === 0 ? '🔮 Peerless!' : '🎉 You found it!'}</h2>
+          <h2>{state.hintsUsed?.length === 0 ? '🔮 Peerless!' : '🎉 You found it!'}</h2>
         {:else}
           <h2>{bestPct}% matched</h2>
         {/if}
@@ -129,7 +128,7 @@
           </p>
         </div>
         {#if mode === 'daily'}
-          <ShareSummary guesses={state.guesses} won={state.status === 'won'} {dayKey} hintsUsed={hintsUsed} />
+          <ShareSummary guesses={state.guesses} won={state.status === 'won'} {dayKey} hintsUsed={state.hintsUsed ?? []} />
         {:else}
           <p class="muted">Free mode — no stats recorded.</p>
         {/if}

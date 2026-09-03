@@ -12,7 +12,7 @@ export const MAX_GUESSES = 10;
  */
 export function createGame({ mode, dayKey, targetName, targetCard }) {
   const storageKey = mode === 'daily' ? `mtg:game:${dayKey}` : null;
-  const initial = { targetName, guesses: [], status: 'playing', loaded: !storageKey };
+  const initial = { targetName, guesses: [], hintsUsed: [], status: 'playing', loaded: !storageKey };
   const { subscribe, set, update } = writable(initial);
 
   async function persist(state) {
@@ -20,6 +20,7 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
     await dbSet(storageKey, {
       targetName: state.targetName,
       guesses: state.guesses,
+      hintsUsed: state.hintsUsed,
       status: state.status,
     });
   }
@@ -32,7 +33,13 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
       if (!storageKey) return;
       const saved = await dbGet(storageKey);
       if (saved && saved.targetName === targetName && Array.isArray(saved.guesses)) {
-        set({ targetName, guesses: saved.guesses, status: saved.status ?? 'playing', loaded: true });
+        set({
+          targetName,
+          guesses: saved.guesses,
+          hintsUsed: Array.isArray(saved.hintsUsed) ? saved.hintsUsed : [],
+          status: saved.status ?? 'playing',
+          loaded: true,
+        });
       } else {
         update((s) => ({ ...s, loaded: true }));
       }
@@ -59,6 +66,18 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
       if (concluded && mode === 'daily') {
         await recordDailyResult(concluded.dayKey, concluded.won);
       }
+    },
+
+    /** Record that a hint was used after the guess at `guessIndex` (persisted for reloads. */
+    markHintUsed() {
+      update((s) => {
+        if (s.status !== 'playing') return s;
+        const guessIndex = s.guesses.length - 1;
+        if (guessIndex < 0 || s.hintsUsed.includes(guessIndex)) return s;
+        const next = { ...s, hintsUsed: [...s.hintsUsed, guessIndex] };
+        persist(next);
+        return next;
+      });
     },
   };
 }
