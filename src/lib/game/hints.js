@@ -67,6 +67,7 @@ export function gatherHints(guesses,) {
   for (const entry of guesses ?? []) {
     for (const r of entry?.results ?? []) {
       if (fullyMatched.has(r.key) && r.status !== 'correct') continue; // fully matched property: partial/wrong values are irrelevant
+      if (r.absentOnTarget) continue; // guessed-only property: no Scryfall operator for it
       switch (r.key) {
         case 'mana': {
           const mv = r.mvValues?.find((m) => m.status === 'correct');

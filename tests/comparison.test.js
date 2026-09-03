@@ -184,6 +184,16 @@ describe('compareCards — creature stats applicability', () => {
     ]);
   });
 
+  it('P/T row marks absentOnTarget when the target has no P/T', () => {
+    const target = makeCard({ type_line: 'Instant', power: undefined, toughness: undefined });
+    const pt = byKey(compareCards(makeCard({ name: 'A', oracle_id: 'g1' }), target), 'pt');
+    expect(pt).toMatchObject({ status: 'wrong', applicable: true, absentOnTarget: true });
+    expect(pt.ptSegments).toEqual([
+      { text: '3', status: 'wrong' },
+      { text: '2', status: 'wrong' },
+    ]);
+  });
+
   it('partial P/T match colors each side independently', () => {
     const results = compareCards(
       makeCard({ name: 'A', oracle_id: 'g1', power: '3', toughness: '5' }),
@@ -195,6 +205,19 @@ describe('compareCards — creature stats applicability', () => {
       { text: '3', status: 'correct' },
       { text: '5', status: 'wrong' },
     ]);
+  });
+
+  it('loyalty marks absentOnTarget when the guessed walker faces a non-walker', () => {
+    const walker = makeCard({
+      name: 'A',
+      oracle_id: 'g1',
+      type_line: 'Legendary Planeswalker — Jace',
+      power: undefined,
+      toughness: undefined,
+      loyalty: '3',
+    });
+    const loy = byKey(compareCards(walker, makeCard({ type_line: 'Instant' })), 'loyalty');
+    expect(loy).toMatchObject({ status: 'wrong', applicable: true, absentOnTarget: true });
   });
 
   it('loyalty only appears for planeswalker guesses', () => {
