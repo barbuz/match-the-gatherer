@@ -132,11 +132,11 @@ describe('compareCards — sets', () => {
     const type = byKey(compareCards(guess, target), 'type');
     expect(type.status).toBe('correct');
     expect(type.segments).toEqual([
-      { text: 'Legendary', ok: true },
-      { text: 'Creature', ok: true },
+      { text: 'Legendary', status: 'correct' },
+      { text: 'Creature', status: 'correct' },
       { dash: true },
-      { text: 'Hydra', ok: true },
-      { text: 'Avatar', ok: true },
+      { text: 'Hydra', status: 'correct' },
+      { text: 'Avatar', status: 'correct' },
     ]);
   });
 
@@ -145,7 +145,7 @@ describe('compareCards — sets', () => {
     const target = makeCard({ name: 'T', oracle_id: 't1', type_line: 'Sorcery' });
     const type = byKey(compareCards(guess, target), 'type');
     expect(type.status).toBe('wrong');
-    expect(type.segments).toEqual([{ text: 'Instant', ok: false }]);
+    expect(type.segments).toEqual([{ text: 'Instant', status: 'wrong' }]);
   });
 });
 
@@ -155,8 +155,9 @@ describe('compareCards — creature stats applicability', () => {
     const results = compareCards(guess, makeCard());
     const pt = byKey(results, 'pt');
     expect(pt).toMatchObject({ status: 'correct', applicable: true });
-    expect(pt.ptSegments).toEqual([
+    expect(pt.segments).toEqual([
       { text: '3', status: 'correct' },
+      { slash: true },
       { text: '2', status: 'correct' },
     ]);
   });
@@ -178,8 +179,9 @@ describe('compareCards — creature stats applicability', () => {
     const results = compareCards(makeCard({ name: 'A', oracle_id: 'g1' }), target);
     const pt = byKey(results, 'pt');
     expect(pt).toMatchObject({ status: 'wrong', applicable: true });
-    expect(pt.ptSegments).toEqual([
+    expect(pt.segments).toEqual([
       { text: '3', status: 'wrong' },
+      { slash: true },
       { text: '2', status: 'wrong' },
     ]);
   });
@@ -188,8 +190,9 @@ describe('compareCards — creature stats applicability', () => {
     const target = makeCard({ type_line: 'Instant', power: undefined, toughness: undefined });
     const pt = byKey(compareCards(makeCard({ name: 'A', oracle_id: 'g1' }), target), 'pt');
     expect(pt).toMatchObject({ status: 'wrong', applicable: true, absentOnTarget: true });
-    expect(pt.ptSegments).toEqual([
+    expect(pt.segments).toEqual([
       { text: '3', status: 'wrong' },
+      { slash: true },
       { text: '2', status: 'wrong' },
     ]);
   });
@@ -201,8 +204,9 @@ describe('compareCards — creature stats applicability', () => {
     );
     const pt = byKey(results, 'pt');
     expect(pt.status).toBe('partial');
-    expect(pt.ptSegments).toEqual([
+    expect(pt.segments).toEqual([
       { text: '3', status: 'correct' },
+      { slash: true },
       { text: '5', status: 'wrong' },
     ]);
   });

@@ -37,12 +37,14 @@
       <div class="line {r.status}">
         <span class="prop-label" class:absent={r.absentOnTarget}>{r.label}</span>
         {#if r.segments}
-          <span class="values type-line">
-            {#each r.segments as seg (seg.text ?? 'dash')}
+          <span class="values seg-values">
+            {#each r.segments as seg (seg.text ?? (seg.dash ? 'dash' : 'slash'))}
               {#if seg.dash}
                 <span class="dash">—</span>
+              {:else if seg.slash}
+                <span class="pt-sep">/</span>
               {:else}
-                <span class="val" class:correct={seg.ok} class:wrong={!seg.ok}>{seg.text}</span>
+                <span class="val {seg.status}">{seg.text}</span>
               {/if}
             {/each}
           </span>
@@ -70,14 +72,6 @@
               <span class="val wrong">{v}</span>
             {/if}
           {/each}
-          {#if r.ptSegments}
-            {#each r.ptSegments as seg, i (i)}
-              {#if i > 0}
-                <span class="pt-sep">/</span>
-              {/if}
-              <span class="val {seg.status}">{seg.text}</span>
-            {/each}
-          {/if}
           {#if r.mvValues}
             {#each r.mvValues as mv, i (i)}
               {#if i > 0}
@@ -192,15 +186,16 @@
     background: var(--partial-bg);
     color: var(--partial-fg);
   }
-  /* Type line is phrased like on the card: "Supertypes Types — Subtypes". */
-  .values.type-line {
+  /* Segments rows phrase values in order:the type line like the card
+     ("Supertypes Types — Subtypes"),the P/T row as "3/2". */
+  .values.seg-values {
     gap: 0.3em;
     align-items: baseline;
   }
-  .values.type-line .val {
+  .values.seg-values .val {
     padding: 0 0.1rem;
   }
-  .values.type-line .dash {
+  .values.seg-values .dash, .values.seg-values .pt-sep {
     padding: 0 0.25rem;
     color: var(--muted);
   }

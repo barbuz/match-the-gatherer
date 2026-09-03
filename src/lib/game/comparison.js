@@ -6,6 +6,9 @@
  * - status: 'correct' | 'partial' | 'wrong'
  * - correct: guessed values that match the target (shown highlighted)
  * - wrong: guessed values that don't match the target (shown marked wrong)
+ * - segments: ordered units for positioning-sensitive rows; values are
+ *   { text, status }, separators are { dash: true } (type line) or
+ *   { slash: true } (P/T row)
  * - empty properties on both cards report a '—' marker as correct
  * - applicable: whether the property exists on the GUESSED card, so the
  *   share-score denominator never leaks information about the target (§11)
@@ -83,8 +86,9 @@ function setLine(key, label, guessVals, targetVals) {
 /**
  * Type line rendered like the card: "Supertypes Types — Subtypes".
  * Matching is still per-token against the target's combined type tokens,
- * but `segments` preserves the guess's order (supertypes + types before an
+ * but `segments` preserves the guess's order (supertypes + types before the
  * em-dash, subtypes after) so the UI can phrase it the way cards do.
+ * Values are { text, status }; the em-dash is a { dash: true } separator.
  */
 function typeLine(key, label, guessFace, targetFace) {
   const gMain = [...guessFace.supertypes, ...guessFace.types];
@@ -105,9 +109,9 @@ function typeLine(key, label, guessFace, targetFace) {
         ? 'partial'
         : 'wrong';
   const segments = [];
-  for (const t of gMain) segments.push({ text: t, ok: targetSet.has(t) });
+  for (const t of gMain) segments.push({ text: t, status: targetSet.has(t) ? 'correct' : 'wrong' });
   if (gSub.length > 0) segments.push({ dash: true });
-  for (const t of gSub) segments.push({ text: t, ok: targetSet.has(t) });
+  for (const t of gSub) segments.push({ text: t, status: targetSet.has(t) ? 'correct' : 'wrong' });
   return line(key, label, status, correct, wrong, true, undefined, undefined, segments);
 }
 
@@ -159,6 +163,7 @@ function statsLine(key, label, guessFace, targetFace) {
     [guessFace.toughness, targetFace.toughness],
   ]) {
     if (g == null) continue;
+    if (present > 0) segments.push({ slash: true });
     present += 1;
     if (t == null) missing += 1;
     segments.push({
@@ -167,29 +172,28 @@ function statsLine(key, label, guessFace, targetFace) {
     });
   }
   if (segments.length === 0) return null;
-  const status = segments.every((s) => s.status === 'correct')
+  const values = segments.filter((s) => !s.dash && !s.slash);
+  const status = values.every((s) => s.status === 'correct')
     ? 'correct'
-    : segments.some((s) => s.status === 'correct')
+    : values.some((s) => s.status === 'correct')
       ? 'partial'
       : 'wrong';
-  // `ptSegments` (not `segments`) so it doesn't collide with the type-line
-  // segments shape ({ text, ok } / { dash }) in the feedback UI.
-  return { key, label, status, correct: [], wrong: [], applicable: true, ptSegments: segments,
+  return { key, label, status, correct: [], wrong: [], applicable: true, segments,
     ...(present === missing ? { absentOnTarget: true } : {}),
   };
 }
 
-function compareFace(results, keyPrefix, labelPrefix, guessFace, targetFace, guessCmc, targetCmc) {
-  results.push(manaLine(`${keyPrefix}mana`, `${labelPrefix}Mana cost`, guessFace, targetFace, guessCmc, targetCmc));
-  results.push(setLine(`${keyPrefix}colors`, `${labelPrefix}Colors`, guessFace.colors, targetFace.colors));
-  results.push(typeLine(`${keyPrefix}type`, `${labelPrefix}Type`, guessFace, targetFace));
-  const stats = statsLine(`${keyPrefix}pt`, `${labelPrefix}P/T`, guessFace, targetFace);
+function compareFace(results, guessFace, targetFace, guessCmc, targetCmc) {
+  results.push(manaLine('mana', 'Mana cost', guessFace, targetFace, guessCmc, targetCmc));
+  results.push(setLine('colors', 'Colors', guessFace.colors, targetFace.colors));
+  results.push(typeLine('type', 'Type', guessFace, targetFace));
+  const stats = statsLine('pt', 'P/T', guessFace, targetFace);
   if (stats) results.push(stats);
   for (const [key, label, g, t] of [
     ['loyalty', 'Loyalty', guessFace.loyalty, targetFace.loyalty],
     ['defense', 'Defense', guessFace.defense, targetFace.defense],
   ]) {
-    const l = scalarLine(`${keyPrefix}${key}`, `${labelPrefix}${label}`, g, t);
+    const l = scalarLine(`${key}`, `${label}`, g, t);
     if (l) results.push(l);
   }
 }
@@ -202,7 +206,7 @@ function compareFace(results, keyPrefix, labelPrefix, guessFace, targetFace, gue
 export function compareCards(guess, target) {
   const results = [];
 
-  compareFace(results, '', '', faceView(guess), faceView(target), guess.cmc, target.cmc);
+  compareFace(results, faceView(guess), faceView(target), guess.cmc, target.cmc);
 
   // Layout shown only when the guess is non-normal, never revealing a
   // normal target's layout.
