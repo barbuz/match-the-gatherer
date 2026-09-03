@@ -98,7 +98,7 @@ export function gatherHints(guesses,) {
           pushSetValues(r.wrong, 'type', true);
           break;
         case 'pt': {
-          const segs = r.ptSegments ?? [];
+          const segs = r.segments ?? [];
           for (let i = 0; i < segs.length; i++) {
             const seg = segs[i];
             if (seg.text == null || seg.text === PLACEHOLDER) continue;
