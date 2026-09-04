@@ -211,6 +211,18 @@ describe('compareCards — creature stats applicability', () => {
     ]);
   });
 
+  it('symmetric P/T row has unique per-segment keys for the UI', () => {
+    // A creature with equal power and toughness renders "3 / 3". The
+    // distinc separator keeps the two values distinguishable; the keyed
+    // each-block in GuessFeedback is index-based, so duplicate texts are safe.
+    const pt = byKey(compareCards(makeCard({ name: 'A', oracle_id: 'g1', power: '3', toughness: '3' }), makeCard()), 'pt');
+    expect(pt.segments).toEqual([
+      { text: '3', status: 'correct' },
+      { slash: true },
+      { text: '3', status: 'wrong' },
+    ]);
+  });
+
   it('loyalty marks absentOnTarget when the guessed walker faces a non-walker', () => {
     const walker = makeCard({
       name: 'A',

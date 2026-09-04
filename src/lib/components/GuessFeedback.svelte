@@ -38,7 +38,7 @@
         <span class="prop-label" class:absent={r.absentOnTarget}>{r.label}</span>
         {#if r.segments}
           <span class="values seg-values">
-            {#each r.segments as seg (seg.text ?? (seg.dash ? 'dash' : 'slash'))}
+            {#each r.segments as seg, i (i)}
               {#if seg.dash}
                 <span class="dash">—</span>
               {:else if seg.slash}
