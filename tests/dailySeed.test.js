@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { utcDateKey, seedFromDateKey, dailyIndex, pickDailyCardName } from '../src/lib/game/dailySeed.js';
+import { utcDateKey, seedFromDateKey, dailyIndex, pickDailyCardName, resolveVintageLegalCard, resolveDailyTargetCard } from '../src/lib/game/dailySeed.js';
 
 const NAMES = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta'];
 
@@ -47,5 +47,106 @@ describe('dailyIndex', () => {
   it('handles an empty name list', () => {
     expect(dailyIndex('2026-08-26', 0)).toBe(-1);
     expect(pickDailyCardName([], new Date())).toBeUndefined();
+  });
+});
+const legalH = (name) => ({ name: name, legalities: { vintage: 'legal' }, reprint: false });
+const restrictedH = (name) => ({ name: name, legalities: { vintage: 'restricted' }, reprint: false });
+const reprintH = (name) => ({ name: name, legalities: { vintage: 'legal' }, reprint: true });
+const illegalH = (name) => ({ name: name, legalities: { vintage: 'not_legal' }, reprint: false });
+
+async function makeFakeFetch(map) {
+  const calls = [];
+  return [async (name) => {
+    calls.push(name);
+    const entry = map.get(name);
+    return entry ?? null;
+  }, calls];
+}
+
+describe('resolveVintageLegalCard', () => {
+  it('resolves the card at the index picked for attempt 0', async () => {
+    const map = new Map([['Beta', legalH('Beta')], ['Gamma', illegalH('Gamma')]]);
+    const [fetchCard, calls] = await makeFakeFetch(map);
+    const card = await resolveVintageLegalCard(['Alpha', 'Beta', 'Gamma'], () => 1, fetchCard);
+    expect(card).toEqual(legalH('Beta'));
+    expect(calls).toEqual(['Beta']);
+  });
+  it('rerolls with pickIndex until a legal card is found', async () => {
+    const map = new Map([['Alpha', illegalH('Alpha')], ['Gamma', null], ['Beta', legalH('Beta')]]);
+    const pickIndex = (attempt) => [0,2,1][attempt];
+    const [fetchCard, calls] = await makeFakeFetch(map);
+    const card = await resolveVintageLegalCard(['Alpha', 'Beta', 'Gamma'], pickIndex, fetchCard);
+    expect(card).toEqual(legalH('Beta'));
+    expect(calls).toEqual(['Alpha', 'Gamma', 'Beta']);
+  });
+  it('allows pickIndex to revisit the same name', async () => {
+    const map = new Map([['Alpha', illegalH('Alpha')], ['Beta', legalH('Beta')]]);
+    const pickIndex = (attempt) => [0,0,1][attempt];
+    const [fetchCard, calls] = await makeFakeFetch(map);
+    const card = await resolveVintageLegalCard(['Alpha', 'Beta'], pickIndex, fetchCard);
+    expect(card).toEqual(legalH('Beta'));
+    expect(calls).toEqual(['Alpha', 'Alpha', 'Beta']);
+  });
+  it('skips reprints and counts restricted as legal', async () => {
+    const map = new Map([
+      ['Alpha', reprintH('Alpha')],
+      ['Beta', restrictedH('Beta')],
+    ]);
+    const pickIndex = (attempt) => [0,1][attempt];
+    const [fetchCard, calls] = await makeFakeFetch(map);
+    const card = await resolveVintageLegalCard(['Alpha', 'Beta'], pickIndex, fetchCard);
+    expect(card).toEqual(restrictedH('Beta'));
+    expect(calls).toEqual(['Alpha', 'Beta']);
+  });
+  it('gives up after 100 attempts when nothing is legal', async () => {
+    const map = new Map([['Alpha', illegalH('Alpha')], ['Beta', null]]);
+    const [fetchCard, calls] = await makeFakeFetch(map);
+    await expect(resolveVintageLegalCard(['Alpha', 'Beta'], () => 0, fetchCard)).resolves.toBeUndefined();
+    expect(calls).toHaveLength(100);
+    expect(calls.every((name) => name === 'Alpha')).toBe(true);
+  });
+  it('returns undefined on invalid input', async () => {
+    const [fetchCard, calls] = await makeFakeFetch(new Map());
+    await expect(resolveVintageLegalCard([], () => 0, fetchCard)).resolves.toBeUndefined();
+    await expect(resolveVintageLegalCard(['Alpha'], () => -1, fetchCard)).resolves.toBeUndefined();
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe('resolveDailyTargetCard', () => {
+  it('rerolls through deterministic attempt seeds', async () => {
+    const names = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'];
+    const map = new Map([
+      ['Epsilon', reprintH('Epsilon')],
+      ['Alpha', illegalH('Alpha')],
+      ['Beta', legalH('Beta')],
+    ]);
+    const [fetchCard, calls] = await makeFakeFetch(map);
+    const card = await resolveDailyTargetCard(names, fetchCard, new Date('2026-08-26T00:00:00Z'));
+    expect(card).toEqual(legalH('Beta'));
+    expect(calls).toEqual(['Epsilon', 'Alpha', 'Gamma', 'Delta', 'Alpha', 'Beta']);
+  });
+
+  it('is deterministic for a given date', async () => {
+    const names = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'];
+    const map = new Map([['Epsilon', legalH('Epsilon')]]);
+    const [fetchCard, calls] = await makeFakeFetch(map);
+    const a = await resolveDailyTargetCard(names, fetchCard, new Date('2026-08-26T00:00:00Z'));
+    const b = await resolveDailyTargetCard(names, fetchCard, new Date('2026-08-26T00:00:00Z'));
+    expect(a).toEqual(b);
+  });
+
+  it('returns undefined when no name resolves to a legal card', async () => {
+    const names = ['Alpha', 'Beta', 'Gamma'];
+    const map = new Map([['Alpha', illegalH('Alpha')], ['Beta', null], ['Gamma', illegalH('Gamma')]]);
+    const [fetchCard, calls] = await makeFakeFetch(map);
+    await expect(resolveDailyTargetCard(names, fetchCard, new Date('2026-08-26T00:00:00Z'))).resolves.toBeUndefined();
+    expect(calls).toHaveLength(100);
+  });
+
+  it('handles an empty name list', async () => {
+    const [fetchCard, calls] = await makeFakeFetch(new Map());
+    await expect(resolveDailyTargetCard([], fetchCard, new Date('2026-08-26T00:00:00Z'))).resolves.toBeUndefined();
+    expect(calls).toHaveLength(0);
   });
 });

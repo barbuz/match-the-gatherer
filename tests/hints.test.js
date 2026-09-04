@@ -290,19 +290,19 @@ describe('buildScryfallSearchUrl', () => {
       { kind: 'released', value: '2009-01-10', dir: '>' },
     ]);
     expect(url).toBe(
-      'https://scryfall.com/search/?q=t%3Acreature%20mv%3D4%20-c%3Au%20date%3E2009-01-10%20not%3Areprint',
+      'https://scryfall.com/search/?q=t%3Acreature%20mv%3D4%20-c%3Au%20date%3E2009-01-10%20f%3Av%20not%3Areprint',
     );
   });
 
   it('handles an empty hint list with just the reprint filter', () => {
     expect(buildScryfallSearchUrl([])).toBe(
-      'https://scryfall.com/search/?q=not%3Areprint',
+      'https://scryfall.com/search/?q=f%3Av%20not%3Areprint',
     );
   });
 
   it('keeps the mana-cost braces URL-encoded', () => {
     expect(buildScryfallSearchUrl([{ kind: 'mana', value: '{2}{R}' }])).toBe(
-      'https://scryfall.com/search/?q=mana%3D%7B2%7D%7BR%7D%20not%3Areprint',
+      'https://scryfall.com/search/?q=mana%3D%7B2%7D%7BR%7D%20f%3Av%20not%3Areprint',
     );
   });
 });
