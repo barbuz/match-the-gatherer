@@ -126,6 +126,39 @@ describe('gatherHints', () => {
     expect(hints).toContainEqual({ kind: 'manaValue', value: '3', negated: false });
   });
 
+  it('emits no cost negation when the mana value is wrong too', () => {
+    const hints = gatherHints([
+      guessEntry(
+        makeCard({ name: 'A', mana_cost: '{4}{R}', cmc: 5 }),
+        makeCard({ name: 'T', mana_cost: '{2}{R}', cmc: 3 }),
+      ),
+    ]);
+    expect(hints).toContainEqual({ kind: 'manaValue', value: '5', negated: true });
+    expect(hints.filter((h) => h.kind === 'mana' && h.negated)).toHaveLength(0); // no mana!={4}{R} — mv!= suffices
+  });
+
+  it('emits a negated exact-cost hint on a same-MV different-cost partial line', () => {
+    const hints = gatherHints([
+      guessEntry(
+        makeCard({ name: 'A', mana_cost: '{3}{R}', cmc: 4 }),
+        makeCard({ name: 'T', mana_cost: '{2}{R}{R}', cmc: 4 }),
+      ),
+    ]);
+    expect(hints).toContainEqual({ kind: 'manaValue', value: '4', negated: false });
+    expect(hints).toContainEqual({ kind: 'mana', value: '{3}{R}', negated: true });
+  });
+
+  it('drops negated exact-cost hints once the exact cost is pinned', () => {
+    const target = makeCard();
+    const hints = gatherHints([
+      guessEntry(makeCard({ name: 'A', mana_cost: '{4}{R}', cmc: 5 }), target),
+      guessEntry(makeCard({ name: 'B', mana_cost: '{2}{R}', cmc: 3 }), target),
+    ]);
+    expect(hints).toContainEqual({ kind: 'mana', value: '{2}{R}', negated: false });
+    expect(hints.filter((h) => h.kind === 'mana' && h.negated)).toHaveLength(0); // no mana!={4}{R} survives
+    expect(hints.filter((h) => h.kind === 'mana')).toHaveLength(1);
+  });
+
   it('drops the no-mana-cost display token', () => {
     const hints = gatherHints([guessEntry(makeCard({ name: 'A', mana_cost: '' }))]);
     expect(hints.some((h) => h.kind === 'mana' && h.value === '(no mana cost)')).toBe(false);
@@ -228,6 +261,7 @@ describe('hintToClause', () => {
     expect(hintToClause({ kind: 'keyword', value: 'Flying' })).toBe('kw:flying');
     expect(hintToClause({ kind: 'layout', value: 'transform', negated: true })).toBe('-layout:transform');
     expect(hintToClause({ kind: 'mana', value: '{2}{R}' })).toBe('mana={2}{R}');
+    expect(hintToClause({ kind: 'mana', value: '{2}{R}', negated: true })).toBe('mana!={2}{R}');
     expect(hintToClause({ kind: 'manaValue', value: '3' })).toBe('mv=3');
     expect(hintToClause({ kind: 'manaValue', value: '3', negated: true })).toBe('mv!=3');
     expect(hintToClause({ kind: 'power', value: '3' })).toBe('pow=3');

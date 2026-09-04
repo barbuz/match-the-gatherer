@@ -75,6 +75,14 @@ export function gatherHints(guesses,) {
           if (r.status === 'correct') {
             const shown = r.correct?.[0];
             if (shown && shown !== '(no mana cost)') pushValue({ kind: 'mana', value: shown });
+          } else if (r.status === 'partial') {
+            // Same mana value, different exact cost: the value is already pinned
+            // via `mv=`, so `mana!=` adds a real exclusion (Scryfall evaluates
+            // per face, so multi-faced cards whose other face differs still leak).
+            // When the cost differs AND the MV differs, `mv!=` already rules out
+            // every card with that cost;, so a cost negation would add nothing.
+            const wrongCost = r.wrong?.[0];
+            if (wrongCost && wrongCost !== '(no mana cost)') push(negate({ kind: 'mana', value: wrongCost }));
           } else if (r.status === 'wrong') {
             const gmv = r.mvValues?.find((m) => m.status === 'wrong');
             if (gmv && gmv.text != null) push(negate({ kind: 'manaValue', value: gmv.text }));
@@ -134,13 +142,13 @@ export function gatherHints(guesses,) {
     }
   }
 
-  // A pinned scalar (exact mana value / power / toughness / loyalty)
-  // already equals the target: negated inequalities for the same property carry
-  // no extra information (rule 1) and are dropped.
+  // A pinned scalar (exact mana cost / mana value / power / toughness /
+  // loyalty) already equals the target: negated inequalities for the same
+  // property carry no extra information (rule 1) and are dropped.
 
   const pinned = new Set();
   for (const h of hints) {
-    if (!h.negated && !h.dir && (h.kind === 'manaValue' || h.kind === 'power' || h.kind === 'toughness' || h.kind === 'loyalty')) pinned.add(h.kind);
+    if (!h.negated && !h.dir && (h.kind === 'mana' || h.kind === 'manaValue' || h.kind === 'power' || h.kind === 'toughness' || h.kind === 'loyalty')) pinned.add(h.kind);
   }
   if (pinned.size > 0) {
     hints = hints.filter((h) => !(h.negated && pinned.has(h.kind)));
@@ -190,7 +198,7 @@ export function hintToClause(hint,) {
     case 'layout':
       return `${negated ? '-' : ''}layout:${quoteIfNeeded(String(value).toLowerCase())}`;
     case 'mana':
-      return `mana=${value}`;
+      return negated ? `mana!=${value}` : `mana=${value}`;
     case 'manaValue':
       return negated ? `mv!=${value}` : `mv=${value}`;
     case 'power':
