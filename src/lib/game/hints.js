@@ -216,13 +216,14 @@ export function hintToClause(hint,) {
 }
 
 /**
- * Build a Scryfall search URL from a hint list. First printings only,
- * always via not:reprint (per spec §3).
+ * Build a Scryfall search URL from a hint list. Vintage-legal first
+ * printings only, always via f:v + not:reprint (per spec §3).
  * @param {Array<{ kind, value, negated?, dir? }>} hints  gatherHints() output
  * @returns {string}
  */
 export function buildScryfallSearchUrl(hints,) {
   const clauses = (hints ?? []).map(hintToClause).filter(Boolean);
+  clauses.push('f:v');
   clauses.push('not:reprint');
   const q = encodeURIComponent(clauses.join(' '));
   return `https://scryfall.com/search/?q=${q}`;
