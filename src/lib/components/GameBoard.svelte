@@ -6,7 +6,8 @@
   import { onMount } from 'svelte';
   import { ensureData, dataStatus } from '../stores/backgroundFetch.js';
   import { fetchCardByName } from '../api/scryfall.js';
-  import { resolveDailyTargetCard, utcDateKey } from '../game/dailySeed.js';
+  import { resolveDailyTargetCard, resolveVintageLegalCard, utcDateKey }
+    from '../game/dailySeed.js';
   import { compareCards } from '../game/comparison.js';
   import { createGame, MAX_GUESSES } from '../game/gameState.js';
   import { gatherHints, buildScryfallSearchUrl } from '../game/hints.js';
@@ -56,10 +57,11 @@
         targetName = targetCard.name;
 
       } else {
-        targetName = names[Math.floor(Math.random() * names.length)];
-        if (!targetName) throw new Error('no card names available');
-        targetCard = await fetchCardByName(targetName);
-        if (!targetCard) throw new Error(`target card not found: ${targetName}`);
+        const start = Math.floor(Math.random() * names.length);
+        targetCard = await resolveVintageLegalCard(names, start, fetchCardByName);
+        if (!targetCard) throw new Error('no vintage-legal card found in name list');
+        targetName = targetCard.name;
+
       }
       game = createGame({ mode, dayKey, targetName, targetCard });
       unsubscribe?.();

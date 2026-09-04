@@ -29,19 +29,46 @@ export function pickDailyCardName(names, date = new Date()) {
 }
 
 /**
- * Resolve the daily target card, re-rolling forward through the name list
- * until a vintage-legal (and non-reprint) card is found. The walk is
- * deterministic (same names[], same seed start, same fetcher → same target;
- * the reroll only shifts the pick forward within the list, so every player
- * still sees the same card each UTC date.
+ * Reroll forward through the name list, circularly from `start`, fetching
+ * each name until a vintage-legal (and non-reprint) card is found..
+ * Returns undefined when no name resolves to a legal card (or when the
+ * inputs are invalid.. The reroll steps forward within the list, so the
+ * result is deterministic for a given start index — shared by the daily
+ * seed and free-mode random start..
+ *
+ * @param {string[]} names full card-name list, iterated circularly.
+ * @param {number} start starting index into `names` (the first candidate.
+ * @param {(name: string) => Promise<object|null>} fetchCard card lookup,
+ *   defaulting to the Scryfall exact-name fetch.
+ * @returns {Promise<object|undefined>} The resolved card,, or undefined when
+ *   no name resolves to a vintage-legal card.
+ */
+export async function resolveVintageLegalCard(names, start, fetchCard = fetchCardByName) {
+  if (!Number.isInteger(start) || start < 0 || start >= names.length) return undefined;
+  for (let i = 0; i < names.length; i++) {
+    const card = await fetchCard(names[(start + i) % names.length]);
+    if (card && isVintageLegal(card)) return card;
+  }
+  return undefined;
+}
+
+/**
+ * Resolve the daily target card for a UTC date,, re-rolling forward through
+ * the name list until a vintage-legal (and non-reprint) card is found..
+ * The walk starts at the deterministic daily seed index,, so same inputs
+ * (names,, date) always yield the same target for every player..
+ *
+ * @param {string[]} names full card-name list,, iterated circularly.
+ * @param {(name: string) => Promise<object|null>} fetchCard card lookup,
+ *   defaulting to the Scryfall exact-name fetch.
+ * @param {Date|string} [date] The UTC date (defaults to now),, as accepted
+ *   by `utcDateKey`..
+ * @returns {Promise<object|undefined>} The resolved card,, or undefined when
+ *   no name in the list resolves to a vintage-legal card..
  */
 export async function resolveDailyTargetCard(names, fetchCard = fetchCardByName, date = new Date()) {
   const key = utcDateKey(date);
   const start = dailyIndex(key, names.length);
   if (start === -1) return undefined;
-  for (let i =0; i < names.length; i++) {
-    const card = await fetchCard(names[(start + i) % names.length]);
-    if (card && isVintageLegal(card)) return card;
-  }
-  return undefined;
+  return resolveVintageLegalCard(names, start, fetchCard);
 }
