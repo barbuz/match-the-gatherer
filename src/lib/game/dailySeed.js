@@ -29,46 +29,52 @@ export function pickDailyCardName(names, date = new Date()) {
 }
 
 /**
- * Reroll forward through the name list, circularly from `start`, fetching
- * each name until a vintage-legal (and non-reprint) card is found..
- * Returns undefined when no name resolves to a legal card (or when the
- * inputs are invalid.. The reroll steps forward within the list, so the
- * result is deterministic for a given start index — shared by the daily
- * seed and free-mode random start..
+ * Reroll through the name list, drawing a fresh index via `pickIndex(attempt)`
+ * until a vintage-legal (and non-reprint) card is found. Each attempt
+ * seeds an independent candidate (the attempt number is part of the hash), so
+ * every legal card has equal selection probability instead of sliding forward's
+ * bias toward cards following long illegal runs. Determinism is preserved for
+ * the daily path because the same date produces the same attempt index sequence..
  *
- * @param {string[]} names full card-name list, iterated circularly.
- * @param {number} start starting index into `names` (the first candidate.
+ * @param {string[]} names full card-name list.
+ * @param {(attempt: number) => number} pickIndex candidate index for each
+ *   attempt (0-based within `names`。
  * @param {(name: string) => Promise<object|null>} fetchCard card lookup,
- *   defaulting to the Scryfall exact-name fetch.
- * @returns {Promise<object|undefined>} The resolved card,, or undefined when
- *   no name resolves to a vintage-legal card.
+ *   defaulting to the Scryfall exact-name fetch。
+ * @returns {Promise<object|undefined>} The resolved card,, or undefined after
+ *   100 attempts when nothing legal was found．
  */
-export async function resolveVintageLegalCard(names, start, fetchCard = fetchCardByName) {
-  if (!Number.isInteger(start) || start < 0 || start >= names.length) return undefined;
-  for (let i = 0; i < names.length; i++) {
-    const card = await fetchCard(names[(start + i) % names.length]);
+export async function resolveVintageLegalCard(names, pickIndex, fetchCard = fetchCardByName) {
+  if (!Array.isArray(names) || names.length === 0) return undefined;
+  for (let attempt =0; attempt < 100; attempt++) {
+    const idx = pickIndex(attempt);
+    if (!Number.isInteger(idx) || idx < 0 || idx >= names.length) continue;
+    const card = await fetchCard(names[idx]);
     if (card && isVintageLegal(card)) return card;
   }
   return undefined;
 }
-
 /**
- * Resolve the daily target card for a UTC date,, re-rolling forward through
- * the name list until a vintage-legal (and non-reprint) card is found..
- * The walk starts at the deterministic daily seed index,, so same inputs
- * (names,, date) always yield the same target for every player..
+ * Resolve the daily target card for a UTC date, re-rolling through the name
+ * list until a vintage-legal (and non-reprint) card is found. Each
+ * attempt seeds a fresh index from the date key + attempt number,, so the
+ * result is deterministic for every player on the same date (and uniform over
+ * legal cards when several attempts are needed)..
  *
- * @param {string[]} names full card-name list,, iterated circularly.
+ * @param {string[]} names full card-name list．
  * @param {(name: string) => Promise<object|null>} fetchCard card lookup,
- *   defaulting to the Scryfall exact-name fetch.
- * @param {Date|string} [date] The UTC date (defaults to now),, as accepted
- *   by `utcDateKey`..
- * @returns {Promise<object|undefined>} The resolved card,, or undefined when
- *   no name in the list resolves to a vintage-legal card..
+ *   defaulting to the Scryfall exact-name fetch．
+ * @param {Date|string} [date] The UTC date (defaults to now), as accepted
+ *   by `utcDateKey`．
+ * @returns {Promise<object|undefined>} The resolved card,, or undefined after
+ *   100 attempts when nothing legal was found．
  */
 export async function resolveDailyTargetCard(names, fetchCard = fetchCardByName, date = new Date()) {
+
   const key = utcDateKey(date);
-  const start = dailyIndex(key, names.length);
-  if (start === -1) return undefined;
-  return resolveVintageLegalCard(names, start, fetchCard);
+  return resolveVintageLegalCard(names, (attempt) => {
+    const idx = dailyIndex(`${key}:${attempt}`, names.length);
+    if (idx === -1) return -1;
+    return idx;
+  }, fetchCard);
 }

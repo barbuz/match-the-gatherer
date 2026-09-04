@@ -57,8 +57,7 @@
         targetName = targetCard.name;
 
       } else {
-        const start = Math.floor(Math.random() * names.length);
-        targetCard = await resolveVintageLegalCard(names, start, fetchCardByName);
+        targetCard = await resolveVintageLegalCard(names, () => Math.floor(Math.random() * names.length), fetchCardByName);
         if (!targetCard) throw new Error('no vintage-legal card found in name list');
         targetName = targetCard.name;
 
