@@ -5,6 +5,7 @@
   import FreeMode from './routes/FreeMode.svelte';
   import ThemeToggle from './lib/components/ThemeToggle.svelte';
   import VersionFooter from './lib/components/VersionFooter.svelte';
+  import InfoDialog from './lib/components/InfoDialog.svelte';
 
   const routes = {
     '/': Home,
@@ -16,7 +17,10 @@
 <div class="app">
   <header class="topbar">
     <a class="brand" href="#/">Match the Gatherer</a>
-    <ThemeToggle />
+    <div class="topbar-actions">
+      <InfoDialog />
+      <ThemeToggle />
+    </div>
   </header>
   <main>
     <Router {routes} />
@@ -36,6 +40,11 @@
     align-items: center;
     padding: 0.6rem 0.8rem;
     border-bottom: 1px solid var(--border);
+  }
+  .topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
   .brand {
     font-weight: 700;
