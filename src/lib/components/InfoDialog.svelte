@@ -55,8 +55,8 @@
         </li>
         <li>
           <strong>Read the feedback.</strong> Every property of your guess is compared against the target:
-          green means the value matches the target, strikethrough means it isn't on the target at all,
-          and a <em>partial</em> row shows which of your values hit. The percentage badge shows how closely
+          green highlight means the value matches the target completely, means strikethrough means it isn't on the target at all,
+          and yellow highlights show which parts of your values hit. The percentage badge shows how closely
           your guess matched overall.
 
           <ul class="props">
@@ -64,17 +64,19 @@
             <li>Colors</li>
             <li>Type line — supertypes, types,and subtypes</li>
             <li>Power/toughness (creatures), loyalty (planeswalkers), defense (battles)</li>
-            <li>Layout (e.g. double-faced), first release date, and keywords</li>
+            <li>Layout (e.g. double-faced)</li>
+            <li>First release date (showing also if it's older or newer)</li>
+            <li>Keywords appearing on the card's text</li>
           </ul>
         </li>
         <li>
           <strong>Narrow it down.</strong> The cards are laid out oldest-to-newest by first printing, with
-          dividers showing what's older than, same day as,, or newer than the target. Press <strong>Hint</strong> to
+          dividers showing what's older than, same day as, or newer than the target. Press <strong>Hint</strong> to
           open a Scryfall search for every card still matching everything you've learned so far.
 
         </li>
         <li>
-          <strong>Win,or reveal.</strong> Find the card in 10 tries to win;otherwise the target is revealed and
+          <strong>Win,or reveal.</strong> Find the card in 10 tries to win; otherwise the target is revealed. At the end,
           you can share your score as an emoji bar graph.
 
         </li>
@@ -83,8 +85,8 @@
       <h3>Free mode & stats</h3>
       <p>
         <strong>Free mode</strong> gives you unlimited practice games with random targets — no stats are
-        recorded there. Daily games are tracked locally in your browser (games played, won,, win rate), so
-        closing the tab mid-game doesn't count as a loss.
+        recorded there. Daily games are tracked locally in your browser (games played, won, win rate), and
+        you can close the tab any time and come back to the game later in the day.
       </p>
 
       <div class="disclaimer" aria-label="Disclaimer and attribution">
@@ -94,10 +96,9 @@
           Coast. ©Wizards of the Coast LLC.
         </p>
         <p>
-          Card data, images,and the mana symbols are provided by <a href="https://scryfall.com" target="_blank" rel="noopener noreferrer">Scryfall</a>.
+          Card data, images, and the mana symbols are provided by <a href="https://scryfall.com" target="_blank" rel="noopener noreferrer">Scryfall</a>.
           This project is not affiliated with or endorsed by Scryfall or Wizards of the Coast.
-.
-</p>
+        </p>
       </div>
     </div>
   </div>
