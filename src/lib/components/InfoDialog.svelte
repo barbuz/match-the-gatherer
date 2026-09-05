@@ -51,7 +51,8 @@
       <ol class="steps">
         <li>
           <strong>Make a guess.</strong> Type a card name and pick it from the autocomplete list. Cards
-          already guessed are removed from the list.
+          already guessed are removed from the list. You can guess any card you want, but <em>only vintage-legal cards will ever 
+          be picked as the day's target</em>.
         </li>
         <li>
           <strong>Read the feedback.</strong> Every property of your guess is compared against the target:
