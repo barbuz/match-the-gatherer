@@ -28,6 +28,7 @@ A Wordle-style daily guessing game for Magic: The Gathering cards, built as a Sv
 | Toughness | |
 | Loyalty | |
 | Defense | |
+| Rarity | common, uncommon, rare, mythic, special, bonus |
 | Dual-faced status | Including all properties above re-checked for the back face |
 | Released date (`released_at`) | Oldest printing; used to place guess in the timeline |
 | Oracle tags ("otags") | All tags associated with the card |
@@ -39,6 +40,7 @@ A Wordle-style daily guessing game for Magic: The Gathering cards, built as a Sv
 - **Otags**: all otags are used for the comparison (no cap for now).
 
 ### Feedback rules
+- **Anti-leak rendering**: unlike the fixed property list (mana, color, type, etc.), the guessed card drives which rows appear: a property absent on the guessed card renders no row (e.g. a non-creature guess shows no P/T row; a keyword-less guess shows no Keywords row), so an absent property never leaks thatthe target has it.
 - **Fully correct property** (e.g., exact type match, exact power/toughness match): show the correct value, highlighted.
 - **Partially correct property** (e.g., 2 of 3 subtypes match, some otags match): show the matching values first, then the non-matching values, with clear visual distinction between the two groups.
 - **Fully incorrect property**: show the (incorrect) guessed values, visually marked as wrong.
