@@ -251,6 +251,25 @@ describe('compareCards — creature stats applicability', () => {
   });
 });
 
+describe('compareCards — rarity', () => {
+  it('matching rarity is correct', () => {
+    const guess = makeCard({ name: 'A', rarity: 'uncommon' });
+    const target = makeCard({ rarity: 'uncommon' });
+    expect(byKey(compareCards(guess, target), 'rarity')).toMatchObject({ status: 'correct', correct: ['uncommon'] });
+  });
+
+  it('mismatched rarity is wrong', () => {
+    const guess = makeCard({ name: 'A', rarity: 'mythic' });
+    const target = makeCard({ rarity: 'rare' });
+    expect(byKey(compareCards(guess, target), 'rarity')).toMatchObject({ status: 'wrong', wrong: ['mythic'] });
+  });
+
+  it('no rarity line when the guess lacks a rarity', () => {
+    const results = compareCards(makeCard({ name: 'A' }), makeCard({ name: 'T', rarity: 'rare' }));
+    expect(byKey(results, 'rarity')).toBeUndefined();
+  });
+});
+
 describe('compareCards — release date and keywords', () => {
   it('same release date is correct; otherwise wrong with direction note', () => {
     const target = makeCard({ released_at: '2020-06-01' });
@@ -270,21 +289,19 @@ describe('compareCards — release date and keywords', () => {
     expect(line.wrong).toEqual(['Haste']);
   });
 
-  it('keywords line is not applicable when the guess has no keywords', () => {
+  it('no keywords line when the guess has no keywords', () => {
     const results = compareCards(makeCard({ name: 'A', keywords: [] }), makeCard({ keywords: ['Flying'] }));
-    expect(byKey(results, 'keywords').applicable).toBe(false);
+    expect(byKey(results, 'keywords')).toBeUndefined();
   });
 
-  it('both-empty set properties come back correct with the placeholder', () => {
+  it('empty keyword sets on both cards omit the line too', () => {
     const guess = makeCard({ colors: [], type_line: 'Creature', keywords: [] });
     const target = makeCard({ colors: [], type_line: 'Creature', keywords: [] });
     const results = compareCards(guess, target);
-    for (const key of ['colors', 'keywords']) {
-      const l = byKey(results, key);
-      expect(l.status).toBe('correct');
-      expect(l.correct).toEqual(['—']);
-      expect(l.wrong).toEqual([]);
-    }
+    expect(byKey(results, 'keywords')).toBeUndefined();
+    const colors = byKey(results, 'colors');
+    expect(colors.status).toBe('correct');
+    expect(colors.correct).toEqual(['—']);
   });
 });
 

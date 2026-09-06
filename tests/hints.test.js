@@ -120,6 +120,37 @@ describe('gatherHints', () => {
     expect(hints.some((h) => h.kind === 'defense')).toBe(false);
   });
 
+  it('emits a positive rarity hint bila fully matched rarity line', () => {
+    const hints = gatherHints([
+      guessEntry(
+        makeCard({ name: 'A', rarity: 'uncommon' }),
+        makeCard({ name: 'T', rarity: 'uncommon' }),
+      ),
+    ]);
+    expect(hints).toContainEqual({ kind: 'rarity', value: 'uncommon', negated: false });
+  });
+
+ it('emits a negated rarity hint bila the guessed rarity differs', () => {
+    const hints = gatherHints([
+      guessEntry(
+        makeCard({ name: 'A', rarity: 'mythic' }),
+        makeCard({ name: 'T', rarity: 'rare' }),
+      ),
+    ]);
+    expect(hints).toContainEqual({ kind: 'rarity', value: 'mythic', negated: true });
+  });
+
+ it('drops later rarity hints once the rarity is already pinned', () => {
+    const target = makeCard({ rarity: 'rare' });
+    const hints = gatherHints([
+      guessEntry(makeCard({ name: 'A', rarity: 'uncommon' }), target),
+      guessEntry(makeCard({ name: 'B', rarity: 'rare' }), target),
+    ]);
+    expect(hints).toContainEqual({ kind: 'rarity', value: 'rare', negated: false });
+    expect(hints.filter((h) => h.kind === 'rarity')).toHaveLength(1);
+  });
+
+
   it('pulls exact mana cost from a fully correct mana line', () => {
     const hints = gatherHints([guessEntry(makeCard({ name: 'A', mana_cost: '{2}{R}', cmc: 3 }))]);
     expect(hints).toContainEqual({ kind: 'mana', value: '{2}{R}', negated: false });
@@ -268,6 +299,8 @@ describe('hintToClause', () => {
     expect(hintToClause({ kind: 'power', value: '3', negated: true })).toBe('pow!=3');
     expect(hintToClause({ kind: 'toughness', value: '2' })).toBe('tou=2');
     expect(hintToClause({ kind: 'loyalty', value: '4', negated: true })).toBe('loy!=4');
+    expect(hintToClause({ kind: 'rarity', value: 'rare' })).toBe('r:rare');
+    expect(hintToClause({ kind: 'rarity', value: 'Mythic', negated: true })).toBe('-r:mythic');
     expect(hintToClause({ kind: 'released', value: '2020-01-01' })).toBe('date=2020-01-01');
     expect(hintToClause({ kind: 'released', value: '2009-01-10', dir: '>' })).toBe('date>2009-01-10');
     expect(hintToClause({ kind: 'released', value: '2009-01-10', dir: '<' })).toBe('date<2009-01-10');

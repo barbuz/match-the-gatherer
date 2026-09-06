@@ -28,16 +28,19 @@ Wordle-style MTG daily guessing game (Svelte PWA, no backend. Spec: `match-the-g
 
 - Daily pick: FNV-1a(UTC 'YYYY-MM-DD') % names.length → deterministic worldwide.
 
-- Game logic is DOM-free in `src/lib/game/` (incl. `gameState.js`, which imports
-  svelte/store but runs fine under node) for unit-testability. Anti-leak rules:
+- Game logic is DOM-freein `src/lib/game/` (incl. `gameState.js`,which imports
+  svelte/store but runs fine under node)for unit-testability.Anti-leak rules:
+
   properties absent on the GUESSED card render no row;(so a creature-only target is
-  never leaked); layout row appears only for non-normal guesses; score denominators
-  count only `applicable` properties of the guessed card.
+  never leaked);layout row appears only for non-normal guesses;keyword row appears
+  only when the guessed card has keywords;rarity compares on every card (only pushed
+  when the guess has a rarity value);score denominators count only `applicable` properties
+  of the guessed card.
 
 - Hints (`src/lib/game/hints.js`): `gatherHints()` distills every guess's feedback into a
   deduplicated minimal hint list; `buildScryfallSearchUrl()` turns it into a
   `https://scryfall.com/search/?q=...` link with clauses `t:`, `c:`, `c=`, `kw:`,
-  `layout:`, `mana=`, `mv=`, `pow=`, `tou=`, `loy=`, `date>`/`date<`, negations via
+  `layout:`, `mana=`, `mv=`, `pow=`, `tou=`, `loy=`, `r:`, `date>`/`date<`, negations via
   `-`/`!=`, and always ending `not:reprint`. Defense stats have no Scryfall operator, so
   those hints are dropped; fully-matched properties pin their value (later partial/wrong
   hints for the same property are dropped); same-direction date bounds fold down to the

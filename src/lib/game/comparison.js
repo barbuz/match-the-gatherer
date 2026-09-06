@@ -235,10 +235,19 @@ export function compareCards(guess, target) {
   );
 
   const gKw = guess.keywords ?? [];
-  const tKw = target.keywords ?? [];
-  const kwLine = setLine('keywords', 'Keywords', gKw, tKw);
-  kwLine.applicable = gKw.length > 0;
-  results.push(kwLine);
+  if (gKw.length > 0) {
+    const tKw = target.keywords ?? [];
+    results.push(setLine('keywords', 'Keywords', gKw, tKw));
+  }
+
+  const gRarity = String(guess.rarity ?? '').trim();
+  if (gRarity) {
+    results.push(
+      String(target.rarity ?? '').trim() === gRarity
+        ? line('rarity', 'Rarity', 'correct', [gRarity], [], true)
+        : line('rarity', 'Rarity', 'wrong', [], [gRarity], true)
+    );
+  }
 
   return results;
 }

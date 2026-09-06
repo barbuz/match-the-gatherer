@@ -67,7 +67,8 @@
             <li>Power/toughness (creatures), loyalty (planeswalkers), defense (battles)</li>
             <li>Layout (e.g. double-faced)</li>
             <li>First release date (showing also if it's older or newer)</li>
-            <li>Keywords appearing on the card's text</li>
+            <li>Rarity (common,, uncommon,, rare,, mythic,, special,, bonus)</li>
+            <li>Keywords appearing on the card's text (only shown when your guess has any)</li>
           </ul>
         </li>
         <li>

@@ -136,6 +136,10 @@ export function gatherHints(guesses,) {
           pushSetValues(r.correct, 'keyword');
           pushSetValues(r.wrong, 'keyword', true);
           break;
+        case 'rarity':
+          pushSetValues(r.correct, 'rarity');
+          pushSetValues(r.wrong, 'rarity', true);
+          break;
         // Scryfall search has no operator for the defense statistic, so
         // those hints are intentionally dropped rather than silently ignored.
       }
@@ -207,6 +211,8 @@ export function hintToClause(hint,) {
       return negated ? `tou!=${value}` : `tou=${value}`;
     case 'loyalty':
       return negated ? `loy!=${value}` : `loy=${value}`;
+    case 'rarity':
+      return `${negated ? '-' : ''}r:${quoteIfNeeded(String(value).toLowerCase())}`;
     case 'released':
       if (negated) return dir === '>' ? `date<=${value}` : dir === '<' ? `date>=${value}` : `date!=${value}`;
       return dir ? `date${dir}${value}` : `date=${value}`;
