@@ -19,6 +19,7 @@ function makeCard(overrides = {}) {
     defense: undefined,
     released_at: '2020-01-01',
     layout: 'normal',
+    rarity: 'uncommon',
     ...overrides,
   };
 }
@@ -264,9 +265,15 @@ describe('compareCards — rarity', () => {
     expect(byKey(compareCards(guess, target), 'rarity')).toMatchObject({ status: 'wrong', wrong: ['mythic'] });
   });
 
-  it('no rarity line when the guess lacks a rarity', () => {
-    const results = compareCards(makeCard({ name: 'A' }), makeCard({ name: 'T', rarity: 'rare' }));
-    expect(byKey(results, 'rarity')).toBeUndefined();
+
+  it('rarity is always compared (every card has one, including guesses', () => {
+    // Every Scryfall card object carries a non-empty `rarity`, so the row
+    // renders even when the guess doesn't spell it out explicitly (the fixture
+    // default above models that). A target that "lacks" it is treated as an
+    // empty string mismatch rather than an omitted row.
+
+    const results = compareCards(makeCard({ name: 'A' }), makeCard({ name: 'T', rarity: '' }));
+    expect(byKey(results, 'rarity')).toMatchObject({ status: 'wrong', wrong: ['uncommon'] });
   });
 });
 

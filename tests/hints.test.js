@@ -20,6 +20,7 @@ function makeCard(overrides = {}) {
     defense: undefined,
     released_at: '2020-01-01',
     layout: 'normal',
+    rarity: 'uncommon',
     ...overrides,
   };
 }

@@ -240,14 +240,16 @@ export function compareCards(guess, target) {
     results.push(setLine('keywords', 'Keywords', gKw, tKw));
   }
 
+  // Rarity is a core Scryfall field present on every card, so it always
+  // renders (unlike the P/T, loyalty, defense rows that follow the guess's
+  // card type). Only the front/primary face is compared (consistent with the
+  // other per-face properties).
   const gRarity = String(guess.rarity ?? '').trim();
-  if (gRarity) {
-    results.push(
-      String(target.rarity ?? '').trim() === gRarity
-        ? line('rarity', 'Rarity', 'correct', [gRarity], [], true)
-        : line('rarity', 'Rarity', 'wrong', [], [gRarity], true)
-    );
-  }
+  results.push(
+    String(target.rarity ?? '').trim() === gRarity
+      ? line('rarity', 'Rarity', 'correct', [gRarity], [], true)
+      : line('rarity', 'Rarity', 'wrong', [], [gRarity], true)
+  );
 
   return results;
 }

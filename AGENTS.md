@@ -33,8 +33,9 @@ Wordle-style MTG daily guessing game (Svelte PWA, no backend. Spec: `match-the-g
 
   properties absent on the GUESSED card render no row;(so a creature-only target is
   never leaked);layout row appears only for non-normal guesses;keyword row appears
-  only when the guessed card has keywords;rarity compares on every card (only pushed
-  when the guess has a rarity value);score denominators count only `applicable` properties
+  only when the guessed card has keywords;rarity is a core Scryfall field present on
+  every card, so the rarity row always renders for every guess;score denominators
+  count only `applicable` properties
   of the guessed card.
 
 - Hints (`src/lib/game/hints.js`): `gatherHints()` distills every guess's feedback into a
