@@ -307,9 +307,55 @@ describe('compareCards — release date and oracle text', () => {
     expect(line.correct).toEqual(['flying', 'vigilance']);
     expect(line.wrong).toEqual(['cycling']);
     expect(line.segments).toEqual([
-      { text: 'flying', status: 'correct' },
-      { text: 'vigilance', status: 'correct' },
-      { text: 'cycling', status: 'wrong' },
+      { text: 'Flying', token: true, status: 'correct' },
+      { text: '\n' },
+      { text: 'Vigilance', token: true, status: 'correct' },
+      { text: '\n' },
+      { text: 'Cycling', token: true, status: 'wrong' },
+    ]);
+  });
+  it('preserves punctuation and braced symbols as separate tokens', () => {
+    const guess = makeCard({ oracle_text: 'Add {G}: Flying, Vigilance.' });
+    const target = makeCard({ oracle_text: 'Add {G}: Flying' });
+    const line = byKey(compareCards(guess, target), 'oracle');
+    expect(line.status).toBe('partial');
+    // correct/wrong list the lowercased token texts only
+    expect(line.correct).toEqual(['add', '{g}', 'flying']);
+    expect(line.wrong).toEqual(['vigilance']);
+    expect(line.segments).toEqual([
+      { text: 'Add', token: true, status: 'correct' },
+      { text: ' ' },
+      { text: '{G}', token: true, status: 'correct' },
+      { text: ': ' },
+      { text: 'Flying', token: true, status: 'correct' },
+      { text: ', ' },
+      { text: 'Vigilance', token: true, status: 'wrong' },
+      { text: '.' },
+    ]);
+  });
+  it('treats braced groups as single tokens and matches case-insensitively', () => {
+    const guess = makeCard({ oracle_text: 'Add {2}{W/U}: Storm (This spell can\'t be countered).' });
+    const target = makeCard({ oracle_text: 'add {2}{W/U}: storm (This spell can\'t be countered).' });
+    const line = byKey(compareCards(guess, target), 'oracle');
+    expect(line.status).toBe('correct');
+    expect(line.segments).toEqual([
+      { text: 'Add', token: true, status: 'correct' },
+      { text: ' ' },
+      { text: '{2}', token: true, status: 'correct' },
+      { text: '{W/U}', token: true, status: 'correct' },
+      { text: ': ' },
+      { text: 'Storm', token: true, status: 'correct' },
+      { text: ' (' },
+      { text: 'This', token: true, status: 'correct' },
+      { text: ' ' },
+      { text: 'spell', token: true, status: 'correct' },
+      { text: ' ' },
+      { text: 'can\'t', token: true, status: 'correct' },
+      { text: ' ' },
+      { text: 'be', token: true, status: 'correct' },
+      { text: ' ' },
+      { text: 'countered', token: true, status: 'correct' },
+      { text: ').' },
     ]);
   });
 

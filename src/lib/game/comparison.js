@@ -55,11 +55,25 @@ export function normalizeManaCost(cost = '') {
   return cost.replace(/[{}]/g, '').replace(/\s+/g, '').toUpperCase();
 }
 
-const ORACLE_TOKEN = /[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu;
-
-/** Lowercased word tokens of oracle text (punctuation stripped, apostrophes/hyphens kept). */
-export function oracleWords(text = '') {
-  return (text.match(ORACLE_TOKEN) ?? []).map((t) => t.toLocaleLowerCase());
+// Word or braced mana-symbol token ({G},{2}{W/U}}) — each brace pair is one
+// token — followed by words with internal apostrophes/hyphens kept. The gaps
+// between matches are punctuation/whitespace and render as-is with no status..
+const ORACLE_TOKEN = /\{[^\{\}]+\}|[\p{L}\p{N}]+(?:['\u2019\-][\p{L}\p{N}]+)*/gu;
+/**
+ * Split oracle text into render segments: word/braced-mana-symbol tokens
+ * (compared against the target) and status-less plain segments holding the
+ * punctuation/whitespace between them (preserving original formatting..
+ */
+export function oracleSegments(text = '') {
+  const segments = [];
+  let last = 0;
+  for (const m of text.matchAll(ORACLE_TOKEN)) {
+    if (m.index > last) segments.push({ text: text.slice(last,m.index) });
+    segments.push({ text: m[0], token: true });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) segments.push({ text: text.slice(last) });
+  return segments;
 }
 
 function line(key, label, status, correct, wrong, applicable, note, noteBold, segments) {
@@ -255,28 +269,33 @@ export function compareCards(guess, target) {
       : line('rarity', 'Rarity', 'wrong', [], [gRarity], true)
   );
 
-  // Oracle text: every word of the guessed card's text is highlighted
-  // as partial-correct when it appears anywhere in the target's text. Only
-  // rendered when the guess has text, so a text-less target is never leaked.
+  // Oracle text: every word/braced-mana-symbol token of the guessed card's
+  // text is highlighted as partial-correct when it appears anywhere in the
+  // target's text; punctuation/whitespace between tokens keeps its original
+  // formatting and gets no status. Only rendered when the guess has text, so a
+  // text-less target is never leaked..
 
-  const gWords = oracleWords(gFace.oracleText);
-  if (gWords.length > 0) {
-    const tWords = oracleWords(tFace.oracleText);
-    const targetSet = new Set(tWords);
-    const correct = gWords.filter((w) => targetSet.has(w));
-    const wrong = gWords.filter((w) => !targetSet.has(w));
+  const gSegs = oracleSegments(gFace.oracleText);
+  const gTokens = gSegs.filter((s) => s.token);
+  if (gTokens.length > 0) {
+    const tSegs = oracleSegments(tFace.oracleText);
+    const tTokens = tSegs.filter((s) => s.token);
+    const targetSet = new Set(
+      tTokens.map((t) => t.text.toLocaleLowerCase()),
+    );
+    const correct = gTokens.filter((w) => targetSet.has(w.text.toLocaleLowerCase())).map((w) => w.text.toLocaleLowerCase());
+    const wrong = gTokens.filter((w) => !targetSet.has(w.text.toLocaleLowerCase())).map((w) => w.text.toLocaleLowerCase());
     const status =
-      wrong.length === 0 && gWords.length === tWords.length
+      wrong.length === 0 && gTokens.length === tTokens.length
         ? 'correct'
         : correct.length > 0
           ? 'partial'
           : 'wrong';
-    const segments = gWords.map((w) => ({
-      text: w,
-      status: targetSet.has(w) ? 'correct' : 'wrong',
+    const segments = gSegs.map((s) => ({
+      ...s,
+      ...(s.token ? { status: targetSet.has(s.text.toLocaleLowerCase()) ? 'correct' : 'wrong' } : {}),
     }));
     results.push({ key: 'oracle', label: 'Oracle text', status, correct, wrong, applicable: true, segments });
   }
-
   return results;
 }

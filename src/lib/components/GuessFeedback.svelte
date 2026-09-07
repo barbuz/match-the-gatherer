@@ -37,14 +37,24 @@
       <div class="line {r.status}">
         <span class="prop-label" class:absent={r.absentOnTarget}>{r.label}</span>
         {#if r.segments}
-          <span class="values seg-values">
+          <span class="values seg-values" class:oracle={r.key === 'oracle'}>
             {#each r.segments as seg, i (i)}
               {#if seg.dash}
                 <span class="dash">—</span>
               {:else if seg.slash}
                 <span class="pt-sep">/</span>
+              {:else if seg.token}
+                {#if $symbols && manaParts(seg.text)}
+                  <span class="val mana {seg.status}">
+                    {#each manaParts(seg.text) as p, pi (pi)}
+                      <img class="mana-img" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
+                    {/each}
+                  </span>
+                {:else}
+                  <span class="val {seg.status}">{seg.text}</span>
+                {/if}
               {:else}
-                <span class="val {seg.status}">{seg.text}</span>
+                <span class="plain">{seg.text}</span>
               {/if}
             {/each}
           </span>
@@ -192,12 +202,28 @@
     gap: 0.3em;
     align-items: baseline;
   }
+  /* Oracle text keeps its line breaks and punctuation:plain segments flow
+     inline (no per-segment boxes) so the row reads like the card's text. */
+  .values.seg-values.oracle {
+    display: inline;
+    gap: 0;
+  }
+  .values.seg-values.oracle .val {
+    padding: 0;
+  }
+  .values.seg-values.oracle .val.mana {
+    padding: 0 0.1rem;
+    vertical-align: middle;
+  }
   .values.seg-values .val {
     padding: 0 0.1rem;
   }
   .values.seg-values .dash, .values.seg-values .pt-sep {
     padding: 0 0.25rem;
     color: var(--muted);
+  }
+  .values.seg-values .plain {
+    white-space: pre-wrap;
   }
   .note {
     font-size: 0.7rem;
