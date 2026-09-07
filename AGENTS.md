@@ -14,8 +14,13 @@ Wordle-style MTG daily guessing game (Svelte PWA, no backend. Spec: `match-the-g
   **individual face names**, so `lib/api/scryfall.js` prefers a whole-card name
   match, then face-name match, then first result.
 
-- Keywords come straight from the card object (`card.keywords`) — no otag bulk
-  download (removed.
+- Oracle-text row: every word token of the guessed card's text (`card.oracle_text`,
+  primary face only)is highlighted green when it appears anywhere in the target's
+  text (punctuation stripped, words lowercased via `oracleWords()`);only rendered
+  when the guess has text,so a text-less target is never leaked. Hint clauses use
+  Scryfall's `fo:` (full oracle text,incl. reminder text — matches the game's
+  comparison;`o:` would miss reminder words)with `-fo:` for guessed words lacking
+  in the target..
 - `catalog/card-names` needs `A-` prefix filtering (Alchemy-only cards. The
   names download is a singleton in-flight promise (`stores/backgroundFetch.js`), cached
   in idb-keyval (`storage/dataCache.js`), falling back to the cache when offline.
@@ -32,15 +37,15 @@ Wordle-style MTG daily guessing game (Svelte PWA, no backend. Spec: `match-the-g
   svelte/store but runs fine under node)for unit-testability.Anti-leak rules:
 
   properties absent on the GUESSED card render no row;(so a creature-only target is
-  never leaked);layout row appears only for non-normal guesses;keyword row appears
-  only when the guessed card has keywords;rarity is a core Scryfall field present on
+  never leaked);layout row appears only for non-normal guesses;the oracle-text row
+  appears only when the guessed card has text;rarity is a core Scryfall field present on
   every card, so the rarity row always renders for every guess;score denominators
   count only `applicable` properties
   of the guessed card.
 
 - Hints (`src/lib/game/hints.js`): `gatherHints()` distills every guess's feedback into a
   deduplicated minimal hint list; `buildScryfallSearchUrl()` turns it into a
-  `https://scryfall.com/search/?q=...` link with clauses `t:`, `c:`, `c=`, `kw:`,
+  `https://scryfall.com/search/?q=...` link with clauses `t:`, `c:`, `c=`, `fo:`,
   `layout:`, `mana=`, `mv=`, `pow=`, `tou=`, `loy=`, `r:`, `date>`/`date<`, negations via
   `-`/`!=`, and always ending `not:reprint`. Defense stats have no Scryfall operator, so
   those hints are dropped; fully-matched properties pin their value (later partial/wrong
