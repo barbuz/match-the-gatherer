@@ -49,8 +49,9 @@ Wordle-style MTG daily guessing game (Svelte PWA, no backend. Spec: `match-the-g
   `https://scryfall.com/search/?q=...` link with clauses `t:`, `c:`, `c=`,
   `layout:`, `mana=`, `mv=`, `pow=`, `tou=`, `loy=`, `r:`, `date>`/`date<`, negations via
   `-`/`!=`, and always ending `not:reprint`. Defense stats have no Scryfall operator, so
-  those hints are dropped; fully-matched properties pin their value (later partial/wrong
-  hints for the same property are dropped); same-direction date bounds fold down to the
+  those hints are dropped; **exception**: Scryfall's `t:` is a contains-match
+  with no exact-type-line operator,so negated type hints survive even after a
+  fully-matched type row. Same-direction date bounds fold down to the
   tightest,and an exact date subsumes all date hints. The HintButton opens that URL, and
   each used hint press marks its share row with 🔦 (`buildShareText` `hintsUsed`).
 

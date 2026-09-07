@@ -248,6 +248,24 @@ describe('gatherHints', () => {
   });
 
 
+  it('keeps negated type hints even after a fully-matched type line', () => {
+    // Scryfall's t: is a contains-match (no exact-type-line operator), so
+    // learned negations (e.g. -t:legendary) stay informative: even once the
+    // type tokens are fully known, a guessed extra supertype must keep
+    // excluding cards with that extra token.
+
+    const target = makeCard({ type_line: 'Creature — Wizard' });
+    const hints = gatherHints([
+      guessEntry(makeCard({ name: 'A', type_line: 'Creature — Wizard' }), target), // fully matched type row
+      guessEntry(makeCard({ name: 'B', type_line: 'Legendary Creature — Wizard' }), target), // partial: wrong 'legendary'
+    ]);
+    expect(hints).toContainEqual({ kind: 'type', value: 'Creature', negated: false });
+    expect(hints).toContainEqual({ kind: 'type', value: 'Wizard', negated: false });
+    expect(hints).toContainEqual({ kind: 'type', value: 'Legendary', negated: true }); // survives despite the fully-matched row
+    expect(hints.filter((h) => h.kind === 'type' && h.value === 'Legendary')).toHaveLength(1);
+ });
+
+
   it('keeps only the tightest bound per release-date direction', () => {
     // Target is 2008-06-01. Guesses: A (2001) => newer-than bound,
     // B (2010) => older-than bound, C (1995) => looser newer-than,
