@@ -19,8 +19,10 @@ Wordle-style MTG daily guessing game (Svelte PWA, no backend. Spec: `match-the-g
   text (punctuation stripped, words lowercased via `oracleWords()`);only rendered
   when the guess has text,so a text-less target is never leaked. Hint clauses use
   Scryfall's `fo:` (full oracle text,incl. reminder text — matches the game's
-  comparison;`o:` would miss reminder words)with `-fo:` for guessed words lacking
-  in the target..
+  comparison;`o:` would miss reminder words). Missing words are left
+  out of the search URL: negated `-fo:` clauses are unreliable since
+  Scryfall's `fo:` matches substrings (e.g. `-fo:if` would also
+  exclude every card containing "different").
 - `catalog/card-names` needs `A-` prefix filtering (Alchemy-only cards. The
   names download is a singleton in-flight promise (`stores/backgroundFetch.js`), cached
   in idb-keyval (`storage/dataCache.js`), falling back to the cache when offline.

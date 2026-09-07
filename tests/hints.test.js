@@ -78,7 +78,6 @@ describe('gatherHints', () => {
         { kind: 'type', value: 'Creature', negated: false },        // shared type token
         { kind: 'type', value: 'Golem', negated: true },
         { kind: 'toughness', value: '5', negated: true },
-        { kind: 'oracle', value: 'haste', negated: true },
         { kind: 'released', value: '2019-01-01', dir: '>', negated: false }, // target released after the guess
       ]),
     );
@@ -291,8 +290,11 @@ describe('hintToClause', () => {
     expect(hintToClause({ kind: 'color', value: 'W', negated: true })).toBe('-c:w');
     expect(hintToClause({ kind: 'colorSet', value: 'RW' })).toBe('c=rw');
     expect(hintToClause({ kind: 'keyword', value: 'Flying' })).toBe('kw:flying');
+    // Oracle hints never negate: Scryfall's -fo: matches substrings
+    // (e.g. -fo:if would also exclude cards containing "different"),
+    // so a "missing word" cannot be safely expressed in the query..
     expect(hintToClause({ kind: 'oracle', value: 'flying' })).toBe('fo:flying');
-    expect(hintToClause({ kind: 'oracle', value: 'flying', negated: true })).toBe('-fo:flying');
+    expect(hintToClause({ kind: 'oracle', value: 'flying', negated: true })).toBe('fo:flying');
     expect(hintToClause({ kind: 'oracle', value: 'enter the battlefield' })).toBe('fo:"enter the battlefield"');
     expect(hintToClause({ kind: 'layout', value: 'transform', negated: true })).toBe('-layout:transform');
     expect(hintToClause({ kind: 'mana', value: '{2}{R}' })).toBe('mana={2}{R}');
