@@ -244,6 +244,17 @@ export function compareCards(guess, target) {
     )
   );
 
+  // Rarity is a core Scryfall field present on every card, so it always
+  // renders (unlike the P/T, loyalty, defense rows that follow the guess's
+  // card type). Only the front/primary face is compared (consistent with the
+  // other per-face properties).
+  const gRarity = String(guess.rarity ?? '').trim();
+  results.push(
+    String(target.rarity ?? '').trim() === gRarity
+      ? line('rarity', 'Rarity', 'correct', [gRarity], [], true)
+      : line('rarity', 'Rarity', 'wrong', [], [gRarity], true)
+  );
+
   // Oracle text: every word of the guessed card's text is highlighted
   // as partial-correct when it appears anywhere in the target's text. Only
   // rendered when the guess has text, so a text-less target is never leaked.
@@ -266,17 +277,6 @@ export function compareCards(guess, target) {
     }));
     results.push({ key: 'oracle', label: 'Oracle text', status, correct, wrong, applicable: true, segments });
   }
-
-  // Rarity is a core Scryfall field present on every card, so it always
-  // renders (unlike the P/T, loyalty, defense rows that follow the guess's
-  // card type). Only the front/primary face is compared (consistent with the
-  // other per-face properties).
-  const gRarity = String(guess.rarity ?? '').trim();
-  results.push(
-    String(target.rarity ?? '').trim() === gRarity
-      ? line('rarity', 'Rarity', 'correct', [gRarity], [], true)
-      : line('rarity', 'Rarity', 'wrong', [], [gRarity], true)
-  );
 
   return results;
 }

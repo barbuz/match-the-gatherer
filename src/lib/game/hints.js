@@ -133,11 +133,10 @@ export function gatherHints(guesses,) {
           break;
         }
         case 'oracle':
-          // Only matched words pin a positive fo: clause. Negated
-          // -fo: clauses are unreliable: Scryfall's fo: operator matches
-          // substrings (e.g. -fo:if also removes cards whose text merely
-          // contains "different"),so misses are left out of the search URL.
-          pushSetValues(r.correct, 'oracle');
+          // Oracle-text hints are intentionally dropped: positive fo: clauses
+          // give away the whole text (making the hint search too easy)and
+          // negated -fo: is unreliable (Scryfall matches substrings,, so
+          // neither direction is emitted..
           break;
         case 'rarity':
           pushSetValues(r.correct, 'rarity');
@@ -202,11 +201,6 @@ export function hintToClause(hint,) {
       return `c=${String(value).toLowerCase()}`;
     case 'keyword':
       return `${negated ? '-' : ''}kw:${quoteIfNeeded(String(value).toLowerCase())}`;
-    case 'oracle':
-      // Negated -fo: clauses are unreliable (Scryfall matches substrings,
-      // so -fo:if also excludes cards containing "different"). Oracle
-      // hints therefore always pin a positive fo: clause..
-      return `fo:${quoteIfNeeded(String(value).toLowerCase())}`;
     case 'layout':
       return `${negated ? '-' : ''}layout:${quoteIfNeeded(String(value).toLowerCase())}`;
     case 'mana':

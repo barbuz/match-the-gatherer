@@ -266,6 +266,18 @@ describe('compareCards — rarity', () => {
   });
 
 
+  it('rarity row renders above the oracle-text row', () => {
+    const results = compareCards(
+      makeCard({ name: 'A', rarity: 'uncommon', oracle_text: 'Flying' }),
+      makeCard({ name: 'T', rarity: 'rare', oracle_text: 'Flying' }),
+    );
+    const keys = results.map((r) => r.key);
+    expect(keys.indexOf('rarity')).toBeGreaterThan(-1);
+    expect(keys.indexOf('oracle')).toBeGreaterThan(-1);
+    expect(keys.indexOf('rarity')).toBeLessThan(keys.indexOf('oracle'));
+  });
+
+
   it('rarity is always compared (every card has one, including guesses', () => {
     // Every Scryfall card object carries a non-empty `rarity`, so the row
     // renders even when the guess doesn't spell it out explicitly (the fixture

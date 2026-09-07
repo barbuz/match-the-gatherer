@@ -48,7 +48,6 @@ describe('gatherHints', () => {
         { kind: 'type', value: 'Warrior', negated: false },
         { kind: 'power', value: '3', negated: false },
         { kind: 'toughness', value: '2', negated: false },
-        { kind: 'oracle', value: 'flying', negated: false },
         { kind: 'released', value: '2020-01-01', negated: false },
       ]),
     );
@@ -97,7 +96,7 @@ describe('gatherHints', () => {
       hints.filter((h) => h.kind === kind && h.value === value && (h.negated ?? false) === negated).length;
     expect(count('colorSet', 'r')).toBe(1);
     expect(count('type', 'Creature')).toBe(1);
-    expect(count('oracle', 'flying')).toBe(1);
+    expect(count('oracle', 'flying')).toBe(0); // oracle-text hints are dropped entirely
     expect(count('power', '3')).toBe(1); // identical P/T across both guesses
   });
 
@@ -290,12 +289,12 @@ describe('hintToClause', () => {
     expect(hintToClause({ kind: 'color', value: 'W', negated: true })).toBe('-c:w');
     expect(hintToClause({ kind: 'colorSet', value: 'RW' })).toBe('c=rw');
     expect(hintToClause({ kind: 'keyword', value: 'Flying' })).toBe('kw:flying');
-    // Oracle hints never negate: Scryfall's -fo: matches substrings
-    // (e.g. -fo:if would also exclude cards containing "different"),
-    // so a "missing word" cannot be safely expressed in the query..
-    expect(hintToClause({ kind: 'oracle', value: 'flying' })).toBe('fo:flying');
-    expect(hintToClause({ kind: 'oracle', value: 'flying', negated: true })).toBe('fo:flying');
-    expect(hintToClause({ kind: 'oracle', value: 'enter the battlefield' })).toBe('fo:"enter the battlefield"');
+    // Oracle hints are dropped entirely: positive fo: clauses make the
+    // hint search too easy (they give away the whole oracle text), and
+    // negated -fo: matches substrings (unreliable), so unexpressible..
+    expect(hintToClause({ kind: 'oracle', value: 'flying' })).toBeNull();
+    expect(hintToClause({ kind: 'oracle', value: 'flying', negated: true })).toBeNull();
+    expect(hintToClause({ kind: 'oracle', value: 'enter the battlefield' })).toBeNull();
     expect(hintToClause({ kind: 'layout', value: 'transform', negated: true })).toBe('-layout:transform');
     expect(hintToClause({ kind: 'mana', value: '{2}{R}' })).toBe('mana={2}{R}');
     expect(hintToClause({ kind: 'mana', value: '{2}{R}', negated: true })).toBe('mana!={2}{R}');
@@ -315,7 +314,7 @@ describe('hintToClause', () => {
 
   it('quotes values a Scryfall would misparse bare', () => {
     expect(hintToClause({ kind: 'type', value: 'Noble Knight' })).toBe('t:"noble knight"');
-    expect(hintToClause({ kind: 'oracle', value: 'Forestcycling' })).toBe('fo:forestcycling');
+    expect(hintToClause({ kind: 'oracle', value: 'Forestcycling' })).toBeNull();
     expect(hintToClause({ kind: 'type', value: "Urza's" })).toBe('t:urza\'s'); // apostrophes are fine bare
   });
 });
