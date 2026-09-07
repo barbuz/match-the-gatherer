@@ -47,11 +47,19 @@ function faceView(card) {
     toughness: face.toughness ?? card.toughness,
     loyalty: face.loyalty ?? card.loyalty,
     defense: face.defense ?? card.defense,
+    oracleText: face.oracle_text ?? card.oracle_text ?? '',
   };
 }
 
 export function normalizeManaCost(cost = '') {
   return cost.replace(/[{}]/g, '').replace(/\s+/g, '').toUpperCase();
+}
+
+const ORACLE_TOKEN = /[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu;
+
+/** Lowercased word tokens of oracle text (punctuation stripped, apostrophes/hyphens kept). */
+export function oracleWords(text = '') {
+  return (text.match(ORACLE_TOKEN) ?? []).map((t) => t.toLocaleLowerCase());
 }
 
 function line(key, label, status, correct, wrong, applicable, note, noteBold, segments) {
@@ -206,7 +214,9 @@ function compareFace(results, guessFace, targetFace, guessCmc, targetCmc) {
 export function compareCards(guess, target) {
   const results = [];
 
-  compareFace(results, faceView(guess), faceView(target), guess.cmc, target.cmc);
+  const gFace = faceView(guess);
+  const tFace = faceView(target);
+  compareFace(results, gFace, tFace, guess.cmc, target.cmc);
 
   // Layout shown only when the guess is non-normal, never revealing a
   // normal target's layout.
@@ -234,10 +244,27 @@ export function compareCards(guess, target) {
     )
   );
 
-  const gKw = guess.keywords ?? [];
-  if (gKw.length > 0) {
-    const tKw = target.keywords ?? [];
-    results.push(setLine('keywords', 'Keywords', gKw, tKw));
+  // Oracle text: every word of the guessed card's text is highlighted
+  // as partial-correct when it appears anywhere in the target's text. Only
+  // rendered when the guess has text, so a text-less target is never leaked.
+
+  const gWords = oracleWords(gFace.oracleText);
+  if (gWords.length > 0) {
+    const tWords = oracleWords(tFace.oracleText);
+    const targetSet = new Set(tWords);
+    const correct = gWords.filter((w) => targetSet.has(w));
+    const wrong = gWords.filter((w) => !targetSet.has(w));
+    const status =
+      wrong.length === 0 && gWords.length === tWords.length
+        ? 'correct'
+        : correct.length > 0
+          ? 'partial'
+          : 'wrong';
+    const segments = gWords.map((w) => ({
+      text: w,
+      status: targetSet.has(w) ? 'correct' : 'wrong',
+    }));
+    results.push({ key: 'oracle', label: 'Oracle text', status, correct, wrong, applicable: true, segments });
   }
 
   // Rarity is a core Scryfall field present on every card, so it always

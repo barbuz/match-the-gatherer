@@ -277,7 +277,7 @@ describe('compareCards — rarity', () => {
   });
 });
 
-describe('compareCards — release date and keywords', () => {
+describe('compareCards — release date and oracle text', () => {
   it('same release date is correct; otherwise wrong with direction note', () => {
     const target = makeCard({ released_at: '2020-06-01' });
     const older = compareCards(makeCard({ name: 'A', released_at: '2019-01-01' }), target);
@@ -286,31 +286,49 @@ describe('compareCards — release date and keywords', () => {
     expect(byKey(same, 'released').status).toBe('correct');
   });
 
-  it('keywords compare partially when guess has keywords', () => {
-    const guess = makeCard({ name: 'A', keywords: ['Flying', 'Cycling', 'Haste'] });
-    const target = makeCard({ keywords: ['Flying', 'Cycling'] });
+  it('oracle text compares partially when the guess has text', () => {
+    const guess = makeCard({ name: 'A', oracle_text: 'Flying\nVigilance\nCycling' });
+    const target = makeCard({ oracle_text: 'Flying\nVigilance' });
     const results = compareCards(guess, target);
-    const line = byKey(results, 'keywords');
+    const line = byKey(results, 'oracle');
     expect(line).toMatchObject({ status: 'partial', applicable: true });
-    expect(line.correct).toEqual(['Flying', 'Cycling']);
-    expect(line.wrong).toEqual(['Haste']);
+    expect(line.correct).toEqual(['flying', 'vigilance']);
+    expect(line.wrong).toEqual(['cycling']);
+    expect(line.segments).toEqual([
+      { text: 'flying', status: 'correct' },
+      { text: 'vigilance', status: 'correct' },
+      { text: 'cycling', status: 'wrong' },
+    ]);
   });
 
-  it('no keywords line when the guess has no keywords', () => {
-    const results = compareCards(makeCard({ name: 'A', keywords: [] }), makeCard({ keywords: ['Flying'] }));
-    expect(byKey(results, 'keywords')).toBeUndefined();
+  it('no oracle-text line when the guess has no text', () => {
+    const results = compareCards(
+      makeCard({ name: 'A', oracle_text: '' }),
+      makeCard({ oracle_text: 'Flying' }),
+    );
+    expect(byKey(results, 'oracle')).toBeUndefined();
   });
 
-  it('empty keyword sets on both cards omit the line too', () => {
-    const guess = makeCard({ colors: [], type_line: 'Creature', keywords: [] });
-    const target = makeCard({ colors: [], type_line: 'Creature', keywords: [] });
+  it('empty oracle text on both cards omits the line too', () => {
+    const guess = makeCard({ colors: [], type_line: 'Creature', oracle_text: '' });
+    const target = makeCard({ colors: [], type_line: 'Creature', oracle_text: '' });
     const results = compareCards(guess, target);
-    expect(byKey(results, 'keywords')).toBeUndefined();
+    expect(byKey(results, 'oracle')).toBeUndefined();
     const colors = byKey(results, 'colors');
     expect(colors.status).toBe('correct');
     expect(colors.correct).toEqual(['—']);
   });
+
+  it('a fully matching oracle text is a correct row', () => {
+    const text = 'Flying (This creature can\'t be blocked.)\nVigilance';
+    const results = compareCards(
+      makeCard({ name: 'A', oracle_text: text }),
+      makeCard({ name: 'T', oracle_text: text }),
+    );
+    expect(byKey(results, 'oracle')).toMatchObject({ status: 'correct' });
+  });
 });
+
 
 describe('compareCards — layout', () => {
   const frontFace = {

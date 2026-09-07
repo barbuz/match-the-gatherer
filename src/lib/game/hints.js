@@ -132,9 +132,13 @@ export function gatherHints(guesses,) {
           }
           break;
         }
-        case 'keywords':
-          pushSetValues(r.correct, 'keyword');
-          pushSetValues(r.wrong, 'keyword', true);
+        case 'oracle':
+          // Words that matched pin a positive fo: clause; words the
+          // target lacks emit a negated one (-fo:). Each oracle-text
+          // clause is ANDed in Scryfall, so a multi-word hint pin
+          // the full text, and negations rule out cards containing the word.
+          pushSetValues(r.correct, 'oracle');
+          pushSetValues(r.wrong, 'oracle', true);
           break;
         case 'rarity':
           pushSetValues(r.correct, 'rarity');
@@ -199,6 +203,8 @@ export function hintToClause(hint,) {
       return `c=${String(value).toLowerCase()}`;
     case 'keyword':
       return `${negated ? '-' : ''}kw:${quoteIfNeeded(String(value).toLowerCase())}`;
+    case 'oracle':
+      return `${negated ? '-' : ''}fo:${quoteIfNeeded(String(value).toLowerCase())}`;
     case 'layout':
       return `${negated ? '-' : ''}layout:${quoteIfNeeded(String(value).toLowerCase())}`;
     case 'mana':
