@@ -195,10 +195,6 @@
     transform: translateY(-50%);
     pointer-events: none;
   }
-  .line.partial .val.correct {
-    background: var(--partial-bg);
-    color: var(--partial-fg);
-  }
   /* Segments rows phrase values in order:the type line like the card
      ("Supertypes Types — Subtypes"),the P/T row as "3/2". */
   .values.seg-values {

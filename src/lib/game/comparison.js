@@ -3,67 +3,134 @@
  *
  * compareCards(guess, target) returns an array of result lines:
  *   { key, label, status, correct, wrong, applicable, note? }
- * - status: 'correct' | 'partial' | 'wrong'
- * - correct: guessed values that match the target (shown highlighted)
- * - wrong: guessed values that don't match the target (shown marked wrong)
- * - segments: ordered units for positioning-sensitive rows; values are
- *   { text, status }, separators are { dash: true } (type line) or
- *   { slash: true } (P/T row)
- * - empty properties on both cards report a '—' marker as correct
- * - applicable: whether the property exists on the GUESSED card, so the
+ *
+ * Comparison is token-based: every property's values are modeled as a
+ * list of tokens, and a guessed token is correct when it appears anywhere
+ * in the target's token list for that property. A row is fully correct when
+ * every guessed token is present in the target's list, otherwise wrong..
+ *
+ * For multi-faced cards, the target's token list is the union of every
+ * face's values (plus the card-level field when relevant), mirroring how
+ * Scryfall's search operators index any face. A creature with P/T 3/2
+ * has power tokens [3]and toughness tokens [2];if its other face is
+ * 4/5 the lists become [3,4]and [2,5]..
+ *
+ * Colorless cards carry an explicit 'colorless' token in their color list
+ * and cards with no mana cost carry an explicit '(no mana cost)' token
+ * so neither property can collapse to an empty list..
+ *
+ * - status: 'correct' | 'wrong'
+ * - correct: guessed tokens that match the target (shown highlighted)
+ * - wrong: guessed tokens that don't match the target (shown marked wrong)
+ * - segments: ordered units for positioning-sensitive rows
+ * - applicable: whetherthe property exists on the GUESSED card,so the
  *   share-score denominator never leaks information about the target (§11)
  * - absentOnTarget: guess has the property butthe target lacks it entirely
- *   (e.g. a creature guess against an instant); shown struck-through
- *   and excluded from hint queries, since no Scryfall operator can
- *   express "has no power/toughness/loyalty"
+ *   (e.g. a creature guess against an instant)
  */
 
-const SUPERTYPES = new Set(['Basic', 'Legendary', 'Snow', 'World', 'Ongoing']);
+export const COLORLESS = 'colorless';
+export const NO_MANA_COST = '(no mana cost)';
+
+const SUPER_TYPES = new Set(['Basic', 'Legendary', 'Snow', 'World', 'Ongoing']);
 
 export function parseTypeLine(typeLine = '') {
   const dash = typeLine.indexOf('—');
-  const left = (dash === -1 ? typeLine : typeLine.slice(0, dash)).trim();
-  const right = dash === -1 ? '' : typeLine.slice(dash + 1).trim();
+  let left;
+  let right;
+  if (dash === -1) {
+    left = typeLine;
+    right = '';
+  } else {
+    left = typeLine.slice(0, dash);
+    right = typeLine.slice(dash + 1);
+  }
+  left = left.trim();
+  right = right.trim();
   const leftTokens = left.split(/\s+/).filter(Boolean);
   return {
-    supertypes: leftTokens.filter((t) => SUPERTYPES.has(t)),
-    types: leftTokens.filter((t) => !SUPERTYPES.has(t)),
+    supertypes: leftTokens.filter((t) => SUPER_TYPES.has(t)),
+    types: leftTokens.filter((t) => !SUPER_TYPES.has(t)),
     subtypes: right ? right.split(/\s+/).filter(Boolean) : [],
   };
 }
 
-/** Normalized view of a card's primary face (falls back to card-level fields). */
-function faceView(card) {
-  const face = Array.isArray(card?.card_faces) && card.card_faces.length > 0 ? card.card_faces[0] : card;
-  const { supertypes, types, subtypes } = parseTypeLine(face.type_line ?? card.type_line ?? '');
-  return {
-    name: face.name ?? card.name ?? '',
-    manaCost: face.mana_cost ?? '',
-    colors: face.colors ?? card.colors ?? [],
-    supertypes,
-    types,
-    subtypes,
-    power: face.power ?? card.power,
-    toughness: face.toughness ?? card.toughness,
-    loyalty: face.loyalty ?? card.loyalty,
-    defense: face.defense ?? card.defense,
-    oracleText: face.oracle_text ?? card.oracle_text ?? '',
-  };
+function facesOf(card) {
+  const faces = card?.card_faces;
+  if (Array.isArray(faces) && faces.length > 0) return faces;
+  return [card];
 }
 
+function addUnique(out, vals) {
+  if (!vals) return;
+  for (const x of vals) {
+    if (x != null && !out.includes(String(x))) out.push(String(x));
+  }
+}
+
+function collect(card, picker) {
+  const out = [];
+  for (const f of facesOf(card)) addUnique(out, picker(f));
+  addUnique(out, picker(card));
+  return out;
+}
+
+function manaSymbols(cost = '') {
+  const text = String(cost);
+  const matches = [...text.matchAll(/\{[^{}]+\}/g)];
+  return matches.map((m) => m[0]);
+}
+
+/** Normalized comparable form of a mana cost: braced symbols joined, braces/space/case stripped. */
 export function normalizeManaCost(cost = '') {
-  return cost.replace(/[{}]/g, '').replace(/\s+/g, '').toUpperCase();
+  return String(cost ?? '').replace(/[{}]/g, '' ).replace(/\s+/g, '' ).toUpperCase();
 }
 
-// Word or braced mana-symbol token ({G},{2}{W/U}}) — each brace pair is one
-// token — followed by words with internal apostrophes/hyphens kept. The gaps
-// between matches are punctuation/whitespace and render as-is with no status..
-const ORACLE_TOKEN = /\{[^\{\}]+\}|[\p{L}\p{N}]+(?:['\u2019\-][\p{L}\p{N}]+)*/gu;
-/**
- * Split oracle text into render segments: word/braced-mana-symbol tokens
- * (compared against the target) and status-less plain segments holding the
- * punctuation/whitespace between them (preserving original formatting..
+function manaCostTokens(card) {
+  const out = [];
+  for (const f of facesOf(card)) {
+    const syms = manaSymbols(f.mana_cost ?? '');
+    addUnique(out, syms.length > 0 ? [syms.join('')] : [NO_MANA_COST]);
+  }
+  // Card-level cost: only meaningful when it actually holds symbols. On
+  // double-faced cards the card-level field is usually absent, and an empty
+  // string here would wrongly inject the no-cost token into the face union.
+
+  const cardCost = card?.mana_cost;
+  if (cardCost != null && cardCost !== '') {
+    const syms = manaSymbols(cardCost);
+    if (syms.length > 0) addUnique(out, [syms.join('')]);
+  }
+  return out;
+}
+
+function colorTokens(card) {
+  const colors = collect(card, (f) => f.colors ?? []);
+  return colors.length > 0 ? colors : [COLORLESS];
+}
+
+function typeTokens(card) {
+  const collectTypes = (f) => {
+    const parsed = parseTypeLine(f.type_line ?? '');
+    return [...parsed.supertypes, ...parsed.types, ...parsed.subtypes];
+  };
+  return collect(card, collectTypes);
+}
+
+function scalarTokens(card, key) {
+  const pick = (f) => {
+    const v = f[key];
+    return v == null ? null : [String(v)];
+  };
+  return collect(card, pick);
+}
+
+/** Word or braced mana-symbol token ({G},{2}{W/U}}) — each brace pair is one
+ * token — followed by words with internal apostrophes/hyphens kept. The gaps
+ * between matches are punctuation/whitespace and render as-is with no status..
  */
+const ORACLE_TOKEN = /\{[^\{\}]+\}|[\p{L}\p{N}]+(?:['\u2019\-][\p{L}\p{N}]+)*/gu;
+
 export function oracleSegments(text = '') {
   const segments = [];
   let last = 0;
@@ -76,164 +143,123 @@ export function oracleSegments(text = '') {
   return segments;
 }
 
+function oracleTokens(card) {
+  const out = [];
+  for (const f of facesOf(card)) {
+    for (const s of oracleSegments(f.oracle_text ?? '')) {
+      if (s.token) out.push(s.text.toLocaleLowerCase());
+    }
+  }
+  return out;
+}
+
 function line(key, label, status, correct, wrong, applicable, note, noteBold, segments) {
   return {
-    key,
-    label,
-    status,
-    correct,
-    wrong,
-    applicable,
+    key, label, status, correct, wrong, applicable,
     ...(note ? { note } : {}),
     ...(noteBold ? { noteBold } : {}),
     ...(segments ? { segments } : {}),
   };
 }
 
-function setLine(key, label, guessVals, targetVals) {
-  // Both empty: the placeholder '—' renders as a correct (green) value.
-  if (guessVals.length === 0 && targetVals.length === 0) {
+function tokenRow(key, label, guessTokens, targetTokens) {
+  if (guessTokens.length === 0 && targetTokens.length === 0) {
     return line(key, label, 'correct', ['—'], [], true);
   }
-  const targetSet = new Set(targetVals);
-  const correct = guessVals.filter((v) => targetSet.has(v));
-  const wrong = guessVals.filter((v) => !targetSet.has(v));
-  let status;
-  if (wrong.length === 0 && guessVals.length === targetVals.length) status = 'correct';
-  else if (correct.length > 0) status = 'partial';
-  else status = 'wrong';
+  const targetSet = new Set(targetTokens);
+  const correct = guessTokens.filter((v) => targetSet.has(v));
+  const wrong = guessTokens.filter((v) => !targetSet.has(v));
+  const status = wrong.length === 0 ? 'correct' : 'wrong';
   return line(key, label, status, correct, wrong, true);
 }
 
-/**
- * Type line rendered like the card: "Supertypes Types — Subtypes".
- * Matching is still per-token against the target's combined type tokens,
- * but `segments` preserves the guess's order (supertypes + types before the
- * em-dash, subtypes after) so the UI can phrase it the way cards do.
- * Values are { text, status }; the em-dash is a { dash: true } separator.
- */
-function typeLine(key, label, guessFace, targetFace) {
-  const gMain = [...guessFace.supertypes, ...guessFace.types];
-  const gSub = [...guessFace.subtypes];
-  const tMain = [...targetFace.supertypes, ...targetFace.types];
-  const tSub = [...targetFace.subtypes];
-  if (gMain.length + gSub.length === 0 && tMain.length + tSub.length === 0) {
+function typeLine(key, label, guessCard, targetCard) {
+  const gTokens = typeTokens(guessCard);
+  const tTokens = typeTokens(targetCard);
+  if (gTokens.length === 0 && tTokens.length === 0) {
     return line(key, label, 'correct', ['—'], [], true);
   }
-  const targetSet = new Set([...tMain, ...tSub]);
-  const all = [...gMain, ...gSub];
-  const correct = all.filter((v) => targetSet.has(v));
-  const wrong = all.filter((v) => !targetSet.has(v));
-  const status =
-    wrong.length === 0 && all.length === tMain.length + tSub.length
-      ? 'correct'
-      : correct.length > 0
-        ? 'partial'
-        : 'wrong';
+  const targetSet = new Set(tTokens);
+  const correct = gTokens.filter((v) => targetSet.has(v));
+  const wrong = gTokens.filter((v) => !targetSet.has(v));
+  const status = wrong.length === 0 ? 'correct' : 'wrong';
   const segments = [];
-  for (const t of gMain) segments.push({ text: t, status: targetSet.has(t) ? 'correct' : 'wrong' });
-  if (gSub.length > 0) segments.push({ dash: true });
-  for (const t of gSub) segments.push({ text: t, status: targetSet.has(t) ? 'correct' : 'wrong' });
+  for (const f of facesOf(guessCard)) {
+    const parsed = parseTypeLine(f.type_line ?? '');
+    const main = [...parsed.supertypes, ...parsed.types];
+    for (const t of main) segments.push({ text: t, status: targetSet.has(t) ? 'correct' : 'wrong' });
+    if (parsed.subtypes.length >0) {
+      segments.push({ dash: true });
+      for (const t of parsed.subtypes) segments.push({ text: t, status: targetSet.has(t) ? 'correct' : 'wrong' });
+    }
+  }
   return line(key, label, status, correct, wrong, true, undefined, undefined, segments);
 }
 
-function manaLine(key, label, guessFace, targetFace, guessCmc, targetCmc) {
-  const g = normalizeManaCost(guessFace.manaCost);
-  const t = normalizeManaCost(targetFace.manaCost);
-  const shown = guessFace.manaCost || '(no mana cost)';
-  const mv = guessCmc != null ? String(guessCmc) : null;
-  const mvCorrect = mv != null && targetCmc != null && String(guessCmc) === String(targetCmc);
-  const mvStatus = mv == null ? null : mvCorrect ? 'correct' : 'wrong';
+function manaLine(key, label, guessCard, targetCard) {
+  const g = manaCostTokens(guessCard);
+  const t = manaCostTokens(targetCard);
+  const targetSet = new Set(t);
+  // The guessed card's whole cost(s) are rendered as units: splitting into
+  // individual symbols would hide thatthe full guessed cost itself differs (the
+  // negation hint needs the whole cost string).
+  const correct = g.filter((v) => targetSet.has(v));
+  const wrong = g.filter((v) => !targetSet.has(v));
+  const status = wrong.length === 0 ? 'correct' : 'wrong';
+  const mv = guessCard.cmc != null ? String(guessCard.cmc) : null;
+  const mvStatus = mv == null ? null : String(targetCard.cmc) === mv ? 'correct' : 'wrong';
   const mvValue = { text: mv, status: mvStatus };
-  if (g === t) {
-    return { key, label, status: 'correct', correct: [shown], wrong: [], applicable: true, mvValues: [mvValue] };
-  }
-  if (guessCmc != null && targetCmc != null && guessCmc === targetCmc) {
-    return {
-      key,
-      label,
-      status: 'partial',
-      correct: [],
-      wrong: [shown],
-      applicable: true,
-      mvValues: [mvValue],
-    };
-  }
-  return { key, label, status: 'wrong', correct: [], wrong: [shown], applicable: true, mvValues: [mvValue] };
+  return { key, label, status, correct, wrong, applicable: true, mvValues: [mvValue] };
 }
 
-function scalarLine(key, label, guessVal, targetVal) {
-  if (guessVal == null) return null; // property absent on the guess: don't reveal the target has it
-  const shown = String(guessVal);
-  if (targetVal != null && String(targetVal) === shown) return line(key, label, 'correct', [shown], [], true);
-  const l = line(key, label, 'wrong', [], [shown], true);
-  if (targetVal == null) l.absentOnTarget = true;
-  return l;
-}
-
-/**
- * Power and toughness are shown together in one P/T row, with each side
- * colored independently. Absent on the guess (non-creature) → no row, so a
- * creature target is never leaked.
- */
-function statsLine(key, label, guessFace, targetFace) {
+function statsLine(key, label, guessCard, targetCard) {
+  const gPower = scalarTokens(guessCard, 'power');
+  const gTough = scalarTokens(guessCard, 'toughness');
+  const tPower = new Set(scalarTokens(targetCard, 'power'));
+  const tTough = new Set(scalarTokens(targetCard, 'toughness'));
+  if (gPower.length + gTough.length === 0) return null;
   const segments = [];
-  let present =  0;
-  let missing =  0;
-  for (const [g, t] of [
-    [guessFace.power, targetFace.power],
-    [guessFace.toughness, targetFace.toughness],
-  ]) {
-    if (g == null) continue;
-    if (present > 0) segments.push({ slash: true });
-    present += 1;
-    if (t == null) missing += 1;
-    segments.push({
-      text: String(g),
-      status: t != null && String(t) === String(g) ? 'correct' : 'wrong',
-    });
-  }
-  if (segments.length === 0) return null;
-  const values = segments.filter((s) => !s.dash && !s.slash);
-  const status = values.every((s) => s.status === 'correct')
-    ? 'correct'
-    : values.some((s) => s.status === 'correct')
-      ? 'partial'
-      : 'wrong';
-  return { key, label, status, correct: [], wrong: [], applicable: true, segments,
-    ...(present === missing ? { absentOnTarget: true } : {}),
+  for (const v of gPower) segments.push({ text: v, status: tPower.has(v) ? 'correct' : 'wrong' });
+  if (gPower.length > 0 && gTough.length > 0) segments.push({ slash: true });
+  for (const v of gTough) segments.push({ text: v, status: tTough.has(v) ? 'correct' : 'wrong' });
+  const values = segments.filter((s) => !s.slash);
+  const status = values.every((s) => s.status === 'correct') ? 'correct' : 'wrong';
+  const present = gPower.length + gTough.length;
+  return {
+    key, label, status,
+    correct: [],
+    wrong: [],
+    applicable: true,
+    segments,
+    ...(present > 0 && tPower.size === 0 && tTough.size === 0 ? { absentOnTarget: true } : {}),
   };
 }
 
-function compareFace(results, guessFace, targetFace, guessCmc, targetCmc) {
-  results.push(manaLine('mana', 'Mana cost', guessFace, targetFace, guessCmc, targetCmc));
-  results.push(setLine('colors', 'Colors', guessFace.colors, targetFace.colors));
-  results.push(typeLine('type', 'Type', guessFace, targetFace));
-  const stats = statsLine('pt', 'P/T', guessFace, targetFace);
-  if (stats) results.push(stats);
-  for (const [key, label, g, t] of [
-    ['loyalty', 'Loyalty', guessFace.loyalty, targetFace.loyalty],
-    ['defense', 'Defense', guessFace.defense, targetFace.defense],
-  ]) {
-    const l = scalarLine(`${key}`, `${label}`, g, t);
-    if (l) results.push(l);
-  }
+function scalarRow(key, label, guessCard, targetCard, targetKey) {
+  const g = scalarTokens(guessCard, key);
+  if (g.length === 0) return null;
+  const tSet = new Set(scalarTokens(targetCard, targetKey));
+  const correct = g.filter((v) => tSet.has(v));
+  const wrong = g.filter((v) => !tSet.has(v));
+  const status = wrong.length === 0 ? 'correct' : 'wrong';
+  const l = line(key, label, status, correct, wrong, true);
+  if (tSet.size === 0) l.absentOnTarget = true;
+  return l;
 }
 
-/**
- * Compare a guessed card against the target card.
- * @param {object} guess  Scryfall card object
- * @param {object} target Scryfall card object
- */
 export function compareCards(guess, target) {
   const results = [];
 
-  const gFace = faceView(guess);
-  const tFace = faceView(target);
-  compareFace(results, gFace, tFace, guess.cmc, target.cmc);
+  results.push(manaLine('mana', 'Mana cost', guess, target));
+  results.push(tokenRow('colors', 'Colors', colorTokens(guess), colorTokens(target)));
+  results.push(typeLine('type', 'Type', guess, target));
+  const stats = statsLine('pt', 'P/T', guess, target);
+  if (stats) results.push(stats);
+  for (const key of ['loyalty', 'defense']) {
+    const l = scalarRow(key, key === 'loyalty' ? 'Loyalty' : 'Defense', guess, target, key);
+    if (l) results.push(l);
+  }
 
-  // Layout shown only when the guess is non-normal, never revealing a
-  // normal target's layout.
   const gLayout = guess.layout ?? 'normal';
   if (gLayout !== 'normal') {
     results.push(
@@ -247,21 +273,13 @@ export function compareCards(guess, target) {
   const direction = sameDate ? undefined : guess.released_at < target.released_at ? 'newer' : 'older';
   results.push(
     line(
-      'released',
-      'First released',
-      sameDate ? 'correct' : 'wrong',
+      'released', 'First released', sameDate ? 'correct' : 'wrong',
       sameDate ? [guess.released_at] : [],
       sameDate ? [] : [guess.released_at],
-      true,
-      direction ? `target is ${direction}` : undefined,
-      direction
+      true, direction ? `target is ${direction}` : undefined, direction
     )
   );
 
-  // Rarity is a core Scryfall field present on every card, so it always
-  // renders (unlike the P/T, loyalty, defense rows that follow the guess's
-  // card type). Only the front/primary face is compared (consistent with the
-  // other per-face properties).
   const gRarity = String(guess.rarity ?? '').trim();
   results.push(
     String(target.rarity ?? '').trim() === gRarity
@@ -269,32 +287,28 @@ export function compareCards(guess, target) {
       : line('rarity', 'Rarity', 'wrong', [], [gRarity], true)
   );
 
-  // Oracle text: every word/braced-mana-symbol token of the guessed card's
-  // text is highlighted as partial-correct when it appears anywhere in the
-  // target's text; punctuation/whitespace between tokens keeps its original
-  // formatting and gets no status. Only rendered when the guess has text, so a
-  // text-less target is never leaked..
 
-  const gSegs = oracleSegments(gFace.oracleText);
-  const gTokens = gSegs.filter((s) => s.token);
-  if (gTokens.length > 0) {
-    const tSegs = oracleSegments(tFace.oracleText);
-    const tTokens = tSegs.filter((s) => s.token);
-    const targetSet = new Set(
-      tTokens.map((t) => t.text.toLocaleLowerCase()),
-    );
-    const correct = gTokens.filter((w) => targetSet.has(w.text.toLocaleLowerCase())).map((w) => w.text.toLocaleLowerCase());
-    const wrong = gTokens.filter((w) => !targetSet.has(w.text.toLocaleLowerCase())).map((w) => w.text.toLocaleLowerCase());
-    const status =
-      wrong.length === 0 && gTokens.length === tTokens.length
-        ? 'correct'
-        : correct.length > 0
-          ? 'partial'
-          : 'wrong';
-    const segments = gSegs.map((s) => ({
-      ...s,
-      ...(s.token ? { status: targetSet.has(s.text.toLocaleLowerCase()) ? 'correct' : 'wrong' } : {}),
-    }));
+
+  const gSegs = [];
+  for (const f of facesOf(guess)) {
+    const segs = oracleSegments(f.oracle_text ?? '');
+    if (gSegs.length > 0 && segs.length >0) gSegs.push({ text: '\n' });
+    gSegs.push(...segs);
+  }
+  const gTokens = oracleTokens(guess);
+  if (gTokens.length >0) {
+  const tTokens = oracleTokens(target);
+    const targetSet = new Set(tTokens);
+    const correct = gTokens.filter((w) => targetSet.has(w));
+    const wrong = gTokens.filter((w) => !targetSet.has(w));
+    const status = wrong.length === 0 ? 'correct' : 'wrong';
+    const segments = gSegs.map((s) => {
+      const seg = { ...s };
+      if (s.token) {
+        seg.status = targetSet.has(s.text.toLocaleLowerCase()) ? 'correct' : 'wrong';
+      }
+      return seg;
+    });
     results.push({ key: 'oracle', label: 'Oracle text', status, correct, wrong, applicable: true, segments });
   }
   return results;

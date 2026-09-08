@@ -11,16 +11,16 @@ const line = (status, applicable = true) => ({
 });
 
 describe('scoreResults', () => {
-  it('counts correct as 1 and partial as 0.5 over applicable properties', () => {
+  it('counts only fully correct rows over applicable properties', () => {
     const { matched, applicable, ratio } = scoreResults([
       line('correct'),
       line('correct'),
-      line('partial'),
+      line('wrong'),
       line('wrong'),
     ]);
-    expect(matched).toBe(2.5);
+    expect(matched).toBe(2);
     expect(applicable).toBe(4);
-    expect(ratio).toBeCloseTo(0.625);
+    expect(ratio).toBeCloseTo(0.5);
   });
 
   it('ignores non-applicable properties so the denominator does not leak', () => {

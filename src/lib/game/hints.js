@@ -31,7 +31,7 @@ function pushUnique(hints, seen, hint) {
  *
  * Two rules keep the Scryfall query from over-constraining:
  * - once a property line is fully matched ('correct'), hints from later
- *   partial/wrong lines for the same property carry no extra informationand
+ *   wrong lines for the same property carry no extra informationand
  *   are dropped;
  * - same-direction release-date bounds collapse to the tightest one
  *   (e.g. date>2001 AND date>2010 reduces to date>2010).
@@ -40,7 +40,7 @@ function pushUnique(hints, seen, hint) {
  */
 export function gatherHints(guesses,) {
   // First pass: track which property lines were ever fully matched, so
-  // their partial/wrong counterparts elsewhere can be ignored. Exception:
+  // their wrong counterparts elsewhere can be ignored. Exception:
   // `type` — Scryfall's `t:`/`type:` is a contains-match for supertypes,
   // card types, and subtypes with no exact-type-line operator,so negated
   // type hints remain informative even after a fully-matched type row.
@@ -69,41 +69,46 @@ export function gatherHints(guesses,) {
 
   for (const entry of guesses ?? []) {
     for (const r of entry?.results ?? []) {
-      if (fullyMatched.has(r.key) && r.status !== 'correct' && r.key !== 'type') continue; // fully matched property: partial/wrong values are irrelevant (except type: see above)
+      if (fullyMatched.has(r.key) && r.status !== 'correct' && r.key !== 'type') continue; // fully matched property: wrong values are irrelevant (except type: see above)
       if (r.absentOnTarget) continue; // guessed-only property: no Scryfall operator for it
       switch (r.key) {
         case 'mana': {
-          const mv = r.mvValues?.find((m) => m.status === 'correct');
-          if (mv && mv.text != null) pushValue({ kind: 'manaValue', value: mv.text });
+          const mvCorrect = r.mvValues?.find((m) => m.status === 'correct');
+          const mvWrong = r.mvValues?.find((m) => m.status === 'wrong');
+          if (mvCorrect && mvCorrect.text != null) pushValue({ kind: 'manaValue', value: mvCorrect.text });
+          else if (mvWrong && mvWrong.text != null) push(negate({ kind: 'manaValue', value: mvWrong.text }));
           if (r.status === 'correct') {
-            const shown = r.correct?.[0];
-            if (shown && shown !== '(no mana cost)') pushValue({ kind: 'mana', value: shown });
-          } else if (r.status === 'partial') {
-            // Same mana value, different exact cost: the value is already pinned
-            // via `mv=`, so `mana!=` adds a real exclusion (Scryfall evaluates
-            // per face, so multi-faced cards whose other face differs still leak).
+            const toks = r.correct ?? [];
+            // `mana=` pins one exact cost; with multiple matched whole costs (a
+            // multi-faced guess whose every face cost is on the target) no single
+            // clause can express the union, so rely on the `mv=` hint alone.
+
+            if (toks.length === 1) {
+              const full = toks[0];
+              if (full && full !== '(no mana cost)') pushValue({ kind: 'mana', value: full });
+            }
+          } else if (r.status === 'wrong' && !mvWrong) {
             // When the cost differs AND the MV differs, `mv!=` already rules out
             // every card with that cost;, so a cost negation would add nothing.
-            const wrongCost = r.wrong?.[0];
+            // Only negate the exact cost on a same-MV wrong line, where
+            // Scryfall's per-face `mana!=` adds a real exclusion.
+            const wrongCost = (r.wrong ?? []).join('');
             if (wrongCost && wrongCost !== '(no mana cost)') push(negate({ kind: 'mana', value: wrongCost }));
-          } else if (r.status === 'wrong') {
-            const gmv = r.mvValues?.find((m) => m.status === 'wrong');
-            if (gmv && gmv.text != null) push(negate({ kind: 'manaValue', value: gmv.text }));
           }
           break;
         }
-        case 'colors':
-          if (r.status === 'correct') {
-            // The full color set is known exactly: query the exact set,
-            // not a "contains this color" clause (which would also match
-            // supersets like BW for an exact R).
-            const letters = (r.correct ?? []).join('').toLowerCase().split('').filter((c) => 'wubrg'.includes(c)).sort().join('');
+        case 'colors': {
+          const coloredCorrect = (r.correct ?? []).filter((v) => v !== 'colorless');
+          const coloredWrong = (r.wrong ?? []).filter((v) => v !== 'colorless');
+          if (r.status === 'correct' && coloredCorrect.length > 0) {
+            const letters = coloredCorrect.join('').toLowerCase().split('').filter((c) => 'wubrg'.includes(c)).sort().join('');
             if (letters) pushValue({ kind: 'colorSet', value: letters });
           } else {
-            pushSetValues(r.correct, 'color');
-            pushSetValues(r.wrong, 'color', true);
+            pushSetValues(coloredCorrect, 'color');
+            pushSetValues(coloredWrong, 'color', true);
           }
           break;
+        }
         case 'type':
           pushSetValues(r.correct, 'type');
           pushSetValues(r.wrong, 'type', true);
