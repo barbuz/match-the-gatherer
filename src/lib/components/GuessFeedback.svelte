@@ -53,6 +53,8 @@
                 {:else}
                   <span class="val {seg.status}">{seg.text}</span>
                 {/if}
+              {:else if seg.status}
+                <span class="val {seg.status}">{seg.text}</span>
               {:else}
                 <span class="plain">{seg.text}</span>
               {/if}
@@ -116,8 +118,9 @@
     background: var(--surface);
   }
   .card-name {
-    margin: 0 0 0.4rem;
+    margin: 0 3rem 0.4rem;
     font-size: 0.95rem;
+    overflow-wrap: anywhere;
   }
   .lines {
     display: flex;
@@ -224,6 +227,7 @@
   }
   .values.seg-values .plain {
     white-space: pre-wrap;
+    color: var(--muted);
   }
   .note {
     font-size: 0.7rem;
@@ -232,8 +236,8 @@
   }
   .match-badge {
     position: absolute;
+    top: 0.6rem;
     right: 0.6rem;
-    bottom: 0.6rem;
     width: 44px;
     height: 44px;
   }
