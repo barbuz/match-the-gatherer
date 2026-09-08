@@ -34,8 +34,8 @@ describe('gatherHints', () => {
   it('collects positive hints from correct properties', () => {
     const hints = gatherHints([
       guessEntry(
-        makeCard({ name: 'A', manacost: '{2}{R}', cmc: 3, colors: ['R'], type_line: 'Creature — Goblin Warrior', power: '3', toughness: '2', keywords: ['Flying'], released_at: '2020-01-01' }),
-        makeCard({ keywords: ['Flying'] }),
+        makeCard({ name: 'A', manacost: '{2}{R}', cmc: 3, colors: ['R'], type_line: 'Creature — Goblin Warrior', power: '3', toughness: '2', oracle_text: 'Flying', released_at: '2020-01-01' }),
+        makeCard({ oracle_text: 'Flying' }),
       ),
     ]);
     expect(hints).toEqual(
@@ -48,7 +48,6 @@ describe('gatherHints', () => {
         { kind: 'type', value: 'Warrior', negated: false },
         { kind: 'power', value: '3', negated: false },
         { kind: 'toughness', value: '2', negated: false },
-        { kind: 'keyword', value: 'Flying', negated: false },
         { kind: 'released', value: '2020-01-01', negated: false },
       ]),
     );
@@ -65,7 +64,7 @@ describe('gatherHints', () => {
       type_line: 'Artifact Creature — Golem',
       power: '3',
       toughness: '5',
-      keywords: ['Haste'],
+      oracle_text: 'Haste',
       released_at: '2019-01-01',
     });
     const hints = gatherHints([guessEntry(guess, target,)]);
@@ -78,7 +77,6 @@ describe('gatherHints', () => {
         { kind: 'type', value: 'Creature', negated: false },        // shared type token
         { kind: 'type', value: 'Golem', negated: true },
         { kind: 'toughness', value: '5', negated: true },
-        { kind: 'keyword', value: 'Haste', negated: true },
         { kind: 'released', value: '2019-01-01', dir: '>', negated: false }, // target released after the guess
       ]),
     );
@@ -88,17 +86,17 @@ describe('gatherHints', () => {
   });
 
   it('deduplicates repeated hints across guesses', () => {
-    const card = makeCard({ name: 'A', colors: ['R'], type_line: 'Creature — Goblin Warrior', keywords: ['Flying'] });
-    const target = makeCard({ keywords: ['Flying'] });
+    const card = makeCard({ name: 'A', colors: ['R'], type_line: 'Creature — Goblin Warrior', oracle_text: 'Flying' });
+    const target = makeCard({ oracle_text: 'Flying' });
     const hints = gatherHints([
       guessEntry(card, target),
-      guessEntry(makeCard({ name: 'B', colors: ['R'], type_line: 'Artifact — Golem', keywords: ['Flying'] }), target),
+      guessEntry(makeCard({ name: 'B', colors: ['R'], type_line: 'Artifact — Golem', oracle_text: 'Flying' }), target),
     ]);
     const count = (kind, value, negated = false) =>
       hints.filter((h) => h.kind === kind && h.value === value && (h.negated ?? false) === negated).length;
     expect(count('colorSet', 'r')).toBe(1);
     expect(count('type', 'Creature')).toBe(1);
-    expect(count('keyword', 'Flying')).toBe(1);
+    expect(count('oracle', 'flying')).toBe(0); // oracle-text hints are dropped entirely
     expect(count('power', '3')).toBe(1); // identical P/T across both guesses
   });
 
@@ -111,13 +109,13 @@ describe('gatherHints', () => {
 
   it('ignores the empty-hold placeholder and defense stats', () => {
     const bothEmpty = guessEntry(
-      makeCard({ name: 'A', colors: [], type_line: '', keywords: [], power: undefined, toughness: undefined, loyalty: undefined }),
-      makeCard({ name: 'T', colors: [], type_line: '', keywords: [], power: undefined, toughness: undefined, loyalty: undefined }),
+      makeCard({ name: 'A', colors: [], type_line: '', oracle_text: '', power: undefined, toughness: undefined, loyalty: undefined }),
+      makeCard({ name: 'T', colors: [], type_line: '', oracle_text: '', power: undefined, toughness: undefined, loyalty: undefined }),
     );
     const hints = gatherHints([bothEmpty]);
     expect(hints.filter((h) => h.kind === 'color')).toHaveLength(0);
     expect(hints.filter((h) => h.kind === 'type')).toHaveLength(0);
-    expect(hints.filter((h) => h.kind === 'keyword')).toHaveLength(0);
+    expect(hints.filter((h) => h.kind === 'oracle')).toHaveLength(0);
     expect(hints.some((h) => h.kind === 'defense')).toBe(false);
   });
 
@@ -250,6 +248,24 @@ describe('gatherHints', () => {
   });
 
 
+  it('keeps negated type hints even after a fully-matched type line', () => {
+    // Scryfall's t: is a contains-match (no exact-type-line operator), so
+    // learned negations (e.g. -t:legendary) stay informative: even once the
+    // type tokens are fully known, a guessed extra supertype must keep
+    // excluding cards with that extra token.
+
+    const target = makeCard({ type_line: 'Creature — Wizard' });
+    const hints = gatherHints([
+      guessEntry(makeCard({ name: 'A', type_line: 'Creature — Wizard' }), target), // fully matched type row
+      guessEntry(makeCard({ name: 'B', type_line: 'Legendary Creature — Wizard' }), target), // partial: wrong 'legendary'
+    ]);
+    expect(hints).toContainEqual({ kind: 'type', value: 'Creature', negated: false });
+    expect(hints).toContainEqual({ kind: 'type', value: 'Wizard', negated: false });
+    expect(hints).toContainEqual({ kind: 'type', value: 'Legendary', negated: true }); // survives despite the fully-matched row
+    expect(hints.filter((h) => h.kind === 'type' && h.value === 'Legendary')).toHaveLength(1);
+ });
+
+
   it('keeps only the tightest bound per release-date direction', () => {
     // Target is 2008-06-01. Guesses: A (2001) => newer-than bound,
     // B (2010) => older-than bound, C (1995) => looser newer-than,
@@ -291,6 +307,12 @@ describe('hintToClause', () => {
     expect(hintToClause({ kind: 'color', value: 'W', negated: true })).toBe('-c:w');
     expect(hintToClause({ kind: 'colorSet', value: 'RW' })).toBe('c=rw');
     expect(hintToClause({ kind: 'keyword', value: 'Flying' })).toBe('kw:flying');
+    // Oracle hints are dropped entirely: positive fo: clauses make the
+    // hint search too easy (they give away the whole oracle text), and
+    // negated -fo: matches substrings (unreliable), so unexpressible..
+    expect(hintToClause({ kind: 'oracle', value: 'flying' })).toBeNull();
+    expect(hintToClause({ kind: 'oracle', value: 'flying', negated: true })).toBeNull();
+    expect(hintToClause({ kind: 'oracle', value: 'enter the battlefield' })).toBeNull();
     expect(hintToClause({ kind: 'layout', value: 'transform', negated: true })).toBe('-layout:transform');
     expect(hintToClause({ kind: 'mana', value: '{2}{R}' })).toBe('mana={2}{R}');
     expect(hintToClause({ kind: 'mana', value: '{2}{R}', negated: true })).toBe('mana!={2}{R}');
@@ -310,7 +332,7 @@ describe('hintToClause', () => {
 
   it('quotes values a Scryfall would misparse bare', () => {
     expect(hintToClause({ kind: 'type', value: 'Noble Knight' })).toBe('t:"noble knight"');
-    expect(hintToClause({ kind: 'keyword', value: 'Forestcycling' })).toBe('kw:forestcycling');
+    expect(hintToClause({ kind: 'oracle', value: 'Forestcycling' })).toBeNull();
     expect(hintToClause({ kind: 'type', value: "Urza's" })).toBe('t:urza\'s'); // apostrophes are fine bare
   });
 });

@@ -266,6 +266,18 @@ describe('compareCards — rarity', () => {
   });
 
 
+  it('rarity row renders above the oracle-text row', () => {
+    const results = compareCards(
+      makeCard({ name: 'A', rarity: 'uncommon', oracle_text: 'Flying' }),
+      makeCard({ name: 'T', rarity: 'rare', oracle_text: 'Flying' }),
+    );
+    const keys = results.map((r) => r.key);
+    expect(keys.indexOf('rarity')).toBeGreaterThan(-1);
+    expect(keys.indexOf('oracle')).toBeGreaterThan(-1);
+    expect(keys.indexOf('rarity')).toBeLessThan(keys.indexOf('oracle'));
+  });
+
+
   it('rarity is always compared (every card has one, including guesses', () => {
     // Every Scryfall card object carries a non-empty `rarity`, so the row
     // renders even when the guess doesn't spell it out explicitly (the fixture
@@ -277,7 +289,7 @@ describe('compareCards — rarity', () => {
   });
 });
 
-describe('compareCards — release date and keywords', () => {
+describe('compareCards — release date and oracle text', () => {
   it('same release date is correct; otherwise wrong with direction note', () => {
     const target = makeCard({ released_at: '2020-06-01' });
     const older = compareCards(makeCard({ name: 'A', released_at: '2019-01-01' }), target);
@@ -286,31 +298,95 @@ describe('compareCards — release date and keywords', () => {
     expect(byKey(same, 'released').status).toBe('correct');
   });
 
-  it('keywords compare partially when guess has keywords', () => {
-    const guess = makeCard({ name: 'A', keywords: ['Flying', 'Cycling', 'Haste'] });
-    const target = makeCard({ keywords: ['Flying', 'Cycling'] });
+  it('oracle text compares partially when the guess has text', () => {
+    const guess = makeCard({ name: 'A', oracle_text: 'Flying\nVigilance\nCycling' });
+    const target = makeCard({ oracle_text: 'Flying\nVigilance' });
     const results = compareCards(guess, target);
-    const line = byKey(results, 'keywords');
+    const line = byKey(results, 'oracle');
     expect(line).toMatchObject({ status: 'partial', applicable: true });
-    expect(line.correct).toEqual(['Flying', 'Cycling']);
-    expect(line.wrong).toEqual(['Haste']);
+    expect(line.correct).toEqual(['flying', 'vigilance']);
+    expect(line.wrong).toEqual(['cycling']);
+    expect(line.segments).toEqual([
+      { text: 'Flying', token: true, status: 'correct' },
+      { text: '\n' },
+      { text: 'Vigilance', token: true, status: 'correct' },
+      { text: '\n' },
+      { text: 'Cycling', token: true, status: 'wrong' },
+    ]);
+  });
+  it('preserves punctuation and braced symbols as separate tokens', () => {
+    const guess = makeCard({ oracle_text: 'Add {G}: Flying, Vigilance.' });
+    const target = makeCard({ oracle_text: 'Add {G}: Flying' });
+    const line = byKey(compareCards(guess, target), 'oracle');
+    expect(line.status).toBe('partial');
+    // correct/wrong list the lowercased token texts only
+    expect(line.correct).toEqual(['add', '{g}', 'flying']);
+    expect(line.wrong).toEqual(['vigilance']);
+    expect(line.segments).toEqual([
+      { text: 'Add', token: true, status: 'correct' },
+      { text: ' ' },
+      { text: '{G}', token: true, status: 'correct' },
+      { text: ': ' },
+      { text: 'Flying', token: true, status: 'correct' },
+      { text: ', ' },
+      { text: 'Vigilance', token: true, status: 'wrong' },
+      { text: '.' },
+    ]);
+  });
+  it('treats braced groups as single tokens and matches case-insensitively', () => {
+    const guess = makeCard({ oracle_text: 'Add {2}{W/U}: Storm (This spell can\'t be countered).' });
+    const target = makeCard({ oracle_text: 'add {2}{W/U}: storm (This spell can\'t be countered).' });
+    const line = byKey(compareCards(guess, target), 'oracle');
+    expect(line.status).toBe('correct');
+    expect(line.segments).toEqual([
+      { text: 'Add', token: true, status: 'correct' },
+      { text: ' ' },
+      { text: '{2}', token: true, status: 'correct' },
+      { text: '{W/U}', token: true, status: 'correct' },
+      { text: ': ' },
+      { text: 'Storm', token: true, status: 'correct' },
+      { text: ' (' },
+      { text: 'This', token: true, status: 'correct' },
+      { text: ' ' },
+      { text: 'spell', token: true, status: 'correct' },
+      { text: ' ' },
+      { text: 'can\'t', token: true, status: 'correct' },
+      { text: ' ' },
+      { text: 'be', token: true, status: 'correct' },
+      { text: ' ' },
+      { text: 'countered', token: true, status: 'correct' },
+      { text: ').' },
+    ]);
   });
 
-  it('no keywords line when the guess has no keywords', () => {
-    const results = compareCards(makeCard({ name: 'A', keywords: [] }), makeCard({ keywords: ['Flying'] }));
-    expect(byKey(results, 'keywords')).toBeUndefined();
+  it('no oracle-text line when the guess has no text', () => {
+    const results = compareCards(
+      makeCard({ name: 'A', oracle_text: '' }),
+      makeCard({ oracle_text: 'Flying' }),
+    );
+    expect(byKey(results, 'oracle')).toBeUndefined();
   });
 
-  it('empty keyword sets on both cards omit the line too', () => {
-    const guess = makeCard({ colors: [], type_line: 'Creature', keywords: [] });
-    const target = makeCard({ colors: [], type_line: 'Creature', keywords: [] });
+  it('empty oracle text on both cards omits the line too', () => {
+    const guess = makeCard({ colors: [], type_line: 'Creature', oracle_text: '' });
+    const target = makeCard({ colors: [], type_line: 'Creature', oracle_text: '' });
     const results = compareCards(guess, target);
-    expect(byKey(results, 'keywords')).toBeUndefined();
+    expect(byKey(results, 'oracle')).toBeUndefined();
     const colors = byKey(results, 'colors');
     expect(colors.status).toBe('correct');
     expect(colors.correct).toEqual(['—']);
   });
+
+  it('a fully matching oracle text is a correct row', () => {
+    const text = 'Flying (This creature can\'t be blocked.)\nVigilance';
+    const results = compareCards(
+      makeCard({ name: 'A', oracle_text: text }),
+      makeCard({ name: 'T', oracle_text: text }),
+    );
+    expect(byKey(results, 'oracle')).toMatchObject({ status: 'correct' });
+  });
 });
+
 
 describe('compareCards — layout', () => {
   const frontFace = {

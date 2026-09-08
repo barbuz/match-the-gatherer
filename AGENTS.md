@@ -14,8 +14,14 @@ Wordle-style MTG daily guessing game (Svelte PWA, no backend. Spec: `match-the-g
   **individual face names**, so `lib/api/scryfall.js` prefers a whole-card name
   match, then face-name match, then first result.
 
-- Keywords come straight from the card object (`card.keywords`) — no otag bulk
-  download (removed.
+- Oracle-text row: every word token of the guessed card's text (`card.oracle_text`,
+  primary face only)is highlighted green when it appears anywhere in the target's
+  text (punctuation stripped, words lowercased via `oracleWords()`);only rendered
+  when the guess has text,so a text-less target is never leaked. Oracle text is
+  **not** used for the hint search URL: positive `fo:` clauses give away the whole
+  text (making the hint search too easy)and negated `-fo:` clauses are
+  unreliable (Scryfall's `fo:` matches substrings,e.g. `-fo:if` would also
+  exclude every card containing "different"),so oracle hints are dropped entirely..
 - `catalog/card-names` needs `A-` prefix filtering (Alchemy-only cards. The
   names download is a singleton in-flight promise (`stores/backgroundFetch.js`), cached
   in idb-keyval (`storage/dataCache.js`), falling back to the cache when offline.
@@ -32,19 +38,20 @@ Wordle-style MTG daily guessing game (Svelte PWA, no backend. Spec: `match-the-g
   svelte/store but runs fine under node)for unit-testability.Anti-leak rules:
 
   properties absent on the GUESSED card render no row;(so a creature-only target is
-  never leaked);layout row appears only for non-normal guesses;keyword row appears
-  only when the guessed card has keywords;rarity is a core Scryfall field present on
-  every card, so the rarity row always renders for every guess;score denominators
+  never leaked);layout row appears only for non-normal guesses;rarity is a core
+  Scryfall field present on every card, so the rarity row always renders for every guess;
+  the oracle-text row appears only when the guessed card has text;score denominators
   count only `applicable` properties
   of the guessed card.
 
 - Hints (`src/lib/game/hints.js`): `gatherHints()` distills every guess's feedback into a
   deduplicated minimal hint list; `buildScryfallSearchUrl()` turns it into a
-  `https://scryfall.com/search/?q=...` link with clauses `t:`, `c:`, `c=`, `kw:`,
+  `https://scryfall.com/search/?q=...` link with clauses `t:`, `c:`, `c=`,
   `layout:`, `mana=`, `mv=`, `pow=`, `tou=`, `loy=`, `r:`, `date>`/`date<`, negations via
   `-`/`!=`, and always ending `not:reprint`. Defense stats have no Scryfall operator, so
-  those hints are dropped; fully-matched properties pin their value (later partial/wrong
-  hints for the same property are dropped); same-direction date bounds fold down to the
+  those hints are dropped; **exception**: Scryfall's `t:` is a contains-match
+  with no exact-type-line operator,so negated type hints survive even after a
+  fully-matched type row. Same-direction date bounds fold down to the
   tightest,and an exact date subsumes all date hints. The HintButton opens that URL, and
   each used hint press marks its share row with 🔦 (`buildShareText` `hintsUsed`).
 

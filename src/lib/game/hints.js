@@ -40,7 +40,10 @@ function pushUnique(hints, seen, hint) {
  */
 export function gatherHints(guesses,) {
   // First pass: track which property lines were ever fully matched, so
-  // their partial/wrong counterparts elsewhere can be ignored.
+  // their partial/wrong counterparts elsewhere can be ignored. Exception:
+  // `type` — Scryfall's `t:`/`type:` is a contains-match for supertypes,
+  // card types, and subtypes with no exact-type-line operator,so negated
+  // type hints remain informative even after a fully-matched type row.
 
 
 
@@ -66,7 +69,7 @@ export function gatherHints(guesses,) {
 
   for (const entry of guesses ?? []) {
     for (const r of entry?.results ?? []) {
-      if (fullyMatched.has(r.key) && r.status !== 'correct') continue; // fully matched property: partial/wrong values are irrelevant
+      if (fullyMatched.has(r.key) && r.status !== 'correct' && r.key !== 'type') continue; // fully matched property: partial/wrong values are irrelevant (except type: see above)
       if (r.absentOnTarget) continue; // guessed-only property: no Scryfall operator for it
       switch (r.key) {
         case 'mana': {
@@ -132,9 +135,11 @@ export function gatherHints(guesses,) {
           }
           break;
         }
-        case 'keywords':
-          pushSetValues(r.correct, 'keyword');
-          pushSetValues(r.wrong, 'keyword', true);
+        case 'oracle':
+          // Oracle-text hints are intentionally dropped: positive fo: clauses
+          // give away the whole text (making the hint search too easy)and
+          // negated -fo: is unreliable (Scryfall matches substrings,, so
+          // neither direction is emitted..
           break;
         case 'rarity':
           pushSetValues(r.correct, 'rarity');
