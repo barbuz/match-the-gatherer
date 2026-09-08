@@ -83,6 +83,7 @@ export function gatherHints(guesses,) {
             // multi-faced guess whose every face cost is on the target) no single
             // clause can express the union, so rely on the `mv=` hint alone.
 
+
             if (toks.length === 1) {
               const full = toks[0];
               if (full && full !== '(no mana cost)') pushValue({ kind: 'mana', value: full });
@@ -91,9 +92,15 @@ export function gatherHints(guesses,) {
             // When the cost differs AND the MV differs, `mv!=` already rules out
             // every card with that cost;, so a cost negation would add nothing.
             // Only negate the exact cost on a same-MV wrong line, where
-            // Scryfall's per-face `mana!=` adds a real exclusion.
-            const wrongCost = (r.wrong ?? []).join('');
-            if (wrongCost && wrongCost !== '(no mana cost)') push(negate({ kind: 'mana', value: wrongCost }));
+            // Scryfall's per-face `mana!=` adds a real exclusion. Each wrong
+            // whole cost gets its own `mana!=` clause (ANDed, so “neither”). Joining
+            // them would re-form the split card's concatenated card-level cost.
+
+
+
+            for (const wrongCost of (r.wrong ?? [])) {
+              if (wrongCost && wrongCost !== '(no mana cost)') push(negate({ kind: 'mana', value: wrongCost }));
+            }
           }
           break;
         }

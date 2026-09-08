@@ -92,6 +92,31 @@ describe('compareCards — mana cost tiers', () => {
     const mana = byKey(compareCards(land, target), 'mana');
     expect(mana.mvValues).toEqual([{ text: '0', status: 'wrong' }]);
   });
+
+  it('split card card-level combined cost is not emitted as a third whole cost', () => {
+    // Scryfall puts the concatenated face costs in the split card's card-level
+    // `mana_cost` (`'{1}{R} // {1}{U}}'`). Only the two face-level costs
+    // may appear, so guessing "Fire // Ice" shows exactly two cost chips.
+
+    const fireIce = {
+      ...makeCard(),
+      name: 'Fire // Ice',
+      layout: 'split',
+      mana_cost: '{1}{R} // {1}{U}',
+      cmc: 4,
+      colors: ['R', 'U'],
+      card_faces: [
+        { name: 'Fire', mana_cost: '{1}{R}', colors: ['R'], type_line: 'Instant', power: undefined, toughness: undefined },
+        { name: 'Ice', mana_cost: '{1}{U}', colors: ['U'], type_line: 'Instant', power: undefined, toughness: undefined },
+      ],
+      power: undefined,
+      toughness: undefined,
+    };
+    const mana = byKey(compareCards(fireIce, { ...fireIce, name: 'Copy' }), 'mana');
+    expect(mana.status).toBe('correct');
+    expect(mana.correct).toEqual(['{1}{R}', '{1}{U}']);
+    expect(mana.correct).toHaveLength(2);
+  });
 });
 
 describe('compareCards — sets', () => {

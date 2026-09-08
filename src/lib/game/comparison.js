@@ -88,19 +88,18 @@ export function normalizeManaCost(cost = '') {
 
 function manaCostTokens(card) {
   const out = [];
+  // Only face-level costs count. On split/fuse cards the card-level `mana_cost`
+  // is the two halves CONCATENATED (`{1}{R} // {1}{U}}`), so adding it here
+  // would invent a third whole-cost token that exists on no single face. On
+  // single-faced cards `facesOf` falls back to `[card]`, so the face loop
+  // already covers the card-level field.
+
+
   for (const f of facesOf(card)) {
     const syms = manaSymbols(f.mana_cost ?? '');
     addUnique(out, syms.length > 0 ? [syms.join('')] : [NO_MANA_COST]);
   }
-  // Card-level cost: only meaningful when it actually holds symbols. On
-  // double-faced cards the card-level field is usually absent, and an empty
-  // string here would wrongly inject the no-cost token into the face union.
 
-  const cardCost = card?.mana_cost;
-  if (cardCost != null && cardCost !== '') {
-    const syms = manaSymbols(cardCost);
-    if (syms.length > 0) addUnique(out, [syms.join('')]);
-  }
   return out;
 }
 

@@ -182,6 +182,37 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
     expect(hints).toContainEqual({ kind: 'mana', value: '{3}{R}', negated: true });
   });
 
+  it('emits one mana!= clause per wrong whole cost on a wrong split line', () => {
+    // A split guess whose every face cost fails: each whole cost gets its
+    // own negation (ANDed — “neither”), instead of being rejoined into the
+    // combined card-level `mana_cost` string that exists on no single face.
+
+
+    const split = makeCard({
+      name: 'Fire // Ice',
+      layout: 'split',
+      mana_cost: '{1}{R} // {1}{U}',
+      cmc: 4,
+      colors: ['R', 'U'],
+      card_faces: [
+        { name: 'Fire', mana_cost: '{1}{R}', colors: ['R'], type_line: 'Instant', power: undefined, toughness: undefined },
+        { name: 'Ice', mana_cost: '{1}{U}', colors: ['U'], type_line: 'Instant', power: undefined, toughness: undefined },
+      ],
+      power: undefined,
+      toughness: undefined,
+    });
+    const hints = gatherHints([
+      guessEntry(
+        split,
+        makeCard({ name: 'T', mana_cost: '{2}{G}{G}', cmc: 4, colors: ['G'], type_line: 'Instant' }),
+      ),
+    ]);
+    expect(hints).toContainEqual({ kind: 'mana', value: '{1}{R}', negated: true });
+    expect(hints).toContainEqual({ kind: 'mana', value: '{1}{U}', negated: true });
+    expect(hints.filter((h) => h.kind === 'mana' && h.negated)).toHaveLength(2);
+    expect(hints.some((h) => h.kind === 'mana' && h.value === '{1}{R}{1}{U}}')).toBe(false);
+  });
+
   it('drops negated exact-cost hints once the exact cost is pinned', () => {
     const target = makeCard();
     const hints = gatherHints([
