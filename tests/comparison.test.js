@@ -117,6 +117,84 @@ describe('compareCards — mana cost tiers', () => {
     expect(mana.correct).toEqual(['{1}{R}', '{1}{U}']);
     expect(mana.correct).toHaveLength(2);
   });
+
+ it('mana row segments phrase per-face costs with a // separator', () => {
+    const fireIce = makeCard({
+      name: 'Fire // Ice',
+      layout: 'split',
+      mana_cost: '{1}{R} // {1}{U}',
+      cmc: 4,
+      colors: ['R', 'U'],
+      card_faces: [
+        { name: 'Fire', mana_cost: '{1}{R}', colors: ['R'], type_line: 'Instant', power: undefined, toughness: undefined },
+        { name: 'Ice', mana_cost: '{1}{U}', colors: ['U'], type_line: 'Instant', power: undefined, toughness: undefined },
+      ],
+      power: undefined,
+      toughness: undefined,
+    });
+    const mana = byKey(compareCards(fireIce, { ...fireIce, name: 'Copy' }), 'mana');
+    expect(mana.segments).toEqual([
+      { text: '{1}', token: true, status: 'correct' },
+      { text: '{R}', token: true, status: 'correct' },
+      { sep: true, text: '//' },
+      { text: '{1}', token: true, status: 'correct' },
+      { text: '{U}', token: true, status: 'correct' },
+    ]);
+  });
+
+ it('mana segments color each symbol by whether any target face has it', () => {
+    const guess = makeCard({
+      name: 'Fire // Ice',
+      layout: 'split',
+      mana_cost: '{2}{R} // {1}{U}',
+      cmc: 4,
+      card_faces: [
+        { name: 'Fire', mana_cost: '{2}{R}', colors: ['R'], type_line: 'Instant', power: undefined, toughness: undefined },
+        { name: 'Ice', mana_cost: '{1}{U}', colors: ['U'], type_line: 'Instant', power: undefined, toughness: undefined },
+      ],
+      colors: ['R', 'U'],
+    });
+    const target = makeCard({ name: 'T', mana_cost: '{R}{U} // {3}{B}', cmc: 5, card_faces: [
+      { name: 'T1', mana_cost: '{R}{U}', colors: ['R', 'U'], type_line: 'Instant', power: undefined, toughness: undefined },
+      { name: 'T2', mana_cost: '{3}{B}', colors: ['B'], type_line: 'Instant', power: undefined, toughness: undefined },
+    ], colors: ['R', 'U', 'B'], layout: 'split', power: undefined, toughness: undefined });
+    const mana = byKey(compareCards(guess, target), 'mana');
+    expect(mana.status).toBe('wrong');
+    expect(mana.segments).toEqual([
+      { text: '{2}', token: true, status: 'wrong' },
+      { text: '{R}', token: true, status: 'correct' },
+      { sep: true, text: '//' },
+      { text: '{1}', token: true, status: 'wrong' },
+      { text: '{U}', token: true, status: 'correct' },
+    ]);
+    // Whole costs are still compared as units: neither guessed whole cost
+    // is on the target, but individual symbols are colored by union membership.
+    expect(mana.wrong).toEqual(['{2}{R}', '{1}{U}']);
+    expect(mana.correct).toEqual([]);
+  });
+
+ it('mana segments render the no-cost placeholder per face', () => {
+    const dfc = makeCard({
+      name: 'Human Side // Beast Side',
+      layout: 'transform',
+      mana_cost: '{1}{G}',
+      cmc: 3,
+      colors: ['G'],
+      card_faces: [
+        { name: 'Human Side', mana_cost: '{1}{G}', colors: ['G'], type_line: 'Creature — Human', power: '2', toughness: '2' },
+        { name: 'Beast Side', mana_cost: '', colors: ['G'], type_line: 'Creature — Beast', power: '4', toughness: '4' },
+      ],
+      power: undefined,
+      toughness: undefined,
+    });
+    const mana = byKey(compareCards(dfc, dfc), 'mana');
+    expect(mana.segments).toEqual([
+      { text: '{1}', token: true, status: 'correct' },
+      { text: '{G}', token: true, status: 'correct' },
+      { sep: true, text: '//' },
+      { text: '(no mana cost)', status: 'correct' },
+    ]);
+  });
 });
 
 describe('compareCards — sets', () => {

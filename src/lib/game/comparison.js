@@ -199,16 +199,30 @@ function manaLine(key, label, guessCard, targetCard) {
   const g = manaCostTokens(guessCard);
   const t = manaCostTokens(targetCard);
   const targetSet = new Set(t);
-  // The guessed card's whole cost(s) are rendered as units: splitting into
-  // individual symbols would hide thatthe full guessed cost itself differs (the
-  // negation hint needs the whole cost string).
+  // The guessed card's whole cost(s) are judged as units: the negation hint
+  // needs the whole cost string,, but each face's cost renders as its own
+  // segment,, `//`-separated,, with individual symbols colored by whether
+  // they appear in any target face cost..
   const correct = g.filter((v) => targetSet.has(v));
   const wrong = g.filter((v) => !targetSet.has(v));
   const status = wrong.length === 0 ? 'correct' : 'wrong';
+  const targetSymbols = new Set();
+  for (const whole of t) for (const s of manaSymbols(whole)) targetSymbols.add(s);
+  const segments = [];
+  const faces = facesOf(guessCard);
+  for (let i = 0; i < faces.length; i++) {
+    if (i > 0) segments.push({ sep: true, text: '//' });
+    const syms = manaSymbols(faces[i].mana_cost ?? '');
+    if (syms.length === 0) {
+      segments.push({ text: NO_MANA_COST, status: targetSet.has(NO_MANA_COST) ? 'correct' : 'wrong' });
+    } else {
+      for (const s of syms) segments.push({ text: s, token: true, status: targetSymbols.has(s) ? 'correct' : 'wrong' });
+    }
+  }
   const mv = guessCard.cmc != null ? String(guessCard.cmc) : null;
   const mvStatus = mv == null ? null : String(targetCard.cmc) === mv ? 'correct' : 'wrong';
   const mvValue = { text: mv, status: mvStatus };
-  return { key, label, status, correct, wrong, applicable: true, mvValues: [mvValue] };
+  return { key, label, status, correct, wrong, applicable: true, mvValues: [mvValue], segments };
 }
 
 function statsLine(key, label, guessCard, targetCard) {
