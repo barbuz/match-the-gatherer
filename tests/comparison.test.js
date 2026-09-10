@@ -118,7 +118,7 @@ describe('compareCards — mana cost tiers', () => {
     expect(mana.correct).toHaveLength(2);
   });
 
- it('mana row segments phrase per-face costs with a // separator', () => {
+ it('mana row segments phrase per-face whole costs with a // separator', () => {
     const fireIce = makeCard({
       name: 'Fire // Ice',
       layout: 'split',
@@ -134,15 +134,13 @@ describe('compareCards — mana cost tiers', () => {
     });
     const mana = byKey(compareCards(fireIce, { ...fireIce, name: 'Copy' }), 'mana');
     expect(mana.segments).toEqual([
-      { text: '{1}', token: true, status: 'correct' },
-      { text: '{R}', token: true, status: 'correct' },
+      { text: '{1}{R}', token: true, status: 'correct' },
       { sep: true, text: '//' },
-      { text: '{1}', token: true, status: 'correct' },
-      { text: '{U}', token: true, status: 'correct' },
+      { text: '{1}{U}', token: true, status: 'correct' },
     ]);
   });
 
- it('mana segments color each symbol by whether any target face has it', () => {
+ it('mana segments strike each whole cost that does not appear on the target', () => {
     const guess = makeCard({
       name: 'Fire // Ice',
       layout: 'split',
@@ -161,14 +159,14 @@ describe('compareCards — mana cost tiers', () => {
     const mana = byKey(compareCards(guess, target), 'mana');
     expect(mana.status).toBe('wrong');
     expect(mana.segments).toEqual([
-      { text: '{2}', token: true, status: 'wrong' },
-      { text: '{R}', token: true, status: 'correct' },
+      { text: '{2}{R}', token: true, status: 'wrong' },
       { sep: true, text: '//' },
-      { text: '{1}', token: true, status: 'wrong' },
-      { text: '{U}', token: true, status: 'correct' },
+      { text: '{1}{U}', token: true, status: 'wrong' },
     ]);
-    // Whole costs are still compared as units: neither guessed whole cost
-    // is on the target, but individual symbols are colored by union membership.
+    // Each face's whole cost is judged as a unit: neither guessed whole cost
+    // is on the target, so both chips are struck as wholes (no symbol-by-symbol
+    // coloring); a lone {R}/{U} on a target face doesn't count as a match.
+
     expect(mana.wrong).toEqual(['{2}{R}', '{1}{U}']);
     expect(mana.correct).toEqual([]);
   });
@@ -189,8 +187,7 @@ describe('compareCards — mana cost tiers', () => {
     });
     const mana = byKey(compareCards(dfc, dfc), 'mana');
     expect(mana.segments).toEqual([
-      { text: '{1}', token: true, status: 'correct' },
-      { text: '{G}', token: true, status: 'correct' },
+      { text: '{1}{G}', token: true, status: 'correct' },
       { sep: true, text: '//' },
       { text: '(no mana cost)', status: 'correct' },
     ]);

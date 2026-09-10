@@ -8,6 +8,8 @@
  * list of tokens, and a guessed token is correct when it appears anywhere
  * in the target's token list for that property. A row is fully correct when
  * every guessed token is present in the target's list, otherwise wrong..
+ * Mana costs are one token per WHOLE cost (per face), compared via their
+ * normalized forms — never symbol-by-symbol..
  *
  * For multi-faced cards, the target's token list is the union of every
  * face's values (plus the card-level field when relevant), mirroring how
@@ -92,9 +94,8 @@ function manaCostTokens(card) {
   // is the two halves CONCATENATED (`{1}{R} // {1}{U}}`), so adding it here
   // would invent a third whole-cost token that exists on no single face. On
   // single-faced cards `facesOf` falls back to `[card]`, so the face loop
-  // already covers the card-level field.
-
-
+  // already covers the card-level field. A token is ONE whole cost in its raw
+  // braced form (`'{1}{R}'`), kept display-ready for hint `mana=` clauses..
   for (const f of facesOf(card)) {
     const syms = manaSymbols(f.mana_cost ?? '');
     addUnique(out, syms.length > 0 ? [syms.join('')] : [NO_MANA_COST]);
@@ -198,25 +199,28 @@ function typeLine(key, label, guessCard, targetCard) {
 function manaLine(key, label, guessCard, targetCard) {
   const g = manaCostTokens(guessCard);
   const t = manaCostTokens(targetCard);
-  const targetSet = new Set(t);
-  // The guessed card's whole cost(s) are judged as units: the negation hint
-  // needs the whole cost string,, but each face's cost renders as its own
-  // segment,, `//`-separated,, with individual symbols colored by whether
-  // they appear in any target face cost..
-  const correct = g.filter((v) => targetSet.has(v));
-  const wrong = g.filter((v) => !targetSet.has(v));
+  // Whole costs are judged as units:the negation hint and the share text need
+  // the whole cost string,, so each face's cost renders as one segment — `//`-
+  // separated,, colored/struck as a whole by whether it appears in the target's
+  // face-cost union `(not symbol by symbol)`. The raw braced strings stay in
+  // `correct`/`wrong` for `mana=` hint clauses; matching runs on their
+  // normalized forms (`normalizeManaCost`) — braces/whitespace/case are
+  // stripped,, but symbol order is kept, so a whole cost matches only an
+  // identical whole cost, never asubset or a reordering of its symbols..
+  const compare = (v) => v === NO_MANA_COST ? v : normalizeManaCost(v);
+  const targetSet = new Set(t.map(compare));
+  const correct = g.filter((v) => targetSet.has(compare(v)));
+  const wrong = g.filter((v) => !targetSet.has(compare(v)));
   const status = wrong.length === 0 ? 'correct' : 'wrong';
-  const targetSymbols = new Set();
-  for (const whole of t) for (const s of manaSymbols(whole)) targetSymbols.add(s);
   const segments = [];
   const faces = facesOf(guessCard);
   for (let i = 0; i < faces.length; i++) {
     if (i > 0) segments.push({ sep: true, text: '//' });
-    const syms = manaSymbols(faces[i].mana_cost ?? '');
-    if (syms.length === 0) {
+    const cost = faces[i].mana_cost ?? '';
+    if (manaSymbols(cost).length === 0) {
       segments.push({ text: NO_MANA_COST, status: targetSet.has(NO_MANA_COST) ? 'correct' : 'wrong' });
     } else {
-      for (const s of syms) segments.push({ text: s, token: true, status: targetSymbols.has(s) ? 'correct' : 'wrong' });
+      segments.push({ text: cost,token: true, status: targetSet.has(normalizeManaCost(cost)) ? 'correct' : 'wrong' });
     }
   }
   const mv = guessCard.cmc != null ? String(guessCard.cmc) : null;
