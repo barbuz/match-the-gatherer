@@ -77,6 +77,17 @@ function collect(card, picker) {
   return out;
 }
 
+/** Join per-face segment groups with a `//` separator, dropping empty groups. */
+function joinFaces(groups) {
+  const out = [];
+  for (const g of groups) {
+    if (g.length === 0) continue;
+    if (out.length > 0) out.push({ sep: true, text: '//' });
+    out.push(...g);
+  }
+  return out;
+}
+
 function manaSymbols(cost = '') {
   const text = String(cost);
   const matches = [...text.matchAll(/\{[^{}]+\}/g)];
@@ -162,15 +173,21 @@ function line(key, label, status, correct, wrong, applicable, note, noteBold, se
   };
 }
 
-function tokenRow(key, label, guessTokens, targetTokens) {
-  if (guessTokens.length === 0 && targetTokens.length === 0) {
+function colorLine(key, label, guessCard, targetCard) {
+  const g = colorTokens(guessCard);
+  const t = colorTokens(targetCard);
+  if (g.length === 0 && t.length === 0) {
     return line(key, label, 'correct', ['—'], [], true);
   }
-  const targetSet = new Set(targetTokens);
-  const correct = guessTokens.filter((v) => targetSet.has(v));
-  const wrong = guessTokens.filter((v) => !targetSet.has(v));
+  const targetSet = new Set(t);
+  const correct = g.filter((v) => targetSet.has(v));
+  const wrong = g.filter((v) => !targetSet.has(v));
   const status = wrong.length === 0 ? 'correct' : 'wrong';
-  return line(key, label, status, correct, wrong, true);
+  const segments = joinFaces(facesOf(guessCard).map((f) => {
+    const fc = (f.colors ?? []).length > 0 ? f.colors : [COLORLESS];
+    return fc.map((c) => ({ text: c, status: targetSet.has(c) ? 'correct' : 'wrong' }));
+  }));
+  return line(key, label, status, correct, wrong, true, undefined, undefined, segments);
 }
 
 function typeLine(key, label, guessCard, targetCard) {
@@ -183,16 +200,17 @@ function typeLine(key, label, guessCard, targetCard) {
   const correct = gTokens.filter((v) => targetSet.has(v));
   const wrong = gTokens.filter((v) => !targetSet.has(v));
   const status = wrong.length === 0 ? 'correct' : 'wrong';
-  const segments = [];
-  for (const f of facesOf(guessCard)) {
+  const segments = joinFaces(facesOf(guessCard).map((f) => {
     const parsed = parseTypeLine(f.type_line ?? '');
+    const segs = [];
     const main = [...parsed.supertypes, ...parsed.types];
-    for (const t of main) segments.push({ text: t, status: targetSet.has(t) ? 'correct' : 'wrong' });
+    for (const t of main) segs.push({ text: t, status: targetSet.has(t) ? 'correct' : 'wrong' });
     if (parsed.subtypes.length >0) {
-      segments.push({ dash: true });
-      for (const t of parsed.subtypes) segments.push({ text: t, status: targetSet.has(t) ? 'correct' : 'wrong' });
+      segs.push({ dash: true });
+      for (const t of parsed.subtypes) segs.push({ text: t, status: targetSet.has(t) ? 'correct' : 'wrong' });
     }
-  }
+    return segs;
+  }));
   return line(key, label, status, correct, wrong, true, undefined, undefined, segments);
 }
 
@@ -235,11 +253,16 @@ function statsLine(key, label, guessCard, targetCard) {
   const tPower = new Set(scalarTokens(targetCard, 'power'));
   const tTough = new Set(scalarTokens(targetCard, 'toughness'));
   if (gPower.length + gTough.length === 0) return null;
-  const segments = [];
-  for (const v of gPower) segments.push({ text: v, status: tPower.has(v) ? 'correct' : 'wrong' });
-  if (gPower.length > 0 && gTough.length > 0) segments.push({ slash: true });
-  for (const v of gTough) segments.push({ text: v, status: tTough.has(v) ? 'correct' : 'wrong' });
-  const values = segments.filter((s) => !s.slash);
+  const segments = joinFaces(facesOf(guessCard).map((f) => {
+    const p = f.power == null ? null : String(f.power);
+    const t = f.toughness == null ? null : String(f.toughness);
+    const segs = [];
+    if (p != null) segs.push({ text: p, status: tPower.has(p) ? 'correct' : 'wrong' });
+    if (p != null && t != null) segs.push({ slash: true });
+    if (t != null) segs.push({ text: t, status: tTough.has(t) ? 'correct' : 'wrong' });
+    return segs;
+  }));
+  const values = segments.filter((s) => !s.slash && !s.sep);
   const status = values.every((s) => s.status === 'correct') ? 'correct' : 'wrong';
   const present = gPower.length + gTough.length;
   return {
@@ -259,7 +282,11 @@ function scalarRow(key, label, guessCard, targetCard, targetKey) {
   const correct = g.filter((v) => tSet.has(v));
   const wrong = g.filter((v) => !tSet.has(v));
   const status = wrong.length === 0 ? 'correct' : 'wrong';
-  const l = line(key, label, status, correct, wrong, true);
+  const segments = joinFaces(facesOf(guessCard).map((f) => {
+    const v = f[key];
+    return v == null ? [] : [{ text: String(v), status: tSet.has(String(v)) ? 'correct' : 'wrong' }];
+  }));
+  const l = line(key, label, status, correct, wrong, true, undefined, undefined, segments);
   if (tSet.size === 0) l.absentOnTarget = true;
   return l;
 }
@@ -268,7 +295,7 @@ export function compareCards(guess, target) {
   const results = [];
 
   results.push(manaLine('mana', 'Mana cost', guess, target));
-  results.push(tokenRow('colors', 'Colors', colorTokens(guess), colorTokens(target)));
+  results.push(colorLine('colors', 'Colors', guess, target));
   results.push(typeLine('type', 'Type', guess, target));
   const stats = statsLine('pt', 'P/T', guess, target);
   if (stats) results.push(stats);
@@ -309,7 +336,7 @@ export function compareCards(guess, target) {
   const gSegs = [];
   for (const f of facesOf(guess)) {
     const segs = oracleSegments(f.oracle_text ?? '');
-    if (gSegs.length > 0 && segs.length >0) gSegs.push({ text: '\n' });
+    if (gSegs.length > 0 && segs.length >0) gSegs.push({ sep: true, text: '//' });
     gSegs.push(...segs);
   }
   const gTokens = oracleTokens(guess);

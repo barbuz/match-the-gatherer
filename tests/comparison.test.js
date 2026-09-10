@@ -556,10 +556,63 @@ describe('compareCards — layout', () => {
     expect(byKey(results, 'pt')).toMatchObject({ status: 'wrong' });
     expect(byKey(results, 'pt').segments).toEqual([
       { text: '2', status: 'wrong' },
-      { text: '4', status: 'wrong' },
       { slash: true },
       { text: '2', status: 'wrong' },
+      { sep: true, text: '//' },
       { text: '4', status: 'wrong' },
+      { slash: true },
+      { text: '4', status: 'wrong' },
+    ]);
+  });
+
+  it('color row phrases per-face colors with a // separator', () => {
+    const split = makeCard({
+      name: 'Fire // Ice',
+      layout: 'split',
+      card_faces: [
+        { name: 'Fire', colors: ['R'] },
+        { name: 'Ice', colors: ['U'] },
+      ],
+    });
+    const colors = byKey(compareCards(split, makeCard({ colors: ['R'] })), 'colors');
+    expect(colors.segments).toEqual([
+      { text: 'R', status: 'correct' },
+      { sep: true, text: '//' },
+      { text: 'U', status: 'wrong' },
+    ]);
+  });
+
+  it('type row phrases per-face type lines with a // separator', () => {
+    const split = makeCard({
+      name: 'Fire // Ice',
+      layout: 'split',
+      card_faces: [
+        { name: 'Fire', type_line: 'Instant' },
+        { name: 'Ice', type_line: 'Sorcery' },
+      ],
+    });
+    const type = byKey(compareCards(split, makeCard({ type_line: 'Instant' })), 'type');
+    expect(type.segments).toEqual([
+      { text: 'Instant', status: 'correct' },
+      { sep: true, text: '//' },
+      { text: 'Sorcery', status: 'wrong' },
+    ]);
+  });
+
+  it('oracle row phrases per-face oracle text with a // separator', () => {
+    const split = makeCard({
+      name: 'Fire // Ice',
+      layout: 'split',
+      card_faces: [
+        { name: 'Fire', oracle_text: 'Flying' },
+        { name: 'Ice', oracle_text: 'Vigilance' },
+      ],
+    });
+    const line = byKey(compareCards(split, makeCard({ oracle_text: 'Flying' })), 'oracle');
+    expect(line.segments).toEqual([
+      { text: 'Flying', token: true, status: 'correct' },
+      { sep: true, text: '//' },
+      { text: 'Vigilance', token: true, status: 'wrong' },
     ]);
   });
 });
