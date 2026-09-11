@@ -5,7 +5,7 @@ export const SHARE_BLOCKS = 10;
 /**
  * Score one guess: matched properties out of the properties applicable to
  * the GUESSED card, so the denominator can't leak target information.
- * A full match counts 1, a partial match counts 0.5.
+ * Each row is binary: fully correct counts 1, anything else 0.
  */
 export function scoreResults(results) {
   let matched = 0;
@@ -14,7 +14,6 @@ export function scoreResults(results) {
     if (!r.applicable) continue;
     applicable += 1;
     if (r.status === 'correct') matched += 1;
-    else if (r.status === 'partial') matched += 0.5;
   }
   return { matched, applicable, ratio: applicable === 0 ? 0 : matched / applicable };
 }

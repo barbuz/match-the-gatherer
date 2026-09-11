@@ -72,10 +72,10 @@ describe('compareCards — mana cost tiers', () => {
     expect(mana.mvValues).toEqual([{ text: '3', status: 'correct' }]);
   });
 
-  it('same mana value but different cost is partial; MV marked correct', () => {
+  it('same mana value but different cost is wrong; MV marked correct', () => {
     const guess = makeCard({ name: 'A', oracle_id: 'g1', mana_cost: '{1}{R}{R}' });
     const mana = byKey(compareCards(guess, target), 'mana');
-    expect(mana.status).toBe('partial');
+    expect(mana.status).toBe('wrong');
     expect(mana.note).toBeUndefined();
     expect(mana.mvValues).toEqual([{ text: '3', status: 'correct' }]);
   });
@@ -92,6 +92,106 @@ describe('compareCards — mana cost tiers', () => {
     const mana = byKey(compareCards(land, target), 'mana');
     expect(mana.mvValues).toEqual([{ text: '0', status: 'wrong' }]);
   });
+
+  it('split card card-level combined cost is not emitted as a third whole cost', () => {
+    // Scryfall puts the concatenated face costs in the split card's card-level
+    // `mana_cost` (`'{1}{R} // {1}{U}}'`). Only the two face-level costs
+    // may appear, so guessing "Fire // Ice" shows exactly two cost chips.
+
+    const fireIce = {
+      ...makeCard(),
+      name: 'Fire // Ice',
+      layout: 'split',
+      mana_cost: '{1}{R} // {1}{U}',
+      cmc: 4,
+      colors: ['R', 'U'],
+      card_faces: [
+        { name: 'Fire', mana_cost: '{1}{R}', colors: ['R'], type_line: 'Instant', power: undefined, toughness: undefined },
+        { name: 'Ice', mana_cost: '{1}{U}', colors: ['U'], type_line: 'Instant', power: undefined, toughness: undefined },
+      ],
+      power: undefined,
+      toughness: undefined,
+    };
+    const mana = byKey(compareCards(fireIce, { ...fireIce, name: 'Copy' }), 'mana');
+    expect(mana.status).toBe('correct');
+    expect(mana.correct).toEqual(['{1}{R}', '{1}{U}']);
+    expect(mana.correct).toHaveLength(2);
+  });
+
+ it('mana row segments phrase per-face whole costs with a // separator', () => {
+    const fireIce = makeCard({
+      name: 'Fire // Ice',
+      layout: 'split',
+      mana_cost: '{1}{R} // {1}{U}',
+      cmc: 4,
+      colors: ['R', 'U'],
+      card_faces: [
+        { name: 'Fire', mana_cost: '{1}{R}', colors: ['R'], type_line: 'Instant', power: undefined, toughness: undefined },
+        { name: 'Ice', mana_cost: '{1}{U}', colors: ['U'], type_line: 'Instant', power: undefined, toughness: undefined },
+      ],
+      power: undefined,
+      toughness: undefined,
+    });
+    const mana = byKey(compareCards(fireIce, { ...fireIce, name: 'Copy' }), 'mana');
+    expect(mana.segments).toEqual([
+      { text: '{1}{R}', token: true, status: 'correct' },
+      { sep: true, text: '//' },
+      { text: '{1}{U}', token: true, status: 'correct' },
+    ]);
+  });
+
+ it('mana segments strike each whole cost that does not appear on the target', () => {
+    const guess = makeCard({
+      name: 'Fire // Ice',
+      layout: 'split',
+      mana_cost: '{2}{R} // {1}{U}',
+      cmc: 4,
+      card_faces: [
+        { name: 'Fire', mana_cost: '{2}{R}', colors: ['R'], type_line: 'Instant', power: undefined, toughness: undefined },
+        { name: 'Ice', mana_cost: '{1}{U}', colors: ['U'], type_line: 'Instant', power: undefined, toughness: undefined },
+      ],
+      colors: ['R', 'U'],
+    });
+    const target = makeCard({ name: 'T', mana_cost: '{R}{U} // {3}{B}', cmc: 5, card_faces: [
+      { name: 'T1', mana_cost: '{R}{U}', colors: ['R', 'U'], type_line: 'Instant', power: undefined, toughness: undefined },
+      { name: 'T2', mana_cost: '{3}{B}', colors: ['B'], type_line: 'Instant', power: undefined, toughness: undefined },
+    ], colors: ['R', 'U', 'B'], layout: 'split', power: undefined, toughness: undefined });
+    const mana = byKey(compareCards(guess, target), 'mana');
+    expect(mana.status).toBe('wrong');
+    expect(mana.segments).toEqual([
+      { text: '{2}{R}', token: true, status: 'wrong' },
+      { sep: true, text: '//' },
+      { text: '{1}{U}', token: true, status: 'wrong' },
+    ]);
+    // Each face's whole cost is judged as a unit: neither guessed whole cost
+    // is on the target, so both chips are struck as wholes (no symbol-by-symbol
+    // coloring); a lone {R}/{U} on a target face doesn't count as a match.
+
+    expect(mana.wrong).toEqual(['{2}{R}', '{1}{U}']);
+    expect(mana.correct).toEqual([]);
+  });
+
+ it('mana segments render the no-cost placeholder per face', () => {
+    const dfc = makeCard({
+      name: 'Human Side // Beast Side',
+      layout: 'transform',
+      mana_cost: '{1}{G}',
+      cmc: 3,
+      colors: ['G'],
+      card_faces: [
+        { name: 'Human Side', mana_cost: '{1}{G}', colors: ['G'], type_line: 'Creature — Human', power: '2', toughness: '2' },
+        { name: 'Beast Side', mana_cost: '', colors: ['G'], type_line: 'Creature — Beast', power: '4', toughness: '4' },
+      ],
+      power: undefined,
+      toughness: undefined,
+    });
+    const mana = byKey(compareCards(dfc, dfc), 'mana');
+    expect(mana.segments).toEqual([
+      { text: '{1}{G}', token: true, status: 'correct' },
+      { sep: true, text: '//' },
+      { text: '(no mana cost)', status: 'correct' },
+    ]);
+  });
 });
 
 describe('compareCards — sets', () => {
@@ -102,10 +202,10 @@ describe('compareCards — sets', () => {
     expect(byKey(compareCards(guess, target), 'colors').status).toBe('correct');
   });
 
-  it('overlapping colors are partial with matching values first', () => {
+  it('overlapping colors are wrong with matching values first', () => {
     const guess = makeCard({ name: 'A', oracle_id: 'g1', colors: ['R', 'W'] });
     const colors = byKey(compareCards(guess, target), 'colors');
-    expect(colors.status).toBe('partial');
+    expect(colors.status).toBe('wrong');
     expect(colors.correct).toEqual(['R']);
     expect(colors.wrong).toEqual(['W']);
   });
@@ -114,7 +214,7 @@ describe('compareCards — sets', () => {
     const guess = makeCard({ name: 'A', oracle_id: 'g1', type_line: 'Creature — Elf Druid' });
     const target = makeCard({ name: 'T', oracle_id: 't1', type_line: 'Creature — Goblin Warrior' });
     const type = byKey(compareCards(guess, target), 'type');
-    expect(type.status).toBe('partial');
+    expect(type.status).toBe('wrong');
     expect(type.correct).toEqual(['Creature']);
     expect(type.wrong).toEqual(['Elf', 'Druid']);
   });
@@ -122,7 +222,7 @@ describe('compareCards — sets', () => {
   it('type line keeps matching tokens visible in order', () => {
     const guess = makeCard({ name: 'A', oracle_id: 'g1', type_line: 'Creature — Goblin Warrior Berserker' });
     const type = byKey(compareCards(guess, target), 'type');
-    expect(type.status).toBe('partial');
+    expect(type.status).toBe('wrong');
     expect(type.correct).toEqual(['Creature', 'Goblin', 'Warrior']);
     expect(type.wrong).toEqual(['Berserker']);
   });
@@ -198,13 +298,13 @@ describe('compareCards — creature stats applicability', () => {
     ]);
   });
 
-  it('partial P/T match colors each side independently', () => {
+  it('wrong P/T match colors each side independently', () => {
     const results = compareCards(
       makeCard({ name: 'A', oracle_id: 'g1', power: '3', toughness: '5' }),
       makeCard()
     );
     const pt = byKey(results, 'pt');
-    expect(pt.status).toBe('partial');
+    expect(pt.status).toBe('wrong');
     expect(pt.segments).toEqual([
       { text: '3', status: 'correct' },
       { slash: true },
@@ -298,12 +398,12 @@ describe('compareCards — release date and oracle text', () => {
     expect(byKey(same, 'released').status).toBe('correct');
   });
 
-  it('oracle text compares partially when the guess has text', () => {
+  it('oracle text compares wrong when the guess has text', () => {
     const guess = makeCard({ name: 'A', oracle_text: 'Flying\nVigilance\nCycling' });
     const target = makeCard({ oracle_text: 'Flying\nVigilance' });
     const results = compareCards(guess, target);
     const line = byKey(results, 'oracle');
-    expect(line).toMatchObject({ status: 'partial', applicable: true });
+    expect(line).toMatchObject({ status: 'wrong', applicable: true });
     expect(line.correct).toEqual(['flying', 'vigilance']);
     expect(line.wrong).toEqual(['cycling']);
     expect(line.segments).toEqual([
@@ -318,7 +418,7 @@ describe('compareCards — release date and oracle text', () => {
     const guess = makeCard({ oracle_text: 'Add {G}: Flying, Vigilance.' });
     const target = makeCard({ oracle_text: 'Add {G}: Flying' });
     const line = byKey(compareCards(guess, target), 'oracle');
-    expect(line.status).toBe('partial');
+    expect(line.status).toBe('wrong');
     // correct/wrong list the lowercased token texts only
     expect(line.correct).toEqual(['add', '{g}', 'flying']);
     expect(line.wrong).toEqual(['vigilance']);
@@ -374,7 +474,8 @@ describe('compareCards — release date and oracle text', () => {
     expect(byKey(results, 'oracle')).toBeUndefined();
     const colors = byKey(results, 'colors');
     expect(colors.status).toBe('correct');
-    expect(colors.correct).toEqual(['—']);
+    // Both cards are colorless: the guessed explicit token matches the target's.
+    expect(colors.correct).toEqual(['colorless']);
   });
 
   it('a fully matching oracle text is a correct row', () => {
@@ -427,7 +528,7 @@ describe('compareCards — layout', () => {
     expect(byKey(compareCards(makeCard(), dfc), 'layout')).toBeUndefined();
   });
 
-  it('only the primary face is compared, ignoring the back face', () => {
+  it('any face token matches: target token lists are the union of all faces', () => {
     const other = makeCard({
       name: 'Other // Beast Side',
       layout: 'transform',
@@ -439,5 +540,79 @@ describe('compareCards — layout', () => {
     expect(results.some((r) => r.key.startsWith('front:') || r.key.startsWith('back:'))).toBe(false);
     expect(byKey(results, 'pt')).toMatchObject({ status: 'correct' });
     expect(byKey(results, 'type')).toMatchObject({ status: 'correct' });
+    // A guessed-only front token that appears only on the target's back face
+    // still matches (Scryfall's t:/pow:/tou: operators index any face).
+    const mismatched = compareCards(
+      makeCard({ name: 'A', type_line: 'Creature — Human', power: '2', toughness: '2', layout: 'normal' }),
+      dfc,
+    );
+    expect(byKey(mismatched, 'type')).toMatchObject({ status: 'correct', correct: ['Creature', 'Human'] });
+    expect(byKey(mismatched, 'pt')).toMatchObject({ status: 'correct' });
+  });
+
+  it('guessed tokens from any face are checked against the target face union', () => {
+    const results = compareCards(dfc, makeCard({ name: 'T', type_line: 'Artifact', power: '1', toughness: '1' }));
+    expect(byKey(results, 'type')).toMatchObject({ status: 'wrong', correct: [], wrong: ['Creature', 'Human', 'Beast', 'Goblin', 'Warrior'] });
+    expect(byKey(results, 'pt')).toMatchObject({ status: 'wrong' });
+    expect(byKey(results, 'pt').segments).toEqual([
+      { text: '2', status: 'wrong' },
+      { slash: true },
+      { text: '2', status: 'wrong' },
+      { sep: true, text: '//' },
+      { text: '4', status: 'wrong' },
+      { slash: true },
+      { text: '4', status: 'wrong' },
+    ]);
+  });
+
+  it('color row phrases per-face colors with a // separator', () => {
+    const split = makeCard({
+      name: 'Fire // Ice',
+      layout: 'split',
+      card_faces: [
+        { name: 'Fire', colors: ['R'] },
+        { name: 'Ice', colors: ['U'] },
+      ],
+    });
+    const colors = byKey(compareCards(split, makeCard({ colors: ['R'] })), 'colors');
+    expect(colors.segments).toEqual([
+      { text: 'R', status: 'correct' },
+      { sep: true, text: '//' },
+      { text: 'U', status: 'wrong' },
+    ]);
+  });
+
+  it('type row phrases per-face type lines with a // separator', () => {
+    const split = makeCard({
+      name: 'Fire // Ice',
+      layout: 'split',
+      card_faces: [
+        { name: 'Fire', type_line: 'Instant' },
+        { name: 'Ice', type_line: 'Sorcery' },
+      ],
+    });
+    const type = byKey(compareCards(split, makeCard({ type_line: 'Instant' })), 'type');
+    expect(type.segments).toEqual([
+      { text: 'Instant', status: 'correct' },
+      { sep: true, text: '//' },
+      { text: 'Sorcery', status: 'wrong' },
+    ]);
+  });
+
+  it('oracle row phrases per-face oracle text with a // separator', () => {
+    const split = makeCard({
+      name: 'Fire // Ice',
+      layout: 'split',
+      card_faces: [
+        { name: 'Fire', oracle_text: 'Flying' },
+        { name: 'Ice', oracle_text: 'Vigilance' },
+      ],
+    });
+    const line = byKey(compareCards(split, makeCard({ oracle_text: 'Flying' })), 'oracle');
+    expect(line.segments).toEqual([
+      { text: 'Flying', token: true, status: 'correct' },
+      { sep: true, text: '//' },
+      { text: 'Vigilance', token: true, status: 'wrong' },
+    ]);
   });
 });

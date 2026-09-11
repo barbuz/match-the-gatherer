@@ -13,8 +13,6 @@
   --accent-soft: #26304a;
   --ok-bg: #1e4634;
   --ok-fg: #7ee2a8;
-  --partial-bg: #4a3d1e;
-  --partial-fg: #f2c14e;
   --bad-bg: #46262a;
   --bad-fg: #f1949a;
 }
@@ -29,8 +27,6 @@
   --accent-soft: #e4eafb;
   --ok-bg: #d7f3e3;
   --ok-fg: #14683a;
-  --partial-bg: #fbf0d0;
-  --partial-fg: #8a6413;
   --bad-bg: #fae0e2;
   --bad-fg: #a03240;
 }

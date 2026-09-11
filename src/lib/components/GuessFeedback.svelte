@@ -37,12 +37,14 @@
       <div class="line {r.status}">
         <span class="prop-label" class:absent={r.absentOnTarget}>{r.label}</span>
         {#if r.segments}
-          <span class="values seg-values" class:oracle={r.key === 'oracle'}>
+          <span class="values seg-values" class:mana={r.key === 'mana'} class:oracle={r.key === 'oracle'}>
             {#each r.segments as seg, i (i)}
               {#if seg.dash}
                 <span class="dash">—</span>
               {:else if seg.slash}
                 <span class="pt-sep">/</span>
+              {:else if seg.sep}
+                <span class="sep">//</span>
               {:else if seg.token}
                 {#if $symbols && manaParts(seg.text)}
                   <span class="val mana {seg.status}">
@@ -59,6 +61,15 @@
                 <span class="plain">{seg.text}</span>
               {/if}
             {/each}
+            {#if r.mvValues}
+              {#each r.mvValues as mv, i (i)}
+                {#if i > 0}
+                  <span class="pt-sep">,</span>
+                {/if}
+                <span class="prop-label mv-label">MV</span>
+                <span class="val {mv.status}">{mv.text}</span>
+              {/each}
+            {/if}
           </span>
         {:else}
           <span class="values">
@@ -84,15 +95,6 @@
               <span class="val wrong">{v}</span>
             {/if}
           {/each}
-          {#if r.mvValues}
-            {#each r.mvValues as mv, i (i)}
-              {#if i > 0}
-                <span class="pt-sep">,</span>
-              {/if}
-              <span class="prop-label mv-label">MV</span>
-              <span class="val {mv.status}">{mv.text}</span>
-            {/each}
-          {/if}
         </span>
         {/if}
         {#if r.note}
@@ -195,10 +197,6 @@
     transform: translateY(-50%);
     pointer-events: none;
   }
-  .line.partial .val.correct {
-    background: var(--partial-bg);
-    color: var(--partial-fg);
-  }
   /* Segments rows phrase values in order:the type line like the card
      ("Supertypes Types — Subtypes"),the P/T row as "3/2". */
   .values.seg-values {
@@ -221,9 +219,13 @@
   .values.seg-values .val {
     padding: 0 0.1rem;
   }
-  .values.seg-values .dash, .values.seg-values .pt-sep {
+  .values.seg-values .dash, .values.seg-values .pt-sep, .values.seg-values .sep {
     padding: 0 0.25rem;
     color: var(--muted);
+  }
+  /* Mana rows phrase per-face costs in order, `//` between faces. */
+  .values.seg-values.mana {
+    align-items: center;
   }
   .values.seg-values .plain {
     white-space: pre-wrap;

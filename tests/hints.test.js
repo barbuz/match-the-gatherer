@@ -53,7 +53,7 @@ describe('gatherHints', () => {
     );
   });
 
-  it('collects negative hints and partial positives from mismatches', () => {
+  it('collects negative hints and correct positives from mismatches', () => {
     const target = makeCard();
     const guess = makeCard({
       name: 'A',
@@ -70,7 +70,9 @@ describe('gatherHints', () => {
     const hints = gatherHints([guessEntry(guess, target,)]);
     expect(hints).toEqual(
       expect.arrayContaining([
-        { kind: 'manaValue', value: '5', negated: true }, // mv of the guess was wrong
+        // MV was wrong, so `mv!=5` stands in for the whole cost line: no
+        // `mana!={4}{R}` survives (it would add nothing).
+        { kind: 'manaValue', value: '5', negated: true },
         { kind: 'color', value: 'R', negated: false },             // matching guessed color
         { kind: 'color', value: 'W', negated: true }, // non-matching guessed color
         { kind: 'type', value: 'Artifact', negated: true }, // supertype guessed but not on target
@@ -157,6 +159,8 @@ describe('gatherHints', () => {
   });
 
   it('emits no cost negation when the mana value is wrong too', () => {
+    // The `mv!=5` hint alone covers every card with the guessed cost, so no
+    // `mana!={4}{R}` survives.
     const hints = gatherHints([
       guessEntry(
         makeCard({ name: 'A', mana_cost: '{4}{R}', cmc: 5 }),
@@ -167,7 +171,7 @@ describe('gatherHints', () => {
     expect(hints.filter((h) => h.kind === 'mana' && h.negated)).toHaveLength(0); // no mana!={4}{R} — mv!= suffices
   });
 
-  it('emits a negated exact-cost hint on a same-MV different-cost partial line', () => {
+it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () => {
     const hints = gatherHints([
       guessEntry(
         makeCard({ name: 'A', mana_cost: '{3}{R}', cmc: 4 }),
@@ -176,6 +180,37 @@ describe('gatherHints', () => {
     ]);
     expect(hints).toContainEqual({ kind: 'manaValue', value: '4', negated: false });
     expect(hints).toContainEqual({ kind: 'mana', value: '{3}{R}', negated: true });
+  });
+
+  it('emits one mana!= clause per wrong whole cost on a wrong split line', () => {
+    // A split guess whose every face cost fails: each whole cost gets its
+    // own negation (ANDed — “neither”), instead of being rejoined into the
+    // combined card-level `mana_cost` string that exists on no single face.
+
+
+    const split = makeCard({
+      name: 'Fire // Ice',
+      layout: 'split',
+      mana_cost: '{1}{R} // {1}{U}',
+      cmc: 4,
+      colors: ['R', 'U'],
+      card_faces: [
+        { name: 'Fire', mana_cost: '{1}{R}', colors: ['R'], type_line: 'Instant', power: undefined, toughness: undefined },
+        { name: 'Ice', mana_cost: '{1}{U}', colors: ['U'], type_line: 'Instant', power: undefined, toughness: undefined },
+      ],
+      power: undefined,
+      toughness: undefined,
+    });
+    const hints = gatherHints([
+      guessEntry(
+        split,
+        makeCard({ name: 'T', mana_cost: '{2}{G}{G}', cmc: 4, colors: ['G'], type_line: 'Instant' }),
+      ),
+    ]);
+    expect(hints).toContainEqual({ kind: 'mana', value: '{1}{R}', negated: true });
+    expect(hints).toContainEqual({ kind: 'mana', value: '{1}{U}', negated: true });
+    expect(hints.filter((h) => h.kind === 'mana' && h.negated)).toHaveLength(2);
+    expect(hints.some((h) => h.kind === 'mana' && h.value === '{1}{R}{1}{U}}')).toBe(false);
   });
 
   it('drops negated exact-cost hints once the exact cost is pinned', () => {
@@ -209,7 +244,7 @@ describe('gatherHints', () => {
 
 
   it('drops negated scalar hints once the exact value is pinned', () => {
-    // Toughness 1 matches on the first guess (pt line partial since power
+    // Toughness 1 matches on the first guess (pt line wrong since power
     // misses); later guess had toughness 3, which the target does not have.
     const target = makeCard({ power: '2', toughness: '1' });
     const hints = gatherHints([
@@ -228,7 +263,7 @@ describe('gatherHints', () => {
     const older = gatherHints([guessEntry(makeCard({ name: 'A', released_at: '1995-01-01' }), target,)]);
     expect(older).toContainEqual({ kind: 'released', value: '1995-01-01', dir: '>', negated: false }); // target is newer
   });
-  it('drops partial/wrong hints once a property line is fully matched', () => {
+  it('drops wrong hints once a property line is fully matched', () => {
     // First guess fixes the mana value (4) but misses colors/type; the
     // second guess fixes colors/type but misses the mana value (5) -- those
     // later mana-value hints are dropped since the value is already pinned.
@@ -257,7 +292,7 @@ describe('gatherHints', () => {
     const target = makeCard({ type_line: 'Creature — Wizard' });
     const hints = gatherHints([
       guessEntry(makeCard({ name: 'A', type_line: 'Creature — Wizard' }), target), // fully matched type row
-      guessEntry(makeCard({ name: 'B', type_line: 'Legendary Creature — Wizard' }), target), // partial: wrong 'legendary'
+      guessEntry(makeCard({ name: 'B', type_line: 'Legendary Creature — Wizard' }), target), // wrong: 'legendary' misses
     ]);
     expect(hints).toContainEqual({ kind: 'type', value: 'Creature', negated: false });
     expect(hints).toContainEqual({ kind: 'type', value: 'Wizard', negated: false });
@@ -296,6 +331,59 @@ describe('gatherHints', () => {
     ]);
     expect(hints).toContainEqual({ kind: 'released', value: '2008-06-01', negated: false });
     expect(hints.filter((h) => h.kind === 'released')).toHaveLength(1);
+  });
+
+  it('matches tokens from any face of a multi-faced target (issue #27)', () => {
+    // Regression: "Norman Osborn // Green Goblin" was wrongly excluded from
+    // the hint URL even though the comparison feedback says the guess matches:
+    // Scryfall's t:/pow:/tou:/mana: operators index ANY face, so aguessed
+    // token found only on the target's back face must still be emitted.
+
+
+    const dfc = {
+      name: 'Norman Osborn // Green Goblin',
+      layout: 'transform',
+      card_faces: [
+        {
+          name: 'Norman Osborn',
+          type_line: 'Legendary Creature — Human Rogue',
+          power: '2',
+          toughness: '2',
+          colors: ['W', 'U'],
+          mana_cost: '{1}{U}',
+          oracle_text: '',
+        },
+        {
+          name: 'Green Goblin',
+          type_line: 'Legendary Creature — Goblin',
+          power: '4',
+          toughness: '4',
+          colors: ['G'],
+          mana_cost: '{2}{G}',
+          oracle_text: '',
+        },
+      ],
+      colors: ['U', 'G'],
+      cmc: 3,
+      power: undefined,
+      toughness: undefined,
+      oracle_text: '',
+      released_at: '2020-10-01',
+      rarity: 'mythic',
+    };
+    const guess = {
+      ...makeCard({ name: 'A', type_line: 'Creature — Goblin', power: '4', toughness: '4' }),
+      mana_cost: '{2}{G}',
+      cmc: 3,
+    };
+    const hints = gatherHints([guessEntry(guess, dfc)]);
+    // The back face's tokens are the only clues the guess locks into: every
+    // comparison row is correct, so the hint list must carry them.
+    expect(hints).toContainEqual({ kind: 'type', value: 'Goblin', negated: false });
+    expect(hints).toContainEqual({ kind: 'power', value: '4', negated: false });
+    expect(hints).toContainEqual({ kind: 'toughness', value: '4', negated: false });
+    expect(hints).toContainEqual({ kind: 'mana', value: '{2}{G}', negated: false });
+    expect(hints.some((h) => h.kind === 'type' && h.value === 'Human')).toBe(false); // front-face guess-only token
   });
 });
 
