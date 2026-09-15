@@ -32,6 +32,13 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   divergence, so the two need not stay byte-identical.
 - A response's **final URL** decides the day key (a non-today date 302s to
   today), so a clock-skewed client self-heals instead of mis-persisting.
+- The `/api/daily/<date>` body is **gzipped and served with no
+  `Content-Encoding`** (deliberate anti-casual-cheat obfuscation, backend spec
+  §3.4), so the browser does *not* inflate it and `res.json()` fails on the raw
+  bytes. `dailyApi.js` reads the bytes and inflates them itself via
+  `DecompressionStream('gzip')`; the stats response is negotiated normally and
+  still parses with `res.json()`. Re-test against the live Worker, not a mock —
+  a mock that sets `Content-Encoding` hides this.
 - Scryfall exact-name search (`cards/search?q=!"name" prefer:oldest`) also matches
   **individual face names**, so `lib/api/scryfall.js` prefers a whole-card name
   match, then face-name match, then first result.

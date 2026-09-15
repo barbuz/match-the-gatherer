@@ -74,6 +74,7 @@ All data comes directly from Scryfall's public API; there is no custom backend.
 The daily game is **server-authoritative** (backend spec §3):
 
 - At game start the client calls `GET <api>/api/daily/<today-utc>` and renders the full Scryfall card object it returns. The date in the URL is the cache key, so a new day is always a fresh request. The response's final URL decides the day key the game is stored under, so a clock-skewed client follows the server's 302 to today and self-heals.
+- The response body is **gzipped and sent without a `Content-Encoding` header** (anti-casual-cheat obfuscation, backend spec §3.4), so the browser will not inflate it: the client reads the raw bytes and inflates them itself with `DecompressionStream('gzip')`. Only `/api/daily` does this; `/api/stats` negotiates normally.
 - **No client-side fallback.** If the request fails, show an "unable to load today's puzzle" state with a Retry button. The client must never fall back to a locally-picked card — that would split players across different answers on the same day. `resolveDailyTargetCard` is retained for **free mode only**.
 - The backend reuses the same deterministic selection rules (FNV-1a over the UTC date key, `A-`-filtered Scryfall name list, attempt-seeded re-rolls, vintage-legal + non-reprint), so the daily answer stays familiar. It may diverge when its quality gate requires; the server's pick wins.
 - The puzzle resets at UTC midnight.

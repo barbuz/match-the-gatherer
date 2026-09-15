@@ -7,15 +7,42 @@
  * answers on the same day (backend spec §3.5).
  */
 import { utcDateKey } from '../game/dailySeed.js';
+import { dbGet, dbSet } from '../storage/db.js';
 import { API_BASE } from './config.js';
 
 const DATE_IN_URL = /\/api\/daily\/(\d{4}-\d{2}-\d{2})$/;
+// One slot, rewritten per day: the answer only matters until the date rolls.
+const CACHE_KEY = 'mtg:daily-card';
 
 export class DailyApiError extends Error {
   constructor(message) {
     super(message);
     this.name = 'DailyApiError';
   }
+}
+
+/**
+ * Decode the answer envelope. The backend serves a **pre-gzipped** body with
+ * **no `Content-Encoding`** (anti-casual-cheat obfuscation, backend spec §3.4),
+ * so the browser never inflates it and `res.json()` would choke on the raw
+ * bytes — the client inflates it itself. A plaintext copy is still parsed
+ * as-is so a non-gzipped response keeps working.
+ */
+async function readEnvelope(res) {
+  const buf = await res.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  const gzipped = bytes[0] === 0x1f && bytes[1] === 0x8b;
+  let text;
+  if (gzipped) {
+    if (typeof DecompressionStream === 'undefined') {
+      throw new DailyApiError('this browser cannot decompress the game server response');
+    }
+    const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+    text = await new Response(stream).text();
+  } else {
+    text = new TextDecoder().decode(bytes);
+  }
+  return JSON.parse(text);
 }
 
 /**
@@ -28,12 +55,20 @@ function servedDateKey(res, requested) {
 }
 
 /**
- * Fetch the authoritative card for a UTC day (default: today).
+ * Fetch the authoritative card for a UTC day (default: today), reusing the
+ * cached answer for that day so a reload doesn't re-request it (backend spec
+ * §3.4). The cache only ever holds a card the server served for that same day,
+ * so it can never resurrect a locally-picked answer (§3.5).
  * @param {string} [dateKey] 'YYYY-MM-DD', computed fresh at game start.
  * @returns {Promise<{ card: object, dayKey: string }>}
  * @throws {DailyApiError} on network failure or a non-2xx / card-less response.
  */
 export async function fetchDailyCard(dateKey = utcDateKey()) {
+  const cached = await dbGet(CACHE_KEY);
+  if (cached?.dayKey === dateKey && cached.card?.name) {
+    return { card: cached.card, dayKey: cached.dayKey };
+  }
+
   let res;
   try {
     res = await fetch(`${API_BASE}/api/daily/${dateKey}`);
@@ -43,11 +78,14 @@ export async function fetchDailyCard(dateKey = utcDateKey()) {
   if (!res.ok) throw new DailyApiError(`game server responded HTTP ${res.status}`);
   let body;
   try {
-    body = await res.json();
-  } catch {
+    body = await readEnvelope(res);
+  } catch (err) {
+    if (err instanceof DailyApiError) throw err;
     throw new DailyApiError('game server returned an unreadable response');
   }
   const card = body?.card;
   if (!card?.name) throw new DailyApiError('game server returned no card for today');
-  return { card, dayKey: servedDateKey(res, dateKey) };
+  const dayKey = servedDateKey(res, dateKey);
+  await dbSet(CACHE_KEY, { dayKey, card });
+  return { card, dayKey };
 }
