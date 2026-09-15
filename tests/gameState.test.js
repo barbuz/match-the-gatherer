@@ -1,10 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { dbGet, dbSet } from '../src/lib/storage/db.js';
 import { createGame } from '../src/lib/game/gameState.js';
+import { reportDailyResult } from '../src/lib/api/statsApi.js';
 
 vi.mock('../src/lib/storage/db.js', () => ({
   dbGet: vi.fn(),
   dbSet: vi.fn(),
+}));
+
+vi.mock('../src/lib/api/statsApi.js', () => ({
+  reportDailyResult: vi.fn(),
 }));
 
 const TARGET = { name: 'Grizzly Bears', oracle_id: 'abc' };
@@ -114,5 +119,110 @@ describe('createGame.addGuess/markHintUsed', () => {
     dbSet.mockClear();
     g.markHintUsed();
     expect(dbSet).not.toHaveBeenCalled();
+  });
+});
+
+describe('createGame — daily result reporting', () => {
+  beforeEach(() => {
+    dbGet.mockReset();
+    dbSet.mockReset();
+    reportDailyResult.mockReset();
+  });
+
+  it('reports a win once, with the guess and hint counts', async () => {
+    reportDailyResult.mockResolvedValue({ date: DAY, won: 1, byGuesses: {} });
+    const g = dailyGame();
+    await g.addGuess(GUESS);
+    g.markHintUsed();
+    await g.addGuess({ card: { name: TARGET.name, oracle_id: TARGET.oracle_id }, results: [] });
+
+    expect(reportDailyResult).toHaveBeenCalledTimes(1);
+    expect(reportDailyResult).toHaveBeenCalledWith({
+      date: DAY,
+      outcome: 'won',
+      guesses: 2,
+      hintsUsed: 1,
+    });
+    let s;
+    g.subscribe((v) => (s = v));
+    expect(s.communityStats).toEqual({ date: DAY, won: 1, byGuesses: {} });
+  });
+
+  it('reports a loss after the tenth guess', async () => {
+    reportDailyResult.mockResolvedValue({ date: DAY, won: 0 });
+    const g = dailyGame();
+    for (let i = 0; i < 10; i++) {
+      await g.addGuess({ card: { name: `Card ${i}`, oracle_id: `o${i}` }, results: [] });
+    }
+    expect(reportDailyResult).toHaveBeenCalledTimes(1);
+    expect(reportDailyResult).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'lost', guesses: 10 }),
+    );
+  });
+
+  it('does not report a free-mode game', async () => {
+    const g = createGame({ mode: 'free', dayKey: null, targetName: TARGET.name, targetCard: TARGET });
+    await g.addGuess(GUESS);
+    await g.addGuess({ card: { name: TARGET.name, oracle_id: TARGET.oracle_id }, results: [] });
+    expect(reportDailyResult).not.toHaveBeenCalled();
+  });
+
+  it('reports a restored concluded game, but not a restored in-progress one', async () => {
+    reportDailyResult.mockResolvedValue({ date: DAY, won: 1 });
+
+    dbGet.mockResolvedValue({
+      targetName: TARGET.name,
+      guesses: [GUESS],
+      hintsUsed: [],
+      status: 'won',
+    });
+    const concluded = dailyGame();
+    await concluded.load();
+    await concluded.reportIfConcluded();
+    expect(reportDailyResult).toHaveBeenCalledWith(
+      expect.objectContaining({ date: DAY, outcome: 'won', guesses: 1 }),
+    );
+
+    reportDailyResult.mockClear();
+    dbGet.mockResolvedValue({
+      targetName: TARGET.name,
+      guesses: [GUESS],
+      hintsUsed: [],
+      status: 'playing',
+    });
+    const inProgress = dailyGame();
+    await inProgress.load();
+    await inProgress.reportIfConcluded();
+    expect(reportDailyResult).not.toHaveBeenCalled();
+  });
+
+  it('does not re-POST a concluded game whose aggregates are already stored', async () => {
+    // Spec §1.1 budgets 2 requests/player/day, so a reload of a finished day
+    // must not spend a third on the sink.
+    const stored = { date: DAY, won: 1, byGuesses: {} };
+    dbGet.mockResolvedValue({
+      targetName: TARGET.name,
+      guesses: [GUESS],
+      hintsUsed: [],
+      status: 'won',
+      communityStats: stored,
+    });
+    const g = dailyGame();
+    await g.load();
+    await g.reportIfConcluded();
+
+    expect(reportDailyResult).not.toHaveBeenCalled();
+    let s;
+    g.subscribe((v) => (s = v));
+    expect(s.communityStats).toEqual(stored);
+  });
+
+  it('persists the returned aggregates so a later reload skips the sink', async () => {
+    reportDailyResult.mockResolvedValue({ date: DAY, won: 1 });
+    const g = dailyGame();
+    await g.addGuess({ card: { name: TARGET.name, oracle_id: TARGET.oracle_id }, results: [] });
+
+    const lastWrite = dbSet.mock.calls.at(-1)[1];
+    expect(lastWrite.communityStats).toEqual({ date: DAY, won: 1 });
   });
 });

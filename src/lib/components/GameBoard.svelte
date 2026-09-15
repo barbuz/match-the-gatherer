@@ -6,8 +6,8 @@
   import { onMount } from 'svelte';
   import { ensureData, dataStatus } from '../stores/backgroundFetch.js';
   import { fetchCardByName } from '../api/scryfall.js';
-  import { resolveDailyTargetCard, resolveVintageLegalCard, utcDateKey }
-    from '../game/dailySeed.js';
+  import { fetchDailyCard } from '../api/dailyApi.js';
+  import { resolveVintageLegalCard, utcDateKey } from '../game/dailySeed.js';
   import { compareCards } from '../game/comparison.js';
   import { createGame, MAX_GUESSES } from '../game/gameState.js';
   import { gatherHints, buildScryfallSearchUrl } from '../game/hints.js';
@@ -17,18 +17,21 @@
   import CardTimeline from './CardTimeline.svelte';
   import CardImage from './CardImage.svelte';
   import ShareSummary from './ShareSummary.svelte';
+  import CommunityStats from './CommunityStats.svelte';
   import HintButton from './HintButton.svelte';
 
   export let mode; // 'daily' | 'free'
 
   let phase = 'loading'; // 'loading' | 'ready' | 'error'
   let error = '';
+  // Free mode never leaves the client; the daily day key comes from the
+  // server response (see below), computed fresh on every game start.
   let dayKey = utcDateKey();
   let targetName = '';
   let targetCard = null;
   let names = [];
   let game = null;
-  let state = { guesses: [], hintsUsed: [], status: 'playing', loaded: false };
+  let state = { guesses: [], hintsUsed: [], status: 'playing', loaded: false, communityStats: null };
   let submitError = '';
   let unsubscribe = null;
   let hintUrl = '';
@@ -52,20 +55,24 @@
     try {
       names = await ensureData();
       if (mode === 'daily') {
-        targetCard = await resolveDailyTargetCard(names);
-        if (!targetCard) throw new Error('no vintage-legal card found in name list');
+        // Server-authoritative target: the daily game has no client-side
+        // fallback, so a failure shows a retry state instead of a local pick.
+        const daily = await fetchDailyCard();
+        targetCard = daily.card;
+        dayKey = daily.dayKey;
         targetName = targetCard.name;
-
       } else {
         targetCard = await resolveVintageLegalCard(names, () => Math.floor(Math.random() * names.length), fetchCardByName);
         if (!targetCard) throw new Error('no vintage-legal card found in name list');
         targetName = targetCard.name;
-
       }
       game = createGame({ mode, dayKey, targetName, targetCard });
       unsubscribe?.();
       unsubscribe = game.subscribe((s) => (state = s));
       await game.load();
+      // A game restored after concluding never replayed its sink call; the
+      // report is idempotent server-side, so this only fills in aggregates.
+      if (mode === 'daily') await game.reportIfConcluded();
       phase = 'ready';
     } catch (e) {
       error = String(e?.message ?? e);
@@ -99,7 +106,15 @@
   {#if phase === 'loading'}
     <p class="status">{$dataStatus.detail || 'Loading game…'}</p>
   {:else if phase === 'error'}
-    <p class="status error-msg">{error}</p>
+    <div class="status">
+      <p class="error-msg">
+        {mode === 'daily'
+          ? "Unable to load today's puzzle."
+          : 'Unable to start a free game.'}
+      </p>
+      <p class="error-detail">{error}</p>
+      <button on:click={setup}>Retry</button>
+    </div>
   {:else}
     <p class="hint">
       {mode === 'daily' ? `Daily puzzle — ${dayKey} (UTC)` : 'Free mode'}
@@ -134,6 +149,7 @@
         </div>
         {#if mode === 'daily'}
           <ShareSummary guesses={state.guesses} won={state.status === 'won'} {dayKey} hintsUsed={state.hintsUsed ?? []} />
+          <CommunityStats stats={state.communityStats} />
         {:else}
           <p class="muted">Free mode — no stats recorded.</p>
         {/if}
@@ -181,7 +197,23 @@
   .error-msg {
     color: var(--bad-fg);
     text-align: center;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
+  }
+  .error-detail {
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+  .status button {
+    margin-top: 0.5rem;
+    padding: 0.4rem 1.2rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--fg);
+    cursor: pointer;
+  }
+  .status button:hover {
+    background: var(--accent-soft);
   }
   .feedback-list {
     display: flex;
