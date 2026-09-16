@@ -76,12 +76,16 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
 
 - Hints (`src/lib/game/hints.js`): `gatherHints()` distills every guess's feedback into a
   deduplicated minimal hint list; `buildScryfallSearchUrl()` turns it into a
-  `https://scryfall.com/search/?q=...` link with clauses `t:`, `c:`, `c=`,
-  `layout:`, `mana=`, `mv=`, `pow=`, `tou=`, `loy=`, `r:`, `date>`/`date<`, negations via
+  `https://scryfall.com/search/?q=...` link with clauses `t:`, `c:`, `layout:`,
+  `mana=`, `mv=`, `pow=`, `tou=`, `loy=`, `r:`, `date>`/`date<`, negations via
   `-`/`!=`, and always ending `not:reprint`. Defense stats have no Scryfall operator, so
   those hints are dropped; **exception**: Scryfall's `t:` is a contains-match
-  with no exact-type-line operator,so negated type hints survive even after a
-  fully-matched type row. Same-direction date bounds fold down to the
+  with no exact-type-line operator, so negated type hints survive even after a
+  fully-matched type row. Colors likewise never use the exact-set `c=` operator:
+  a fully matched colors row only proves the guessed colors are a subset of the
+  target's, so `c:` contains hints (positive and negated) are used throughout,
+  and a `//` face separator is never emitted as a filter value. Same-direction
+  date bounds fold down to the
   tightest,and an exact date subsumes all date hints. The HintButton opens that URL, and
   each used hint press marks its share row with 🔦 (`buildShareText` `hintsUsed`).
 

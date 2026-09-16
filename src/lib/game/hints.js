@@ -40,10 +40,13 @@ function pushUnique(hints, seen, hint) {
  */
 export function gatherHints(guesses,) {
   // First pass: track which property lines were ever fully matched, so
-  // their wrong counterparts elsewhere can be ignored. Exception:
-  // `type` — Scryfall's `t:`/`type:` is a contains-match for supertypes,
-  // card types, and subtypes with no exact-type-line operator,so negated
-  // type hints remain informative even after a fully-matched type row.
+  // their wrong counterparts elsewhere can be ignored. Exceptions:
+  // `type` and `colors` — both are set-valued and compared by containment,
+  // so a "correct" row only proves the guess's tokens are a SUBSET of the
+  // target's, never that the sets are equal. Scryfall's `t:` and `c:` are
+  // contains-matches with no exact operator for either, so negated hints
+  // from other guesses stay informative even after a fully-matched row
+  // (e.g. a B,G guess shows a correct colors row against a B,G,U target).
 
 
 
@@ -69,7 +72,7 @@ export function gatherHints(guesses,) {
 
   for (const entry of guesses ?? []) {
     for (const r of entry?.results ?? []) {
-      if (fullyMatched.has(r.key) && r.status !== 'correct' && r.key !== 'type') continue; // fully matched property: wrong values are irrelevant (except type: see above)
+      if (fullyMatched.has(r.key) && r.status !== 'correct' && r.key !== 'type' && r.key !== 'colors') continue; // fully matched property: wrong values are irrelevant (except type/colors: see above)
       if (r.absentOnTarget) continue; // guessed-only property: no Scryfall operator for it
       switch (r.key) {
         case 'mana': {
@@ -105,15 +108,14 @@ export function gatherHints(guesses,) {
           break;
         }
         case 'colors': {
+          // Never pin the exact set with `c=`: a fully matched row only means
+          // every guessed color is on the target, not that they are the only
+          // colors, so `c=` would over-constrain (a B,G row against a B,G,U
+          // target must not exclude U). Emit contains hints per color instead.
           const coloredCorrect = (r.correct ?? []).filter((v) => v !== 'colorless');
           const coloredWrong = (r.wrong ?? []).filter((v) => v !== 'colorless');
-          if (r.status === 'correct' && coloredCorrect.length > 0) {
-            const letters = coloredCorrect.join('').toLowerCase().split('').filter((c) => 'wubrg'.includes(c)).sort().join('');
-            if (letters) pushValue({ kind: 'colorSet', value: letters });
-          } else {
-            pushSetValues(coloredCorrect, 'color');
-            pushSetValues(coloredWrong, 'color', true);
-          }
+          pushSetValues(coloredCorrect, 'color');
+          pushSetValues(coloredWrong, 'color', true);
           break;
         }
         case 'type':
@@ -121,11 +123,15 @@ export function gatherHints(guesses,) {
           pushSetValues(r.wrong, 'type', true);
           break;
         case 'pt': {
-          const segs = r.segments ?? [];
-          for (let i = 0; i < segs.length; i++) {
-            const seg = segs[i];
+          // Segments run power, slash, toughness per face, with a `//` sep
+          // between faces. Track power/toughness structurally- the old
+          // index-based guess classified the `//` sep as a toughness value and
+          // emitted `tou=//`.
+          let kind = 'power';
+          for (const seg of r.segments ?? []) {
+            if (seg.sep) { kind = 'power'; continue; } // new face: power again
+            if (seg.slash) { kind = 'toughness'; continue; }
             if (seg.text == null || seg.text === PLACEHOLDER) continue;
-            const kind = i === 0 ? 'power' : 'toughness';
             pushValue({ kind, value: seg.text, negated: seg.status === 'wrong' });
           }
           break;
@@ -212,8 +218,6 @@ export function hintToClause(hint,) {
       return `${negated ? '-' : ''}t:${quoteIfNeeded(String(value).toLowerCase())}`;
     case 'color':
       return `${negated ? '-' : ''}c:${quoteIfNeeded(String(value).toLowerCase())}`;
-    case 'colorSet':
-      return `c=${String(value).toLowerCase()}`;
     case 'keyword':
       return `${negated ? '-' : ''}kw:${quoteIfNeeded(String(value).toLowerCase())}`;
     case 'layout':

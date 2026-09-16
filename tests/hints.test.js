@@ -42,7 +42,7 @@ describe('gatherHints', () => {
       expect.arrayContaining([
         { kind: 'manaValue', value: '3', negated: false },
         { kind: 'mana', value: '{2}{R}', negated: false },
-        { kind: 'colorSet', value: 'r', negated: false },
+        { kind: 'color', value: 'R', negated: false },
         { kind: 'type', value: 'Creature', negated: false },
         { kind: 'type', value: 'Goblin', negated: false },
         { kind: 'type', value: 'Warrior', negated: false },
@@ -96,7 +96,7 @@ describe('gatherHints', () => {
     ]);
     const count = (kind, value, negated = false) =>
       hints.filter((h) => h.kind === kind && h.value === value && (h.negated ?? false) === negated).length;
-    expect(count('colorSet', 'r')).toBe(1);
+    expect(count('color', 'R')).toBe(1);
     expect(count('type', 'Creature')).toBe(1);
     expect(count('oracle', 'flying')).toBe(0); // oracle-text hints are dropped entirely
     expect(count('power', '3')).toBe(1); // identical P/T across both guesses
@@ -229,17 +229,20 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
     expect(hints.some((h) => h.kind === 'mana' && h.value === '(no mana cost)')).toBe(false);
   });
 
-  it('emits an exact color-set hint bila fully matched color line', () => {
+  it('emits per-color contains hints (never an exact set) on a fully matched color line', () => {
+    // Regression: a fully matched colors row only proves the guessed colors
+    // are a subset of the target's, so pinning `c=` would wrongly exclude
+    // unguessed colors (a B,G row must not exclude U on a B,G,U target).
     const hints = gatherHints([
       guessEntry(
         makeCard({ name: 'A', colors: ['R', 'W'] }),
         makeCard({ name: 'T', colors: ['W', 'R'] }),
       ),
     ]);
-    expect(hints).toContainEqual({ kind: 'colorSet', value: 'rw', negated: false });
-    // No loose per-color "contains" hints survival when the set is pinned:
-    expect(hints.filter((h) => h.kind === 'color')).toHaveLength(0);
-    expect(hintToClause({ kind: 'colorSet', value: 'rw' })).toBe('c=rw');
+    expect(hints).toContainEqual({ kind: 'color', value: 'R', negated: false });
+    expect(hints).toContainEqual({ kind: 'color', value: 'W', negated: false });
+    expect(hints.filter((h) => h.kind === 'colorSet')).toHaveLength(0);
+    expect(hintToClause({ kind: 'color', value: 'R' })).toBe('c:r');
   });
 
 
@@ -278,7 +281,7 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
     expect(hints).toContainEqual({ kind: 'manaValue', value: '4', negated: false });
     const mv4 = hints.filter((h) => h.kind === 'manaValue');
     expect(mv4).toHaveLength(1); // no mv=5 / mv!=5 hints survive
-    expect(hints).toContainEqual({ kind: 'colorSet', value: 'u', negated: false });
+    expect(hints).toContainEqual({ kind: 'color', value: 'U', negated: false });
     expect(hints).toContainEqual({ kind: 'type', value: 'Creature', negated: false });
   });
 
@@ -385,6 +388,77 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
     expect(hints).toContainEqual({ kind: 'mana', value: '{2}{G}', negated: false });
     expect(hints.some((h) => h.kind === 'type' && h.value === 'Human')).toBe(false); // front-face guess-only token
   });
+
+  it('never filters on the `//` face separator or other separators', () => {
+    // Regression: a modal-DFC guess emits `//` separator segments on its
+    // type/pt/etc. rows. Those separators are layout, not values, so no hint
+    // may carry `//` (nor the `—` subtype dash) as a filter value.
+    const dfc = {
+      name: 'Norman Osborn // Green Goblin',
+      layout: 'modal_dfc',
+      card_faces: [
+        { name: 'Norman Osborn', type_line: 'Legendary Creature — Human Scientist Villain', power: '1', toughness: '1', colors: ['U'], mana_cost: '{1}{U}', oracle_text: '' },
+        { name: 'Green Goblin', type_line: 'Legendary Creature — Goblin Human Villain', power: '3', toughness: '3', colors: ['B', 'R', 'U'], mana_cost: '{1}{U}{B}{R}', oracle_text: '' },
+      ],
+      colors: ['U', 'B', 'R'],
+      cmc: 2,
+      power: undefined,
+      toughness: undefined,
+      oracle_text: '',
+      released_at: '2025-09-23',
+      rarity: 'mythic',
+    };
+    const hints = gatherHints([guessEntry(dfc, makeCard({ name: 'T', power: '9', toughness: '9' }))]);
+    const bad = hints.filter((h) => ['//', '—', '/', ''].includes(h.value));
+    expect(bad).toHaveLength(0);
+    // PT still resolves by position within each face (power before slash,
+    // toughness after), so real stats are not lost to the separators.
+    expect(hints).toContainEqual({ kind: 'power', value: '1', negated: true });
+    expect(hints).toContainEqual({ kind: 'power', value: '3', negated: true });
+    expect(hints).toContainEqual({ kind: 'toughness', value: '1', negated: true });
+    expect(hints).toContainEqual({ kind: 'toughness', value: '3', negated: true });
+  });
+
+  it('keeps every guessed color as contains hints even after a fully matched color row', () => {
+    // Regression for the reported game (target Gurmag Nightwatch, B/G/U):
+    // guesses Chromanticore (WUBRG), The Gitrog Monster (B,G), and
+    // Norman Osborn // Green Goblin (B,R,U). The Gitrog Monster's colors row
+    // is fully correct (B,G are both on the target), but the old code pinned
+    // the set to `c=bg`, dropping the target's U and the negations for R/W.
+    // The hint URL must include c:b, c:g, c:u and exclude -c:r, -c:w.
+    const chromanticore = makeCard({ name: 'Chromanticore', colors: ['W', 'U', 'B', 'R', 'G'], type_line: 'Enchantment Creature — Manticore', power: '4', toughness: '4', mana_cost: '{W}{U}{B}{R}{G}', cmc: 5 });
+    const gitrog = makeCard({ name: 'The Gitrog Monster', colors: ['B', 'G'], type_line: 'Legendary Creature — Frog Horror', power: '6', toughness: '6', mana_cost: '{3}{B}{G}', cmc: 5 });
+    const norman = {
+      name: 'Norman Osborn // Green Goblin',
+      layout: 'modal_dfc',
+      card_faces: [
+        { name: 'Norman Osborn', type_line: 'Legendary Creature — Human Scientist Villain', power: '1', toughness: '1', colors: ['U'], mana_cost: '{1}{U}', oracle_text: '' },
+        { name: 'Green Goblin', type_line: 'Legendary Creature — Goblin Human Villain', power: '3', toughness: '3', colors: ['B', 'R', 'U'], mana_cost: '{1}{U}{B}{R}', oracle_text: '' },
+      ],
+      colors: ['U', 'B', 'R'], cmc: 2, power: undefined, toughness: undefined,
+      oracle_text: '', released_at: '2025-09-23', rarity: 'mythic',
+    };
+    const target = makeCard({ name: 'Gurmag Nightwatch', colors: ['B', 'G', 'U'], type_line: 'Creature — Human Ranger', power: '3', toughness: '3', mana_cost: '{2/B}{2/G}{2/U}', cmc: 6 });
+    // Gurmag Nightwatch's print date is after every guess's.
+    const entries = [chromanticore, gitrog, norman].map((card) => guessEntry(card, target));
+    const hints = gatherHints(entries);
+
+    for (const c of ['B', 'G', 'U']) {
+      expect(hints).toContainEqual({ kind: 'color', value: c, negated: false });
+    }
+    for (const c of ['R', 'W']) {
+      expect(hints).toContainEqual({ kind: 'color', value: c, negated: true });
+    }
+    expect(hints.filter((h) => h.kind === 'colorSet')).toHaveLength(0);
+
+    const url = decodeURIComponent(buildScryfallSearchUrl(hints));
+    expect(url).toContain('c:b');
+    expect(url).toContain('c:g');
+    expect(url).toContain('c:u');
+    expect(url).toContain('-c:r');
+    expect(url).toContain('-c:w');
+    expect(url).not.toContain('c=');
+  });
 });
 
 describe('hintToClause', () => {
@@ -393,7 +467,6 @@ describe('hintToClause', () => {
     expect(hintToClause({ kind: 'type', value: 'Creature', negated: true })).toBe('-t:creature');
     expect(hintToClause({ kind: 'color', value: 'R' })).toBe('c:r');
     expect(hintToClause({ kind: 'color', value: 'W', negated: true })).toBe('-c:w');
-    expect(hintToClause({ kind: 'colorSet', value: 'RW' })).toBe('c=rw');
     expect(hintToClause({ kind: 'keyword', value: 'Flying' })).toBe('kw:flying');
     // Oracle hints are dropped entirely: positive fo: clauses make the
     // hint search too easy (they give away the whole oracle text), and
