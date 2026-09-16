@@ -121,11 +121,16 @@ function colorTokens(card) {
 }
 
 function typeTokens(card) {
-  const collectTypes = (f) => {
+  // Face-level only, like manaCostTokens(): a multi-faced card's card-level
+  // `type_line` is the faces' type lines CONCATENATED with `//`, so parsing it
+  // as one line would invent `//`/`—` tokens. facesOf falls back to [card] for
+  // single-faced cards, so the card-level field is still covered there.
+  const out = [];
+  for (const f of facesOf(card)) {
     const parsed = parseTypeLine(f.type_line ?? '');
-    return [...parsed.supertypes, ...parsed.types, ...parsed.subtypes];
-  };
-  return collect(card, collectTypes);
+    addUnique(out, [...parsed.supertypes, ...parsed.types, ...parsed.subtypes]);
+  }
+  return out;
 }
 
 function scalarTokens(card, key) {

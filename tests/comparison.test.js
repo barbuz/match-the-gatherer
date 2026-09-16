@@ -552,7 +552,9 @@ describe('compareCards — layout', () => {
 
   it('guessed tokens from any face are checked against the target face union', () => {
     const results = compareCards(dfc, makeCard({ name: 'T', type_line: 'Artifact', power: '1', toughness: '1' }));
-    expect(byKey(results, 'type')).toMatchObject({ status: 'wrong', correct: [], wrong: ['Creature', 'Human', 'Beast', 'Goblin', 'Warrior'] });
+    // Face-level tokens only: the card-level `type_line` of a multi-faced card
+    // is the faces' lines concatenated, so it must not contribute tokens.
+    expect(byKey(results, 'type')).toMatchObject({ status: 'wrong', correct: [], wrong: ['Creature', 'Human', 'Beast'] });
     expect(byKey(results, 'pt')).toMatchObject({ status: 'wrong' });
     expect(byKey(results, 'pt').segments).toEqual([
       { text: '2', status: 'wrong' },
