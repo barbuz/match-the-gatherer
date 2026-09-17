@@ -99,6 +99,36 @@ export function normalizeManaCost(cost = '') {
   return String(cost ?? '').replace(/[{}]/g, '' ).replace(/\s+/g, '' ).toUpperCase();
 }
 
+/**
+ * The numeric value Scryfall indexes for a creature stat (power/toughness) or
+ * loyalty. Scryfall's `pow`/`tou`/`loy` operators are numeric-only, but rather
+ * than rejecting a variable stat they coerce it: the leading signed constant
+ * wins, and a bare `*`/`X`/`?` counts as 0. Verified against the live API —
+ * `tou=1` matches Tarmogoyf (`1+*`), `pow=2` matches Angry Mob (`2+*`), and
+ * `pow=0` matches the ~220 cards with a bare `*`.
+ *
+ * Comparison uses this same coercion so the feedback the player sees agrees
+ * with what Scryfall will actually return for the hint URL: a `1+*` guess
+ * against a `1` target is a match, not a miss. Returns null when the value has
+ * no numeric reading (e.g. `∞`), which no Scryfall operator can express.
+ */
+export function statValue(raw) {
+  const text = String(raw ?? '').trim();
+  if (text === '') return null;
+  if (/^[+-]?\d+(?:\.\d+)?$/.test(text)) return String(Number(text));
+  if (text.includes('*') || text === '?' || text === 'X') {
+    const m = text.match(/[+-]?\d+(?:\.\d+)?/);
+    return m ? String(Number(m[0])) : '0';
+  }
+  return null;
+}
+
+/** Equality key for a stat: Scryfall's coerced value, or the raw string when unexpressible. */
+function statKey(raw) {
+  const v = statValue(raw);
+  return v == null ? `raw:${String(raw)}` : `n:${v}`;
+}
+
 function manaCostTokens(card) {
   const out = [];
   // Only face-level costs count. On split/fuse cards the card-level `mana_cost`
@@ -255,16 +285,16 @@ function manaLine(key, label, guessCard, targetCard) {
 function statsLine(key, label, guessCard, targetCard) {
   const gPower = scalarTokens(guessCard, 'power');
   const gTough = scalarTokens(guessCard, 'toughness');
-  const tPower = new Set(scalarTokens(targetCard, 'power'));
-  const tTough = new Set(scalarTokens(targetCard, 'toughness'));
+  const tPower = new Set(scalarTokens(targetCard, 'power').map(statKey));
+  const tTough = new Set(scalarTokens(targetCard, 'toughness').map(statKey));
   if (gPower.length + gTough.length === 0) return null;
   const segments = joinFaces(facesOf(guessCard).map((f) => {
     const p = f.power == null ? null : String(f.power);
     const t = f.toughness == null ? null : String(f.toughness);
     const segs = [];
-    if (p != null) segs.push({ text: p, status: tPower.has(p) ? 'correct' : 'wrong' });
+    if (p != null) segs.push({ text: p, status: tPower.has(statKey(p)) ? 'correct' : 'wrong' });
     if (p != null && t != null) segs.push({ slash: true });
-    if (t != null) segs.push({ text: t, status: tTough.has(t) ? 'correct' : 'wrong' });
+    if (t != null) segs.push({ text: t, status: tTough.has(statKey(t)) ? 'correct' : 'wrong' });
     return segs;
   }));
   const values = segments.filter((s) => !s.slash && !s.sep);
@@ -283,13 +313,16 @@ function statsLine(key, label, guessCard, targetCard) {
 function scalarRow(key, label, guessCard, targetCard, targetKey) {
   const g = scalarTokens(guessCard, key);
   if (g.length === 0) return null;
-  const tSet = new Set(scalarTokens(targetCard, targetKey));
-  const correct = g.filter((v) => tSet.has(v));
-  const wrong = g.filter((v) => !tSet.has(v));
+  // Loyalty has a Scryfall operator (`loy`), so it must use the same coercion
+  // as the hint URL; defense has none, so its values compare raw.
+  const keyOf = key === 'loyalty' ? statKey : (v) => `raw:${String(v)}`;
+  const tSet = new Set(scalarTokens(targetCard, targetKey).map(keyOf));
+  const correct = g.filter((v) => tSet.has(keyOf(v)));
+  const wrong = g.filter((v) => !tSet.has(keyOf(v)));
   const status = wrong.length === 0 ? 'correct' : 'wrong';
   const segments = joinFaces(facesOf(guessCard).map((f) => {
     const v = f[key];
-    return v == null ? [] : [{ text: String(v), status: tSet.has(String(v)) ? 'correct' : 'wrong' }];
+    return v == null ? [] : [{ text: String(v), status: tSet.has(keyOf(v)) ? 'correct' : 'wrong' }];
   }));
   const l = line(key, label, status, correct, wrong, true, undefined, undefined, segments);
   if (tSet.size === 0) l.absentOnTarget = true;

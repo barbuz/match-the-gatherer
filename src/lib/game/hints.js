@@ -10,6 +10,8 @@
  * printings via not:reprint.
  */
 
+import { statValue } from './comparison.js';
+
 const PLACEHOLDER = '—';
 
 /** Hint-shaped value for a guessed-but-wrong property. */
@@ -132,13 +134,15 @@ export function gatherHints(guesses,) {
             if (seg.sep) { kind = 'power'; continue; } // new face: power again
             if (seg.slash) { kind = 'toughness'; continue; }
             if (seg.text == null || seg.text === PLACEHOLDER) continue;
-            pushValue({ kind, value: seg.text, negated: seg.status === 'wrong' });
+            const value = statValue(seg.text);
+            if (value == null) continue; // no numeric reading (e.g. `∞`)
+            pushValue({ kind, value, negated: seg.status === 'wrong' });
           }
           break;
         }
         case 'loyalty':
-          pushSetValues(r.correct, 'loyalty');
-          pushSetValues(r.wrong, 'loyalty', true);
+          pushSetValues((r.correct ?? []).map(statValue).filter(Boolean), 'loyalty');
+          pushSetValues((r.wrong ?? []).map(statValue).filter(Boolean), 'loyalty', true);
           break;
         case 'layout':
           pushSetValues(r.correct, 'layout');
@@ -226,12 +230,21 @@ export function hintToClause(hint,) {
       return negated ? `mana!=${value}` : `mana=${value}`;
     case 'manaValue':
       return negated ? `mv!=${value}` : `mv=${value}`;
-    case 'power':
-      return negated ? `pow!=${value}` : `pow=${value}`;
-    case 'toughness':
-      return negated ? `tou!=${value}` : `tou=${value}`;
-    case 'loyalty':
-      return negated ? `loy!=${value}` : `loy=${value}`;
+    case 'power': {
+      const v = statValue(value);
+      if (v == null) return null;
+      return negated ? `pow!=${v}` : `pow=${v}`;
+    }
+    case 'toughness': {
+      const v = statValue(value);
+      if (v == null) return null;
+      return negated ? `tou!=${v}` : `tou=${v}`;
+    }
+    case 'loyalty': {
+      const v = statValue(value);
+      if (v == null) return null;
+      return negated ? `loy!=${v}` : `loy=${v}`;
+    }
     case 'rarity':
       return `${negated ? '-' : ''}r:${quoteIfNeeded(String(value).toLowerCase())}`;
     case 'released':

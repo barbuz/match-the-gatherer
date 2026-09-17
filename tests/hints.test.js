@@ -459,6 +459,112 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
     expect(url).toContain('-c:w');
     expect(url).not.toContain('c=');
   });
+
+  it('coerces variable power/toughness hints instead of dropping them', () => {
+    // Regression: guessing Tarmogoyf (power `*`, toughness `1+*`) emitted
+    // `pow!=* tou!=1+*`. Scryfall's pow/tou operators are numeric-only, but
+    // they don't reject a variable stat — they coerce it to its leading
+    // constant (`1+*` -> 1) or 0 for a bare `*`. So the hint is still
+    // expressible, and it must not 404 the URL.
+    const tarmogoyf = makeCard({
+      name: 'Tarmogoyf',
+      mana_cost: '{1}{G}',
+      cmc: 2,
+      colors: ['G'],
+      type_line: 'Creature — Lhurgoyf',
+      power: '*',
+      toughness: '1+*',
+      oracle_text: '',
+    });
+    const target = makeCard({
+      name: 'T',
+      mana_cost: '{3}{R}',
+      cmc: 4,
+      colors: ['R'],
+      type_line: 'Creature — Dragon',
+      power: '4',
+      toughness: '4',
+      oracle_text: '',
+    });
+    const hints = gatherHints([guessEntry(tarmogoyf, target)]);
+
+    expect(hints).toContainEqual({ kind: 'power', value: '0', negated: true });
+    expect(hints).toContainEqual({ kind: 'toughness', value: '1', negated: true });
+
+    const url = decodeURIComponent(buildScryfallSearchUrl(hints));
+    expect(url).toContain('pow!=0');
+    expect(url).toContain('tou!=1');
+    expect(url).not.toContain('pow!=*');
+    expect(url).not.toContain('tou!=1+*');
+    // The rest of the clue set survives.
+    expect(url).toContain('t:creature');
+    expect(url).toContain('mv!=2');
+  });
+
+  it('coerces every variable stat form Scryfall accepts', () => {
+    // Leading constant wins; a bare `*`/`X`/`?` is 0. Verified against the
+    // live API (`pow=2` matches Angry Mob's `2+*`, `tou=1` matches
+    // Consuming Blob's `*+1`, `pow=0` matches Shellephant's `?`).
+    expect(hintToClause({ kind: 'power', value: '1+*', negated: true })).toBe('pow!=1');
+    expect(hintToClause({ kind: 'power', value: '2+*', negated: true })).toBe('pow!=2');
+    expect(hintToClause({ kind: 'toughness', value: '*+1', negated: true })).toBe('tou!=1');
+    expect(hintToClause({ kind: 'power', value: '*', negated: true })).toBe('pow!=0');
+    expect(hintToClause({ kind: 'toughness', value: '?', negated: true })).toBe('tou!=0');
+    expect(hintToClause({ kind: 'loyalty', value: 'X', negated: true })).toBe('loy!=0');
+    // `+1`/`+0` carry a sign only.
+    expect(hintToClause({ kind: 'power', value: '+1' })).toBe('pow=1');
+    expect(hintToClause({ kind: 'toughness', value: '+0' })).toBe('tou=0');
+    // Unreadable values have no Scryfall expression at all.
+    expect(hintToClause({ kind: 'power', value: '∞' })).toBeNull();
+  });
+
+  it('keeps numeric power/toughness hints, including negative and fractional values', () => {
+    const target = makeCard({ name: 'T', power: '2', toughness: '2' });
+    const guess = makeCard({ name: 'A', power: '-1', toughness: '0.5', type_line: 'Creature — Ooze' });
+    const hints = gatherHints([guessEntry(guess, target)]);
+    expect(hints).toContainEqual({ kind: 'power', value: '-1', negated: true });
+    expect(hints).toContainEqual({ kind: 'toughness', value: '0.5', negated: true });
+    expect(hintToClause({ kind: 'power', value: '-1', negated: true })).toBe('pow!=-1');
+    expect(hintToClause({ kind: 'toughness', value: '0.5', negated: true })).toBe('tou!=0.5');
+  });
+
+  it('coerces variable loyalty hints', () => {
+    const target = makeCard({ name: 'T', type_line: 'Planeswalker — Test', power: undefined, toughness: undefined, loyalty: '3' });
+    const guess = makeCard({ name: 'A', type_line: 'Planeswalker — Test', power: undefined, toughness: undefined, loyalty: '*' });
+    const hints = gatherHints([guessEntry(guess, target)]);
+    expect(hints).toContainEqual({ kind: 'loyalty', value: '0', negated: true });
+    expect(hintToClause({ kind: 'loyalty', value: '*', negated: true })).toBe('loy!=0');
+  });
+
+  it('never emits a stat clause that excludes a target with the same indexed value', () => {
+    // Soundness: the comparison layer must coerce exactly like Scryfall, or a
+    // "wrong" verdict can exclude the true answer. A `1+*` guess facing a
+    // target whose toughness is literally `1` is a MATCH in Scryfall's index
+    // (`tou=1` returns Tarmogoyf), so the row must be correct — otherwise the
+    // hint would read `tou!=1` and filter out the answer.
+    const guess = makeCard({
+      name: 'Tarmogoyf', mana_cost: '{1}{G}', cmc: 2, colors: ['G'],
+      type_line: 'Creature — Lhurgoyf', power: '*', toughness: '1+*', oracle_text: '',
+    });
+    const target = makeCard({
+      name: 'Llanowar Elves', mana_cost: '{G}', cmc: 1, colors: ['G'],
+      type_line: 'Creature — Elf Druid', power: '0', toughness: '1', oracle_text: '',
+    });
+    const entry = guessEntry(guess, target);
+    const pt = entry.results.find((r) => r.key === 'pt');
+    expect(pt.segments).toEqual([
+      { text: '*', status: 'correct' },
+      { slash: true },
+      { text: '1+*', status: 'correct' },
+    ]);
+
+    const hints = gatherHints([entry]);
+    // Both stats match the target's indexed values, so the hints are positive
+    // (never a negation that would filter the answer out).
+    expect(hints).toContainEqual({ kind: 'power', value: '0', negated: false });
+    expect(hints).toContainEqual({ kind: 'toughness', value: '1', negated: false });
+    expect(hints.some((h) => (h.kind === 'power' || h.kind === 'toughness') && h.negated)).toBe(false);
+  });
 });
 
 describe('hintToClause', () => {
