@@ -1,15 +1,44 @@
 # AGENTS.md — Match the Gatherer
 
-Wordle-style MTG daily guessing game (Svelte PWA, no backend. Spec: `match-the-gatherer-spec.md`.
+Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spec.md`.
 
 ## Commands
 
-- `npm test` — vitest (comparison / scoring / gameState / hints / symbology / dailySeed)
+- `npm test` — vitest (comparison / scoring / gameState / hints / symbology / dailySeed / dailyApi)
 - `npm run build` — production build to `dist/` (set `BASE_PATH=/repo-name/` on GitHub Pages)
 - `npm run preview` — serve the production build
 
 ## Key facts
 
+- **There is a backend now.** The daily answer and anonymous stats come from
+  the `match-the-gatherer-backend` Cloudflare Worker
+  (`src/lib/api/config.js`, base URL override `VITE_API_BASE`). The daily game
+  is **hard-coupled** to it (`src/lib/api/dailyApi.js`): `GameBoard.svelte`
+  fetches `GET /api/daily/<today-utc>` and shows a retry state on failure —
+  it must **never** fall back to the local `resolveDailyTargetCard`, which is
+  retained for **free mode only**. Free mode must make zero `/api/*` calls.
+- **Result reporting** (`src/lib/api/statsApi.js`, wired in
+  `gameState.js addGuess`): when a daily game concludes, `POST /api/stats`
+  with `{date, outcome, guesses, hintsUsed, clientVersion, deviceId}` and the
+  response's day aggregates render via `CommunityStats.svelte`. A random
+  `deviceId` is generated once per install and stored in `mtg:device-id`;
+  the server dedupes on `(date, deviceId)`. Reporting is best-effort — offline/
+  `400`/`429` resolve to `null` and never block the summary. A concluded game
+  restored from storage re-reports once on load (`reportIfConcluded`), but only
+  when its aggregates weren't already persisted — keeping the day at the
+  spec's budget of 2 requests per player.
+- The backend's selection mirrors `lib/game/dailySeed.js` (FNV-1a over the UTC
+  date key, `A-` filter, attempt-seeded rerolls); the server's pick wins on
+  divergence, so the two need not stay byte-identical.
+- A response's **final URL** decides the day key (a non-today date 302s to
+  today), so a clock-skewed client self-heals instead of mis-persisting.
+- The `/api/daily/<date>` body is **gzipped and served with no
+  `Content-Encoding`** (deliberate anti-casual-cheat obfuscation, backend spec
+  §3.4), so the browser does *not* inflate it and `res.json()` fails on the raw
+  bytes. `dailyApi.js` reads the bytes and inflates them itself via
+  `DecompressionStream('gzip')`; the stats response is negotiated normally and
+  still parses with `res.json()`. Re-test against the live Worker, not a mock —
+  a mock that sets `Content-Encoding` hides this.
 - Scryfall exact-name search (`cards/search?q=!"name" prefer:oldest`) also matches
   **individual face names**, so `lib/api/scryfall.js` prefers a whole-card name
   match, then face-name match, then first result.
@@ -32,7 +61,8 @@ Wordle-style MTG daily guessing game (Svelte PWA, no backend. Spec: `match-the-g
   only when the map is loaded and fall back to the ascii `{..}` placeholder otherwise
   (`manaParts()`).
 
-- Daily pick: FNV-1a(UTC 'YYYY-MM-DD') % names.length → deterministic worldwide.
+- Daily pick: FNV-1a(UTC 'YYYY-MM-DD') % names.length → deterministic, but the
+  **server** is the source of truth for the served card (see above).
 
 - Game logic is DOM-freein `src/lib/game/` (incl. `gameState.js`,which imports
   svelte/store but runs fine under node)for unit-testability.Anti-leak rules:

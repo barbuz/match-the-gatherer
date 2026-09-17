@@ -1,6 +1,7 @@
 import { writable } from 'svelte/store';
 import { dbGet, dbSet } from '../storage/db.js';
 import { recordDailyResult } from '../storage/statsStore.js';
+import { reportDailyResult } from '../api/statsApi.js';
 
 export const MAX_GUESSES = 10;
 
@@ -12,7 +13,14 @@ export const MAX_GUESSES = 10;
  */
 export function createGame({ mode, dayKey, targetName, targetCard }) {
   const storageKey = mode === 'daily' ? `mtg:game:${dayKey}` : null;
-  const initial = { targetName, guesses: [], hintsUsed: [], status: 'playing', loaded: !storageKey };
+  const initial = {
+    targetName,
+    guesses: [],
+    hintsUsed: [],
+    status: 'playing',
+    loaded: !storageKey,
+    communityStats: null,
+  };
   const { subscribe, set, update } = writable(initial);
 
   async function persist(state) {
@@ -22,6 +30,9 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
       guesses: state.guesses,
       hintsUsed: state.hintsUsed,
       status: state.status,
+      // Kept so a reload of a concluded game doesn't re-POST: the day's
+      // aggregates are already here (backend spec §1.1 targets 2 requests/day).
+      communityStats: state.communityStats,
     });
   }
 
@@ -39,6 +50,7 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
           hintsUsed: Array.isArray(saved.hintsUsed) ? saved.hintsUsed : [],
           status: saved.status ?? 'playing',
           loaded: true,
+          communityStats: saved.communityStats ?? null,
         });
       } else {
         update((s) => ({ ...s, loaded: true }));
@@ -59,13 +71,66 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
         const won = entry.card.oracle_id && entry.card.oracle_id === targetCard?.oracle_id;
         const status = won ? 'won' : guesses.length >= MAX_GUESSES ? 'lost' : 'playing';
         const next = { ...s, guesses, status };
-        if (status !== 'playing') concluded = { dayKey, won: status === 'won' };
+        if (status !== 'playing') {
+          concluded = {
+            dayKey: dayKey,
+            won: status === 'won',
+            guesses: guesses.length,
+            hintsUsed: s.hintsUsed?.length ?? 0,
+          };
+        }
         persist(next);
         return next;
       });
       if (concluded && mode === 'daily') {
         await recordDailyResult(concluded.dayKey, concluded.won);
+        const communityStats = await reportDailyResult({
+          date: concluded.dayKey,
+          outcome: concluded.won ? 'won' : 'lost',
+          guesses: concluded.guesses,
+          hintsUsed: concluded.hintsUsed,
+        });
+        update((s) => {
+          if (s.status === 'playing' || !communityStats) return s;
+          const next = { ...s, communityStats };
+          persist(next);
+          return next;
+        });
       }
+    },
+
+    /**
+     * Report a concluded game whose result was restored from local storage but
+     * whose aggregates are missing (the sink was down, or the report never went
+     * through). Idempotent server-side: a `(date, deviceId)` pair counts once
+     * (§4.1), so a re-report is safe and a stored one short-circuits.
+     */
+    async reportIfConcluded() {
+      if (mode !== 'daily') return;
+      let concluded = null;
+      update((s) => {
+        if (s.status === 'playing' || s.communityStats) return s;
+        concluded = {
+          dayKey: dayKey,
+          won: s.status === 'won',
+          guesses: s.guesses.length,
+          hintsUsed: s.hintsUsed?.length ?? 0,
+        };
+        return s;
+      });
+      if (!concluded) return;
+      const communityStats = await reportDailyResult({
+        date: concluded.dayKey,
+        outcome: concluded.won ? 'won' : 'lost',
+        guesses: concluded.guesses,
+        hintsUsed: concluded.hintsUsed,
+      });
+      update((s) => {
+        if (s.status === 'playing' || !communityStats) return s;
+        const next = { ...s, communityStats };
+        persist(next);
+        return next;
+      });
     },
 
     /** Record that a hint was used after the guess at `guessIndex` (persisted for reloads. */

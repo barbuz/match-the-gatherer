@@ -44,8 +44,9 @@
 
       <h2 id="info-title">How to play</h2>
       <p id="info-desc" class="lede">
-        Guess the same daily Magic: The Gathering card as the whole world, in up to 10 tries. A new
-        card is picked each day at midnight UTC.
+        Guess the same daily Magic: The Gathering card as the whole world, in up to 10 tries. The
+        daily card is served by the game's server, so everyone gets the same puzzle, and a new one
+        arrives each day at midnight UTC.
       </p>
 
       <ol class="steps">
@@ -87,8 +88,10 @@
       <h3>Free mode & stats</h3>
       <p>
         <strong>Free mode</strong> gives you unlimited practice games with random targets — no stats are
-        recorded there. Daily games are tracked locally in your browser (games played, won, win rate), and
-        you can close the tab any time and come back to the game later in the day.
+        recorded there, and it never contacts the game server. Daily games are tracked locally in your
+        browser (games played, won, win rate), and you can close the tab any time and come back to the
+        game later in the day. When a daily game ends, an anonymous result (win/loss, guess count, hints
+        used) is sent to the server so you can see how the world did — no account and no personal data.
       </p>
 
       <div class="disclaimer" aria-label="Disclaimer and attribution">
