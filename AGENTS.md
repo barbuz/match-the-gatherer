@@ -79,7 +79,16 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   `https://scryfall.com/search/?q=...` link with clauses `t:`, `c:`, `layout:`,
   `mana=`, `mv=`, `pow=`, `tou=`, `loy=`, `r:`, `date>`/`date<`, negations via
   `-`/`!=`, and always ending `not:reprint`. Defense stats have no Scryfall operator, so
-  those hints are dropped; **exception**: Scryfall's `t:` is a contains-match
+  those hints are dropped. Scryfall's `pow`/`tou`/`loy` operators are
+  numeric-only but **coerce** a variable stat rather than rejecting it: the
+  leading signed constant wins and a bare `*`/`X`/`?` counts as 0 (`tou=1`
+  matches Tarmogoyf's `1+*`, `pow=2` matches Angry Mob's `2+*`, `pow=0` matches
+  the ~220 cards with a bare `*`; verified against the live API). `comparison.js`
+  `statValue()` applies that same coercion so the feedback agrees with the hint
+  URL — without it a `1+*` guess against a `1` target would read "wrong" and
+  emit `tou!=1`, filtering out the answer. Only values with no numeric reading
+  (`∞`) are unexpressible and dropped.
+  **exception**: Scryfall's `t:` is a contains-match
   with no exact-type-line operator, so negated type hints survive even after a
   fully-matched type row. Colors likewise never use the exact-set `c=` operator:
   a fully matched colors row only proves the guessed colors are a subset of the
