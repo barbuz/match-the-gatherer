@@ -66,8 +66,10 @@
         {:else}
           Streak broken. A new one starts tomorrow.
         {/if}
-      {:else}
+      {:else if active}
         Play today's game to keep it alive.
+      {:else}
+        Play today's game to start a new streak.
       {/if}
     </p>
 
