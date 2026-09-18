@@ -56,7 +56,7 @@ describe('recordDailyResult', () => {
     expect(dbSet).not.toHaveBeenCalled();
   });
 
-  it('drops outcomes that fall out of the 365-day window', async () => {
+  it('keeps history indefinitely instead of trimming old days', async () => {
     const days = Array.from({ length: 365 }, (_, i) => {
       const d = new Date('2025-09-18T00:00:00Z');
       d.setUTCDate(d.getUTCDate() + i);
@@ -66,10 +66,11 @@ describe('recordDailyResult', () => {
     dbGet.mockResolvedValue({ played: 365, won: 365, days, results });
 
     const next = await recordDailyResult('2026-09-18', true);
-    expect(next.days).toHaveLength(365);
+    expect(next.days).toHaveLength(366);
+    expect(next.days[0]).toBe('2025-09-18');
     expect(next.days.at(-1)).toBe('2026-09-18');
-    expect(next.results['2025-09-18']).toBeUndefined();
-    expect(next.results['2025-09-19']).toBe(true);
+    expect(next.results['2025-09-18']).toBe(true);
     expect(next.results['2026-09-18']).toBe(true);
+    expect(next.played).toBe(366);
   });
 });
