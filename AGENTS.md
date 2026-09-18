@@ -100,7 +100,12 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
 
 - Daily games persist per UTC day (`mtg:game:${dayKey}`, via `lib/game/gameState.js`);
   free-mode games are memory-only and never touch stats. Stats live in `storage/statsStore.js`
-  (`mtg:stats`), idempotent per day, capped at 365 days.
+  (`mtg:stats`), idempotent per day, capped at 365 days (`days` + a parallel
+  `results` map of `{dayKey: won}` so the streak can replay the calendar; the
+  window trims both together). `game/streak.js` `calculateStreak()` is pure and
+  derives the current/best win streak from `results`: a loss resets it, a skipped
+  day breaks it, and the current run stays alive while today is still unplayed.
+  The Home page renders it via `StreakMeter.svelte`.
 
 - Scryfall rejects browser-less fetches without a User-Agent (Node returns 400);
   browsers are fine.

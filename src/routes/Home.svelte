@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import { ensureData, dataStatus } from '../lib/stores/backgroundFetch.js';
   import StatsSummary from '../lib/components/StatsSummary.svelte';
+  import StreakMeter from '../lib/components/StreakMeter.svelte';
 
   onMount(() => {
     ensureData().catch(() => {});
@@ -14,6 +15,8 @@
   <p class="tagline">Guess today's Magic: The Gathering card in 10 tries.</p>
 
   <StatsSummary />
+
+  <StreakMeter />
 
   <nav class="entry-points">
     <a class="entry" href="#/daily">📅 Play Today's Game</a>
