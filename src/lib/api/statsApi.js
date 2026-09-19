@@ -33,8 +33,13 @@ export async function getDeviceId() {
 
 /**
  * Report a concluded daily game. Resolves to the day's aggregates
- * (`{ date, target, won, lost, abandoned, byGuesses }`) or null when the sink
- * is unavailable. Never throws.
+ * (`{ date, won, lost, abandoned, byGuesses }`) or null when the sink is
+ * unavailable. Never throws.
+ *
+ * The response never carries the card name (backend spec §4.5): the stats
+ * surface is unauthenticated, so neither this nor `fetchDailyStats` returns a
+ * `target`. Nothing here needs one — the summary takes the answer from the
+ * game's own state.
  */
 export async function reportDailyResult({ date, outcome, guesses, hintsUsed }) {
   try {
@@ -51,6 +56,25 @@ export async function reportDailyResult({ date, outcome, guesses, hintsUsed }) {
         deviceId,
       }),
     });
+    return res.ok ? await res.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read a concluded day's aggregates without posting a result (backend spec
+ * §4.4), so reloading a finished game can show the latest worldwide
+ * distribution while staying within the request budget. Identical shape to
+ * `reportDailyResult` — no `target` for any date (§4.5); the summary already
+ * knows the card.
+ *
+ * Best-effort like the sink: a failure resolves to null and the caller keeps
+ * whatever aggregates it already had. Never throws.
+ */
+export async function fetchDailyStats(date) {
+  try {
+    const res = await fetch(`${API_BASE}/api/stats/${date}`);
     return res.ok ? await res.json() : null;
   } catch {
     return null;

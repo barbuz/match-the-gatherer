@@ -125,8 +125,24 @@ describe('rebuildLegacyResults', () => {
   });
 
   it('produces the maximum current streak the totals allow', () => {
+    // Anchor the fixture to a fixed ending day and pass that same day as
+    // `today`. Asserting against the wall clock (`utcDateKey()`) made this test
+    // depend on the day it ran: `days` ends 2026-09-18, so it only saw a live
+    // 3-streak on 2026-09-18 and failed from the next midnight onward.
+    const endingDay = '2026-09-18';
     const { results } = rebuildLegacyResults(days, 3);
-    expect(calculateStreak({ results }, TODAY)).toMatchObject({ current: 3, playedToday: true });
+    expect(calculateStreak({ results }, endingDay)).toMatchObject({
+      current: 3,
+      playedToday: true,
+    });
+  });
+
+  it('keeps the current streak alive on the day after the last win', () => {
+    const { results } = rebuildLegacyResults(days, 3);
+    // The day after the fixture's last win: still unplayed, so the run stands.
+    expect(calculateStreak({ results }, '2026-09-19')).toMatchObject({ current: 3 });
+    // Two days out the gap breaks it.
+    expect(calculateStreak({ results }, '2026-09-20')).toMatchObject({ current: 0 });
   });
 });
 

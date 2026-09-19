@@ -1,7 +1,7 @@
 import { writable } from 'svelte/store';
 import { dbGet, dbSet } from '../storage/db.js';
 import { recordDailyResult } from '../storage/statsStore.js';
-import { reportDailyResult } from '../api/statsApi.js';
+import { reportDailyResult, fetchDailyStats } from '../api/statsApi.js';
 
 export const MAX_GUESSES = 10;
 
@@ -100,16 +100,23 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
     },
 
     /**
-     * Report a concluded game whose result was restored from local storage but
-     * whose aggregates are missing (the sink was down, or the report never went
-     * through). Idempotent server-side: a `(date, deviceId)` pair counts once
-     * (§4.1), so a re-report is safe and a stored one short-circuits.
+     * Bring a concluded game's community aggregates up to date on load.
+     *
+     * A concluded game restored from storage whose aggregates never arrived
+     * (the sink was down, or the tab closed before the response) is re-POSTed:
+     * the report is idempotent server-side — a `(date, deviceId)` pair counts
+     * once (§4.1) — so this only fills the gap. When the aggregates are already
+     * stored, a reload must not spend another counted `POST`; it refreshes them
+     * with the read-only `GET /api/stats/<date>` (backend spec §4.4), whose
+     * 60-second shared cache keeps reloads off D1.
      */
     async reportIfConcluded() {
       if (mode !== 'daily') return;
       let concluded = null;
+      let refresh = false;
       update((s) => {
-        if (s.status === 'playing' || s.communityStats) return s;
+        if (s.status === 'playing') return s;
+        refresh = !!s.communityStats;
         concluded = {
           dayKey: dayKey,
           won: s.status === 'won',
@@ -119,14 +126,17 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
         return s;
       });
       if (!concluded) return;
-      const communityStats = await reportDailyResult({
-        date: concluded.dayKey,
-        outcome: concluded.won ? 'won' : 'lost',
-        guesses: concluded.guesses,
-        hintsUsed: concluded.hintsUsed,
-      });
+      const communityStats = refresh
+        ? await fetchDailyStats(concluded.dayKey)
+        : await reportDailyResult({
+            date: concluded.dayKey,
+            outcome: concluded.won ? 'won' : 'lost',
+            guesses: concluded.guesses,
+            hintsUsed: concluded.hintsUsed,
+          });
+      if (!communityStats) return;
       update((s) => {
-        if (s.status === 'playing' || !communityStats) return s;
+        if (s.status === 'playing') return s;
         const next = { ...s, communityStats };
         persist(next);
         return next;
