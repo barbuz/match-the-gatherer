@@ -56,3 +56,21 @@ export async function reportDailyResult({ date, outcome, guesses, hintsUsed }) {
     return null;
   }
 }
+
+/**
+ * Read a concluded day's aggregates without posting a result (backend spec
+ * §4.4), so reloading a finished game can show the latest worldwide
+ * distribution while staying within the request budget. The response omits
+ * `target` for a live day, which is fine: the summary already knows the card.
+ *
+ * Best-effort like the sink: a failure resolves to null and the caller keeps
+ * whatever aggregates it already had. Never throws.
+ */
+export async function fetchDailyStats(date) {
+  try {
+    const res = await fetch(`${API_BASE}/api/stats/${date}`);
+    return res.ok ? await res.json() : null;
+  } catch {
+    return null;
+  }
+}

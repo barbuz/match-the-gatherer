@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { dbGet, dbSet } from '../src/lib/storage/db.js';
 import { createGame } from '../src/lib/game/gameState.js';
-import { reportDailyResult } from '../src/lib/api/statsApi.js';
+import { reportDailyResult, fetchDailyStats } from '../src/lib/api/statsApi.js';
 
 vi.mock('../src/lib/storage/db.js', () => ({
   dbGet: vi.fn(),
@@ -10,6 +10,7 @@ vi.mock('../src/lib/storage/db.js', () => ({
 
 vi.mock('../src/lib/api/statsApi.js', () => ({
   reportDailyResult: vi.fn(),
+  fetchDailyStats: vi.fn(),
 }));
 
 const TARGET = { name: 'Grizzly Bears', oracle_id: 'abc' };
@@ -127,6 +128,7 @@ describe('createGame — daily result reporting', () => {
     dbGet.mockReset();
     dbSet.mockReset();
     reportDailyResult.mockReset();
+    fetchDailyStats.mockReset();
   });
 
   it('reports a win once, with the guess and hint counts', async () => {
@@ -196,9 +198,33 @@ describe('createGame — daily result reporting', () => {
     expect(reportDailyResult).not.toHaveBeenCalled();
   });
 
-  it('does not re-POST a concluded game whose aggregates are already stored', async () => {
+  it('does not re-POST a concluded game whose aggregates are already stored, refreshing via GET instead', async () => {
     // Spec §1.1 budgets 2 requests/player/day, so a reload of a finished day
-    // must not spend a third on the sink.
+    // must not spend another counted POST — it reads the aggregates back from
+    // the shared-cached read route (backend spec §4.4) to show fresh numbers.
+    const stored = { date: DAY, won: 1, byGuesses: {} };
+    const fresh = { date: DAY, won: 5, byGuesses: { '3': { plain: 2, hint: 0 } } };
+    dbGet.mockResolvedValue({
+      targetName: TARGET.name,
+      guesses: [GUESS],
+      hintsUsed: [],
+      status: 'won',
+      communityStats: stored,
+    });
+    fetchDailyStats.mockResolvedValue(fresh);
+
+    const g = dailyGame();
+    await g.load();
+    await g.reportIfConcluded();
+
+    expect(reportDailyResult).not.toHaveBeenCalled();
+    expect(fetchDailyStats).toHaveBeenCalledWith(DAY);
+    let s;
+    g.subscribe((v) => (s = v));
+    expect(s.communityStats).toEqual(fresh);
+  });
+
+  it('keeps the stored aggregates when the refresh read fails', async () => {
     const stored = { date: DAY, won: 1, byGuesses: {} };
     dbGet.mockResolvedValue({
       targetName: TARGET.name,
@@ -207,11 +233,12 @@ describe('createGame — daily result reporting', () => {
       status: 'won',
       communityStats: stored,
     });
+    fetchDailyStats.mockResolvedValue(null);
+
     const g = dailyGame();
     await g.load();
     await g.reportIfConcluded();
 
-    expect(reportDailyResult).not.toHaveBeenCalled();
     let s;
     g.subscribe((v) => (s = v));
     expect(s.communityStats).toEqual(stored);

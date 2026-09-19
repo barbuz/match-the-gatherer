@@ -11,7 +11,8 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
 ## Key facts
 
 - **There is a backend now.** The daily answer and anonymous stats come from
-  the `match-the-gatherer-backend` Cloudflare Worker
+  the [`match-the-gatherer-backend`](https://github.com/barbuz/match-the-gatherer-backend)
+  Cloudflare Worker
   (`src/lib/api/config.js`, base URL override `VITE_API_BASE`). The daily game
   is **hard-coupled** to it (`src/lib/api/dailyApi.js`): `GameBoard.svelte`
   fetches `GET /api/daily/<today-utc>` and shows a retry state on failure —
@@ -24,9 +25,13 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   `deviceId` is generated once per install and stored in `mtg:device-id`;
   the server dedupes on `(date, deviceId)`. Reporting is best-effort — offline/
   `400`/`429` resolve to `null` and never block the summary. A concluded game
-  restored from storage re-reports once on load (`reportIfConcluded`), but only
-  when its aggregates weren't already persisted — keeping the day at the
-  spec's budget of 2 requests per player.
+  restored from storage refreshes its aggregates on load (`reportIfConcluded`):
+  it re-`POST`s only when they never arrived, and otherwise reads them back via
+  `GET /api/stats/<date>` (`fetchDailyStats`, backend spec §4.4) so a reload
+  costs a shared-cached read, not another counted write — keeping the day at
+  the spec's budget of 2 requests per player (a reload adds one CDN-absorbed
+  read). The read omits `target` for a live day, which the summary doesn't need
+  (it already knows the card).
 - The backend's selection mirrors `lib/game/dailySeed.js` (FNV-1a over the UTC
   date key, `A-` filter, attempt-seeded rerolls); the server's pick wins on
   divergence, so the two need not stay byte-identical.

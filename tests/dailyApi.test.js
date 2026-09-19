@@ -195,4 +195,36 @@ describe('statsApi', () => {
     );
     await expect(reportDailyResult(payload)).resolves.toBeNull();
   });
+
+  it('reads a concluded day back without posting (backend §4.4)', async () => {
+    stubDb();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(plain({ date: '2026-09-15', won: 4, byGuesses: {} }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { fetchDailyStats } = await import('../src/lib/api/statsApi.js');
+    const stats = await fetchDailyStats('2026-09-15');
+
+    expect(stats).toEqual({ date: '2026-09-15', won: 4, byGuesses: {} });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://match-the-gatherer.barbuz.workers.dev/api/stats/2026-09-15');
+    // A read, not a write: no method/body, so nothing is counted.
+    expect(init?.method).toBeUndefined();
+    expect(init?.body).toBeUndefined();
+  });
+
+  it('fetchDailyStats never throws: offline or a non-2xx resolves to null', async () => {
+    stubDb();
+    const { fetchDailyStats } = await import('../src/lib/api/statsApi.js');
+
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    await expect(fetchDailyStats('2026-09-15')).resolves.toBeNull();
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(response(Buffer.from('{}'), { ok: false, status: 404 })),
+    );
+    await expect(fetchDailyStats('2026-09-15')).resolves.toBeNull();
+  });
 });

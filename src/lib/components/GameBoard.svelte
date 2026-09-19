@@ -70,8 +70,9 @@
       unsubscribe?.();
       unsubscribe = game.subscribe((s) => (state = s));
       await game.load();
-      // A game restored after concluding never replayed its sink call; the
-      // report is idempotent server-side, so this only fills in aggregates.
+      // A concluded game restored from storage refreshes its community
+      // aggregates: it re-POSTs only if they never arrived, otherwise it reads
+      // them back (backend spec §4.4), so a reload stays within budget.
       if (mode === 'daily') await game.reportIfConcluded();
       phase = 'ready';
     } catch (e) {

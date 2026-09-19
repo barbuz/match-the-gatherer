@@ -96,10 +96,10 @@ When a daily game concludes (win or loss), the client `POST`s an anonymous resul
 
 - `deviceId` is a random UUID generated once per install and stored locally; the server dedupes on `(date, deviceId)`, so a replay/reload never double-counts and never blocks play.
 - The response body carries the day's aggregates (`won`, `lost`, `abandoned`, `byGuesses`), which the end-of-game summary renders as a worldwide distribution alongside the player's own share text.
-- Reporting is best-effort telemetry: offline, `400`, or `429` responses are swallowed and never block the summary. A concluded game restored from local storage re-reports once on load (idempotent server-side) so a dropped report still lands.
+- Reporting is best-effort telemetry: offline, `400`, or `429` responses are swallowed and never block the summary. A concluded game restored from local storage refreshes its aggregates on load: if the original report never landed it re-`POST`s (idempotent server-side), otherwise it reads them back with `GET <api>/api/stats/<date>` (backend spec §4.4), whose 60-second shared cache keeps reloads off the backend.
 - **Free mode never touches `/api/*`** — it does its own Scryfall lookups and local resolution, and records no stats (§9).
 
-Total cost per player per day: **2 backend requests** (one `GET /api/daily`, one `POST /api/stats`).
+Total cost per player per day: **2 backend requests** in the common path (one `GET /api/daily`, one `POST /api/stats`); reloading an already-finished game adds at most one shared-cached `GET /api/stats/<date>`.
 
 ## 6. Guess Timeline / Card Images
 
