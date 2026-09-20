@@ -1,21 +1,54 @@
 /** Match-score calculation and share-text rendering (spec §11). */
 
+import { propertyTokens } from './comparison.js';
+
 export const SHARE_BLOCKS = 10;
 
 /**
- * Score one guess: matched properties out of the properties applicable to
- * the GUESSED card, so the denominator can't leak target information.
- * Each row is binary: fully correct counts 1, anything else 0.
+ * Token-overlap (Sørensen–Dice) score for one property: the tokens shared by
+ * both cards, counted once from each side, over the total number of tokens on
+ * the two cards combined:
+ *
+ *   (tokens of guess on target + tokens of target on guess) / (guess + target)
+ *
+ * Duplicate tokens collapse (a word repeated in an oracle text is one token),
+ * so the result is always in [0, 1]. Two empty token sets contribute nothing
+ * and are skipped rather than counted as a perfect match.
  */
-export function scoreResults(results) {
-  let matched = 0;
-  let applicable = 0;
-  for (const r of results) {
-    if (!r.applicable) continue;
-    applicable += 1;
-    if (r.status === 'correct') matched += 1;
+function overlapScore(guessTokens, targetTokens) {
+  const g = new Set(guessTokens ?? []);
+  const t = new Set(targetTokens ?? []);
+  const denom = g.size + t.size;
+  if (denom === 0) return null;
+  let shared = 0;
+  for (const token of g) {
+    if (t.has(token)) shared += 1;
   }
-  return { matched, applicable, ratio: applicable === 0 ? 0 : matched / applicable };
+  return (2 * shared) / denom;
+}
+
+/**
+ * Score one guess against the target: for every property present on either
+ * card, compute its token-overlap score, then average across properties.
+ * Returns `{ ratio }` in [0, 1]; scale to a percentage for display.
+ *
+ * A property counts for the average whenever either card has tokens for it, so
+ * a property the guess lacks but the target has (e.g. a non-creature guess vs
+ * a creature target) scores 0 for that property rather than being ignored.
+ */
+export function scoreGuess(guess, target) {
+  const g = propertyTokens(guess ?? {});
+  const t = propertyTokens(target ?? {});
+  const keys = new Set([...Object.keys(g), ...Object.keys(t)]);
+  let sum = 0;
+  let count = 0;
+  for (const key of keys) {
+    const propertyScore = overlapScore(g[key], t[key]);
+    if (propertyScore == null) continue;
+    sum += propertyScore;
+    count += 1;
+  }
+  return { ratio: count === 0 ? 0 : sum / count };
 }
 
 /** Horizontal emoji bar, proportionally fuller the higher the ratio. */
@@ -26,17 +59,18 @@ export function emojiBar(ratio, blocks = SHARE_BLOCKS) {
 
 /**
  * Copy-pasteable share block: one emoji-bar row per guess, ending with the
- * game URL (§11).
+ * game URL (§11). `targetCard` is needed to score each guess.
  */
-export function buildShareText({ dayKey, guesses, won, url, hintsUsed = [] }) {
-  const bestPct = Math.max(0, ...guesses.map((g) => Math.round(scoreResults(g.results).ratio * 100)));
+export function buildShareText({ dayKey, guesses, won, url, hintsUsed = [], targetCard }) {
+  const ratios = guesses.map((g) => scoreGuess(g.card, targetCard).ratio);
+  const bestPct = Math.max(0, ...ratios.map((r) => Math.round(r * 100)));
   const header = won
     ? `Match the Gatherer ${dayKey} — Matched in ${guesses.length}`
     : `Match the Gatherer ${dayKey} — ${bestPct}% matched`;
   const used = new Set(hintsUsed ?? []);
   const rows = guesses.map((g, i) => {
     const marker = used.has(i) ? '\u{1F52E}' : '';
-    return emojiBar(scoreResults(g.results).ratio) + marker;
+    return emojiBar(ratios[i]) + marker;
   });
   return [header, ...rows, url].join('\n');
 }

@@ -11,7 +11,7 @@
   import { compareCards } from '../game/comparison.js';
   import { createGame, MAX_GUESSES } from '../game/gameState.js';
   import { gatherHints, buildScryfallSearchUrl } from '../game/hints.js';
-  import { scoreResults } from '../game/scoring.js';
+  import { scoreGuess } from '../game/scoring.js';
   import GuessInput from './GuessInput.svelte';
   import GuessFeedback from './GuessFeedback.svelte';
   import CardTimeline from './CardTimeline.svelte';
@@ -42,7 +42,7 @@
   $: guessedNames = state.guesses.map((g) => g.card.name);
   $: gameOver = state.status !== 'playing';
   $: remaining = MAX_GUESSES - state.guesses.length;
-  $: bestPct = Math.max(0, ...state.guesses.map((g) => Math.round(scoreResults(g.results).ratio * 100)));
+  $: bestPct = Math.max(0, ...state.guesses.map((g) => Math.round(scoreGuess(g.card, targetCard).ratio * 100)));
 
   onMount(() => {
     setup();
@@ -149,7 +149,7 @@
           </p>
         </div>
         {#if mode === 'daily'}
-          <ShareSummary guesses={state.guesses} won={state.status === 'won'} {dayKey} hintsUsed={state.hintsUsed ?? []} />
+          <ShareSummary guesses={state.guesses} won={state.status === 'won'} {dayKey} hintsUsed={state.hintsUsed ?? []} {targetCard} />
           <CommunityStats stats={state.communityStats} />
         {:else}
           <p class="muted">Free mode — no stats recorded.</p>
@@ -169,7 +169,7 @@
 
     <div class="feedback-list">
       {#each [...state.guesses].reverse() as entry (entry.card.name)}
-        <GuessFeedback {entry} />
+        <GuessFeedback {entry} {targetCard} />
       {/each}
     </div>
   {/if}

@@ -329,6 +329,55 @@ function scalarRow(key, label, guessCard, targetCard, targetKey) {
   return l;
 }
 
+/**
+ * Token sets for every scored property of a card, keyed the same way as the
+ * comparison rows (`mana`, `colors`, `type`, `pt`, `loyalty`, `defense`,
+ * `layout`, `released`, `rarity`, `oracle`). Used by the token-overlap score
+ * in `scoring.js`, which needs the same tokenization on both cards rather than
+ * just the guessed-side tokens the comparison result lines carry.
+ *
+ * Properties a card does not have are omitted (or, for the always-present
+ * mana/colors trio, fall back to the explicit placeholders). `layout` is only
+ * emitted for non-normal layouts, mirroring the comparison row. Mana folds in
+ * the mana value as its own token so a cost change at equal MV still scores
+ * partial credit, matching the row's `mvValues`.
+ */
+export function propertyTokens(card) {
+  const out = {};
+  // Whole costs are normalized the way manaLine() compares them, so two costs
+  // that differ only in brace/space/case still share a token.
+  out.mana = manaCostTokens(card).map((v) => (v === NO_MANA_COST ? v : normalizeManaCost(v)));
+  if (card?.cmc != null) out.mana.push(`mv:${card.cmc}`);
+  out.colors = colorTokens(card);
+  out.type = typeTokens(card);
+
+  const pt = [
+    ...scalarTokens(card, 'power').map(statKey),
+    ...scalarTokens(card, 'toughness').map(statKey),
+  ];
+  if (pt.length > 0) out.pt = pt;
+
+  const loyalty = scalarTokens(card, 'loyalty').map(statKey);
+  if (loyalty.length > 0) out.loyalty = loyalty;
+
+  const defense = scalarTokens(card, 'defense').map((v) => `raw:${String(v)}`);
+  if (defense.length > 0) out.defense = defense;
+
+  const layout = card?.layout ?? 'normal';
+  if (layout !== 'normal') out.layout = [layout];
+
+  const released = card?.released_at;
+  if (released != null) out.released = [String(released)];
+
+  const rarity = String(card?.rarity ?? '').trim();
+  if (rarity) out.rarity = [rarity];
+
+  const oracle = oracleTokens(card);
+  if (oracle.length > 0) out.oracle = oracle;
+
+  return out;
+}
+
 export function compareCards(guess, target) {
   const results = [];
 

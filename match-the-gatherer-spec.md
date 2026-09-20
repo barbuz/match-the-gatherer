@@ -134,8 +134,9 @@ Total cost per player per day: **2 backend requests** in the common path (one `G
 ## 11. End-of-Game Summary & Sharing
 
 At the end of a **daily** game (win or loss), show a summary that:
-- For each guess, computes a match score: number of properties matched out of the total number of properties applicable to the **guessed card** (e.g. a non-creature guess doesn't count power/toughness in its denominator). This keeps the denominator itself from leaking information about the target.
-- Renders each guess's score as a **horizontal bar made of emojis** (e.g. filled vs. empty block/square emoji), proportionally fuller the higher the match count — one row per guess.
+- For each guess, computes a match score by **token overlap** (spec §11). For every property present on either the guessed or the target card, it counts how many of the guess's tokens appear anywhere on the target plus how many of the target's tokens appear on the guess, then divides that sum by the total number of tokens on both cards (the Sørensen–Dice coefficient). A property's score is therefore in [0, 1] regardless of which card has more tokens. The guess's score is the average of those per-property scores, scaled to a percentage for display. Duplicate tokens collapse, so repeated words can't inflate a property.
+- A property counts toward the average whenever *either* card has tokens for it, so a property the guess lacks but the target has (e.g. a non-creature guess against a creature) contributes 0 rather than being dropped. Because the score is an aggregate over all properties rather than a per-property reveal, the bar still does not disclose which specific properties exist on the target.
+- Renders each guess's score as a **horizontal bar made of emojis** (e.g. filled vs. empty block/square emoji), proportionally fuller the higher the match score — one row per guess.
 - Is copy-pasteable as a single shareable text block (the emoji bars).
 - Always ends with the URL to the game.
 
@@ -187,7 +188,7 @@ match-the-gatherer/
 │   │   ├── game/
 │   │   │   ├── dailySeed.js      # §5 — UTC date → deterministic card index
 │   │   │   ├── comparison.js     # §3 — per-property comparison rules (mana, color, type, otags…)
-│   │   │   ├── scoring.js        # §11 — match score (matched / applicable properties)
+│   │   │   ├── scoring.js        # §11 — token-overlap match score (per-property Dice, averaged)
 │   │   │   └── gameState.js      # store: guesses, remaining attempts, win/loss, persisted per day
 │   │   │
 │   │   ├── storage/
