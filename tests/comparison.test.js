@@ -3,6 +3,7 @@ import {
   parseTypeLine,
   normalizeManaCost,
   compareCards,
+  propertyTokens,
 } from '../src/lib/game/comparison.js';
 
 function makeCard(overrides = {}) {
@@ -616,5 +617,38 @@ describe('compareCards — layout', () => {
       { sep: true, text: '//' },
       { text: 'Vigilance', token: true, status: 'wrong' },
     ]);
+  });
+});
+
+describe('propertyTokens', () => {
+  it('exposes the same token sets the comparison rows use, including MV', () => {
+    const card = makeCard({ oracle_text: 'Flying', cmc: 3 });
+    const tokens = propertyTokens(card);
+    expect(tokens.colors).toEqual(['R']);
+    expect(tokens.type).toEqual(['Creature', 'Goblin', 'Warrior']);
+    expect(tokens.pt).toEqual(['n:3', 'n:2']);
+    expect(tokens.mana).toEqual(['2R', 'mv:3']);
+    expect(tokens.oracle).toEqual(['flying']);
+    expect(tokens.released).toEqual(['2020-01-01']);
+    expect(tokens.rarity).toEqual(['uncommon']);
+    expect(tokens.layout).toBeUndefined();
+  });
+
+  it('omits properties the card does not have and normalizes costs', () => {
+    const instant = makeCard({
+      mana_cost: '{2}{r}',
+      type_line: 'Instant',
+      power: undefined,
+      toughness: undefined,
+      oracle_text: '',
+    });
+    const tokens = propertyTokens(instant);
+    expect(tokens.pt).toBeUndefined();
+    expect(tokens.oracle).toBeUndefined();
+    expect(tokens.mana[0]).toBe('2R');
+  });
+
+  it('emits the layout token only for non-normal layouts', () => {
+    expect(propertyTokens(makeCard({ layout: 'transform' })).layout).toEqual(['transform']);
   });
 });

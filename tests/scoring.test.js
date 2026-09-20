@@ -1,36 +1,43 @@
 import { describe, it, expect } from 'vitest';
-import { scoreResults, emojiBar, buildShareText, SHARE_BLOCKS } from '../src/lib/game/scoring.js';
+import { scoreGuess, emojiBar, buildShareText, SHARE_BLOCKS } from '../src/lib/game/scoring.js';
 
-const line = (status, applicable = true) => ({
-  key: 'x',
-  label: 'x',
-  status,
-  correct: [],
-  wrong: [],
-  applicable,
-});
+/** Minimal cards so a guess's ratio is a clean fraction of a few properties. */
+const target = { mana_cost: '{R}', colors: ['R'], type_line: 'Instant' };
+const same = { mana_cost: '{R}', colors: ['R'], type_line: 'Instant' };
 
-describe('scoreResults', () => {
-  it('counts only fully correct rows over applicable properties', () => {
-    const { matched, applicable, ratio } = scoreResults([
-      line('correct'),
-      line('correct'),
-      line('wrong'),
-      line('wrong'),
-    ]);
-    expect(matched).toBe(2);
-    expect(applicable).toBe(4);
-    expect(ratio).toBeCloseTo(0.5);
+describe('scoreGuess', () => {
+  it('scores an identical guess as a perfect match', () => {
+    expect(scoreGuess(same, target).ratio).toBeCloseTo(1);
   });
 
-  it('ignores non-applicable properties so the denominator does not leak', () => {
-    const { matched, applicable } = scoreResults([line('correct'), line('wrong', false)]);
-    expect(matched).toBe(1);
-    expect(applicable).toBe(1);
+  it('averages per-property token overlap: no shared mana/colors, matching type', () => {
+    const guess = { mana_cost: '{U}', colors: ['U'], type_line: 'Instant' };
+    // mana 0/1, colors 0/1, type 1/1 → mean 1/3.
+    expect(scoreGuess(guess, target).ratio).toBeCloseTo(1 / 3);
   });
 
-  it('handles an empty result list', () => {
-    expect(scoreResults([])).toEqual({ matched: 0, applicable: 0, ratio: 0 });
+  it('gives partial credit per property by shared-token fraction', () => {
+    const guess = { mana_cost: '{R}{U}', colors: ['R', 'U'], type_line: 'Instant Sorcery' };
+    // mana: no shared whole cost → 0; colors: 1 shared over 3 → 2/3;
+    // type: 1 shared over 3 → 2/3. Mean = 4/9.
+    expect(scoreGuess(guess, target).ratio).toBeCloseTo(4 / 9);
+  });
+
+  it('counts a property that only the target has against the guess', () => {
+    const creature = { ...target, type_line: 'Creature — Goblin', power: '2', toughness: '2' };
+    const instant = { mana_cost: '{R}', colors: ['R'], type_line: 'Instant' };
+    // mana + colors match (2), type and P/T score 0 → mean 2/4.
+    expect(scoreGuess(instant, creature).ratio).toBeCloseTo(0.5);
+  });
+
+  it('collapses repeated tokens so duplicates cannot inflate a property', () => {
+    const a = { ...target, oracle_text: 'Flying' };
+    const b = { ...target, oracle_text: 'Flying Flying' };
+    expect(scoreGuess(a, b).ratio).toBeCloseTo(1);
+  });
+
+  it('handles an empty property set without dividing by zero', () => {
+    expect(scoreGuess({}, {}).ratio).toBeGreaterThanOrEqual(0);
   });
 });
 
@@ -49,43 +56,44 @@ describe('emojiBar', () => {
 
 describe('buildShareText', () => {
   const guesses = [
-    { results: [line('correct'), line('wrong')] },
-    { results: [line('correct'), line('correct')] },
+    { card: { mana_cost: '{R}', colors: ['R'], type_line: 'Instant' } }, // 100%
+    { card: { mana_cost: '{U}', colors: ['U'], type_line: 'Instant' } }, // 33%
   ];
 
   it('shows "Matched in N" on a win and the best "% matched" on a loss, ending with the URL', () => {
-    const win = buildShareText({ dayKey: '2026-08-26', guesses, won: true, url: 'https://example.com/' });
+    const win = buildShareText({ dayKey: '2026-08-26', guesses, won: true, url: 'https://example.com/', targetCard: target });
     const rows = win.split('\n');
     expect(rows[0]).toBe('Match the Gatherer 2026-08-26 — Matched in 2');
     expect(rows).toHaveLength(4); // header + 2 bars + url
     expect(rows[rows.length - 1]).toBe('https://example.com/');
 
-    const loss = buildShareText({ dayKey: '2026-08-26', guesses, won: false, url: 'https://example.com/' });
+    const loss = buildShareText({ dayKey: '2026-08-26', guesses, won: false, url: 'https://example.com/', targetCard: target });
     expect(loss.split('\n')[0]).toBe('Match the Gatherer 2026-08-26 — 100% matched');
   });
 
   it('renders one bar row per guess with proportional fill', () => {
-    const rows = buildShareText({ dayKey: 'd', guesses, won: true, maxGuesses: 10, url: 'u' }).split('\n');
-    expect(rows[1]).toBe('🟩'.repeat(5) + '⬜'.repeat(5));
-    expect(rows[2]).toBe('🟩'.repeat(10));
+    const rows = buildShareText({ dayKey: 'd', guesses, won: true, maxGuesses: 10, url: 'u', targetCard: target }).split('\n');
+    expect(rows[1]).toBe('🟩'.repeat(10));
+    expect(rows[2]).toBe('🟩'.repeat(3) + '⬜'.repeat(7));
   });
 
   it('appends a scrying-ball marker to rows where a hint was used', () => {
     const text = buildShareText({
       dayKey: 'd',
       guesses: [
-        { results: [line('correct')] },
-        { results: [line('wrong')] },
-        { results: [line('correct')] },
+        { card: { mana_cost: '{R}', colors: ['R'], type_line: 'Instant' } },
+        { card: { mana_cost: '{U}', colors: ['U'], type_line: 'Instant' } },
+        { card: { mana_cost: '{R}', colors: ['R'], type_line: 'Instant' } },
       ],
       won: true,
       maxGuesses: 10,
       url: 'u',
       hintsUsed: [0, 2],
+      targetCard: target,
     });
     const rows = text.split('\n');
     expect(rows[1]).toBe('🟩'.repeat(10) + '🔮');
-    expect(rows[2]).toBe('⬜'.repeat(10));
+    expect(rows[2]).toBe('🟩'.repeat(3) + '⬜'.repeat(7));
     expect(rows[3]).toBe('🟩'.repeat(10) + '🔮');
   });
 });

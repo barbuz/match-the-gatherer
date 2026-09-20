@@ -1,9 +1,10 @@
 <script>
   /** Per-property feedback for one guess (spec §3). */
   import { manaParts, symbols } from '../api/symbology.js';
-  import { scoreResults } from '../game/scoring.js';
+  import { scoreGuess } from '../game/scoring.js';
 
   export let entry; // { card, results }
+  export let targetCard = null;
 
   // `$symbols` is just a reactivity anchor — when the map finishes downloading
   // the store updates and any already-rendered mana rows re-render as images.
@@ -11,7 +12,7 @@
   const RING_RADIUS = 18;
   const RING_CIRC = 2 * Math.PI * RING_RADIUS;
 
-  $: score = scoreResults(entry.results);
+  $: score = scoreGuess(entry.card, targetCard);
   $: pct = Math.round(score.ratio * 100);
   $: dashOffset = RING_CIRC * (1 - score.ratio);
 </script>

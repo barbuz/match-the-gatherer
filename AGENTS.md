@@ -75,9 +75,14 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   properties absent on the GUESSED card render no row;(so a creature-only target is
   never leaked);layout row appears only for non-normal guesses;rarity is a core
   Scryfall field present on every card, so the rarity row always renders for every guess;
-  the oracle-text row appears only when the guessed card has text;score denominators
-  count only `applicable` properties
-  of the guessed card.
+  the oracle-text row appears only when the guessed card has text. The share score is
+  token-overlap rather than a matched/applicable count: `scoring.js scoreGuess(guess,
+  target)` tokenizes each card's properties via `comparison.js propertyTokens()` and
+  averages the per-property Dice coefficient. A property counts whenever EITHER card
+  has tokens for it, so a property only the target has (creature vs. instant) scores 0
+  instead of being dropped; the aggregate still never reveals which properties exist on
+  the target. `GuessFeedback`/`GameBoard`/`ShareSummary` all pass `targetCard` so the
+  score can be computed at render time (results rows no longer carry enough info).
 
 - Hints (`src/lib/game/hints.js`): `gatherHints()` distills every guess's feedback into a
   deduplicated minimal hint list; `buildScryfallSearchUrl()` turns it into a
