@@ -50,8 +50,8 @@ export async function fetchCardByName(name) {
  * cancel the stream. The count request transfers a few KB instead of the
  * ~100 KB a full page would, and never paginates.
  *
- * Pass an `AbortSignal` to cancel an in-flight count when the player has
- * already moved on; an aborted request rejects with the signal's reason.
+ * Pass an `AbortSignal` to cancel an in-flight count; an aborted request
+ * rejects with the signal's reason.
  *
  * @param {string} query  raw Scryfall search query (e.g. `t:creature f:v`)
  * @param {{ signal?: AbortSignal }} [options]

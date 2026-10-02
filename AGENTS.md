@@ -218,13 +218,15 @@ Pitfalls that make this silently lie:
   empty-result shape) maps to 0. Requests send a User-Agent (Node's fetch 400s
   without one).
   The count is **async and non-blocking**: `GameBoard.svelte` kicks it off on each
-  new guess and aborts the previous in-flight request (`AbortController`) so a slow
-  response can't hold up or overwrite the newer one. Until it resolves the button
-  reads `Hint (???)`, and a failed/aborted request leaves it unresolved (never a
+  new guess. An earlier guess's request is **left to finish, not aborted** — its
+  result is still saved per guess index so it can appear in the endgame summary,
+  while the button only ever reads the *latest* guess's count, so a slow older
+  response can't interfere with the number shown. Until the latest resolves the
+  button reads `Hint (???)`, and a failed request leaves it unresolved (never a
   wrong number). Resolved counts live in `gameState.js` `hintCounts` keyed by guess
-  index, persist with the daily game, and render in the endgame summary's
-  "Cards still matching after each guess" list (`buildShareText` embeds them too).
-  The button stays enabled while unresolved — only the number is pending.
+  index and persist with the daily game; they surface in the share text
+  (`buildShareText` tags each emoji row with its count). The button stays enabled
+  while unresolved — only the number is pending.
 
 - Daily games persist per UTC day (`mtg:game:${dayKey}`, via `lib/game/gameState.js`);
   free-mode games are memory-only and never touch stats. Stats live in `storage/statsStore.js`

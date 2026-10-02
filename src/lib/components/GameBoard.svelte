@@ -3,7 +3,7 @@
    * Shared game screen used by the Daily and Free Mode routes (spec §2).
    * Handles target selection, guessing, feedback, timeline, and summary.
    */
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import { ensureData, dataStatus } from '../stores/backgroundFetch.js';
   import { fetchCardByName, countSearchResults } from '../api/scryfall.js';
   import { fetchDailyCard } from '../api/dailyApi.js';
@@ -35,7 +35,6 @@
   let submitError = '';
   let unsubscribe = null;
   let hintUrl = '';
-  let hintRequest = null; // AbortController for the in-flight count
   let countedIndex = -1;
   // The button's link and count are built from the same cumulative hint list,
   // so the number shown always matches the set the link opens.
@@ -44,9 +43,10 @@
   // The latest guess's stored count (undefined → still resolving → "???").
   $: hintCount = state.hintCounts?.[state.guesses.length - 1] ?? null;
 
-  // Count each new guess's own clue set asynchronously; the game never waits.
-  // Cancel any in-flight request when the next guess lands so a slow response
-  // can't hold up (or overwrite) the newer one.
+  // Count each new guess's cumulative clue set asynchronously; the game never
+  // waits. A request for an earlier guess is left to finish: its result is
+  // still saved per guess index (for the endgame summary), but it no longer
+  // drives the button, which only ever reads the latest guess's count.
   $: {
     const idx = state.guesses.length - 1;
     if (idx >= 0 && idx !== countedIndex) {
@@ -56,26 +56,18 @@
   }
 
   function trackHintCount(index) {
-    hintRequest?.abort();
-    hintRequest = null;
     if (state.guesses[index] == null || state.hintCounts?.[index] != null) return; // already counted
     // Count the same cumulative hint set the button's link opens (hints from
     // this and every earlier guess), so the number shown always describes that
     // link. A per-guess set would ignore earlier clues and can even grow.
     const hints = gatherHints(state.guesses.slice(0, index + 1));
-    const controller = new AbortController();
-    hintRequest = controller;
-    countSearchResults(buildScryfallQuery(hints), { signal: controller.signal })
-      .then((n) => {
-        if (hintRequest === controller) game.setHintCount(index, n);
-      })
+    countSearchResults(buildScryfallQuery(hints))
+      .then((n) => game.setHintCount(index, n))
       .catch(() => {
-        // Aborted (next guess) or offline: leave the count unresolved so it
-        // renders "???" instead of blocking or showing a wrong number.
+        // Offline: leave the count unresolved so it renders "???" instead of
+        // blocking or showing a wrong number.
       });
   }
-
-  onDestroy(() => hintRequest?.abort());
 
   $: guessedNames = state.guesses.map((g) => g.card.name);
   $: gameOver = state.status !== 'playing';
@@ -199,21 +191,6 @@
         {:else}
           <p class="muted">Free mode — no stats recorded.</p>
         {/if}
-        {#if state.guesses.length > 0}
-          <div class="hint-counts">
-            <h3>Cards still matching after each guess</h3>
-            <ol>
-              {#each state.guesses as g, i (g.card.name)}
-                <li>
-                  <span class="guess-name">{g.card.name}</span>
-                  <span class="guess-count">
-                    {state.hintCounts?.[i] != null ? state.hintCounts[i].toLocaleString() : '???'}
-                  </span>
-                </li>
-              {/each}
-            </ol>
-          </div>
-        {/if}
       </div>
     {:else}
       <GuessInput {names} exclude={guessedNames} disabled={!state.loaded} on:select={onSelect} />
@@ -305,40 +282,5 @@
   .muted {
     color: var(--muted);
     font-size: 0.8rem;
-  }
-  .hint-counts {
-    margin: 1rem 0;
-    text-align: left;
-  }
-  .hint-counts h3 {
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--muted);
-    text-align: center;
-    margin: 0 0 0.4rem;
-  }
-  .hint-counts ol {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    font-size: 0.85rem;
-  }
-  .hint-counts li {
-    display: flex;
-    justify-content: space-between;
-    gap: 0.75rem;
-    border-bottom: 1px solid var(--border);
-    padding: 0.2rem 0;
-  }
-  .guess-name {
-    color: var(--fg);
-  }
-  .guess-count {
-    font-variant-numeric: tabular-nums;
-    color: var(--muted);
   }
 </style>
