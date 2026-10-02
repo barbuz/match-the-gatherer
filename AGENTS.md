@@ -8,6 +8,32 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
 - `npm run build` — production build to `dist/` (set `BASE_PATH=/repo-name/` on GitHub Pages)
 - `npm run preview` — serve the production build
 
+## Manual QA against a local mock (default procedure)
+
+Exercising the **daily** game posts to the live stats sink, so never QA it
+against production. Point the app at a local mock instead:
+
+1. `VITE_API_BASE=<mock-origin> npm run build` — bakes the mock base URL into
+   `dist/` (default build uses the real Worker). Rebuild without it afterwards.
+2. Run a tiny mock server on that origin that serves **both** `dist/` statically
+   **and** the API: `GET /api/daily/<date>` (a real card JSON, e.g. fetched once
+   from Scryfall `cards/named?exact=...&set=...`) and `GET|POST /api/stats*`
+   (canned aggregates). Log every request line.
+3. Open the mock origin in the browser and play. Confirm counts, endgame
+   summary, and — on reload of a finished game — a `GET /api/stats/<date>` read
+   (not another `POST`).
+
+Pitfalls that make this silently lie:
+- **Serve the app from the mock origin itself**, not the dev/preview origin.
+  The service worker caches `index.html` and old JS; pointing a different origin
+  at the same API is not enough.
+- **Force a full document reload** (add a `?cache-bust` query) when switching
+  modes. SPA hash navigation (`#/free` → `#/daily`) is a same-document change:
+  the browser keeps the already-loaded bundle and the SW may serve stale JS, so
+  the page can run the *previous* build (e.g. the production API) while you think
+  you're testing the mock. Confirm by reading the mock's request log, not the UI.
+- The mock origin has no prior SW/cache, so a fresh origin is the cleanest.
+
 ## Key facts
 
 - **There is a backend now.** The daily answer and anonymous stats come from
@@ -177,6 +203,28 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   filter value. Same-direction date bounds fold down to the
   tightest,and an exact date subsumes all date hints. The HintButton opens that URL, and
   each used hint press marks its share row with 🔦 (`buildShareText` `hintsUsed`).
+  `buildScryfallQuery()` returns the raw (unencoded) clause string, and
+  `buildScryfallSearchUrl()` is just it URL-encoded, so the button's count and the
+  link it opens always search the same set.
+
+- **Hint count** (`lib/api/scryfall.js countSearchResults()`): the Hint button
+  shows how many cards still match (`Hint (N)`), counted after each guess from
+  the **cumulative** hint set `gatherHints(guesses.slice(0, i+1))` — the same
+  clause set the link opens, so the number always describes that link (a
+  per-guess set would ignore earlier clues and could even grow). Scryfall emits
+  `total_cards` as the first field of a search list, so the client reads only the
+  opening streamed bytes and then cancels the body — a few KB instead of the
+  ~100 KB gzipped (~900 KB raw) full page, and never paginates. A 404 (Scryfall's
+  empty-result shape) maps to 0. Requests send a User-Agent (Node's fetch 400s
+  without one).
+  The count is **async and non-blocking**: `GameBoard.svelte` kicks it off on each
+  new guess and aborts the previous in-flight request (`AbortController`) so a slow
+  response can't hold up or overwrite the newer one. Until it resolves the button
+  reads `Hint (???)`, and a failed/aborted request leaves it unresolved (never a
+  wrong number). Resolved counts live in `gameState.js` `hintCounts` keyed by guess
+  index, persist with the daily game, and render in the endgame summary's
+  "Cards still matching after each guess" list (`buildShareText` embeds them too).
+  The button stays enabled while unresolved — only the number is pending.
 
 - Daily games persist per UTC day (`mtg:game:${dayKey}`, via `lib/game/gameState.js`);
   free-mode games are memory-only and never touch stats. Stats live in `storage/statsStore.js`

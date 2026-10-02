@@ -59,9 +59,19 @@ export function emojiBar(ratio, blocks = SHARE_BLOCKS) {
 
 /**
  * Copy-pasteable share block: one emoji-bar row per guess, ending with the
- * game URL (§11). `targetCard` is needed to score each guess.
+ * game URL (§11). `targetCard` is needed to score each guess. Each row is
+ * tagged with that guess's Scryfall match count (`hintCounts`), shown as
+ * `???` when the count never resolved.
  */
-export function buildShareText({ dayKey, guesses, won, url, hintsUsed = [], targetCard }) {
+export function buildShareText({
+  dayKey,
+  guesses,
+  won,
+  url,
+  hintsUsed = [],
+  targetCard,
+  hintCounts = {},
+}) {
   const ratios = guesses.map((g) => scoreGuess(g.card, targetCard).ratio);
   const bestPct = Math.max(0, ...ratios.map((r) => Math.round(r * 100)));
   const header = won
@@ -70,7 +80,8 @@ export function buildShareText({ dayKey, guesses, won, url, hintsUsed = [], targ
   const used = new Set(hintsUsed ?? []);
   const rows = guesses.map((g, i) => {
     const marker = used.has(i) ? '\u{1F52E}' : '';
-    return emojiBar(ratios[i]) + marker;
+    const count = hintCounts?.[i] != null ? String(hintCounts[i]) : '???';
+    return `${emojiBar(ratios[i])}${marker} ${count}`;
   });
   return [header, ...rows, url].join('\n');
 }

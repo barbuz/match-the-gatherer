@@ -280,15 +280,24 @@ export function hintToClause(hint,) {
 }
 
 /**
- * Build a Scryfall search URL from a hint list. Vintage-legal first
- * printings only, always via f:v + not:reprint (per spec §3).
+ * Build the raw Scryfall search query (unencoded) from a hint list.
+ * Vintage-legal first printings only, always via f:v + not:reprint (spec §3).
+ * Shared by the hint link and the API count so both search the same set.
+ * @param {Array<{ kind, value, negated?, dir? }>} hints  gatherHints() output
+ * @returns {string}
+ */
+export function buildScryfallQuery(hints,) {
+  const clauses = (hints ?? []).map(hintToClause).filter(Boolean);
+  clauses.push('f:v');
+  clauses.push('not:reprint');
+  return clauses.join(' ');
+}
+
+/**
+ * Build a Scryfall search URL from a hint list.
  * @param {Array<{ kind, value, negated?, dir? }>} hints  gatherHints() output
  * @returns {string}
  */
 export function buildScryfallSearchUrl(hints,) {
-  const clauses = (hints ?? []).map(hintToClause).filter(Boolean);
-  clauses.push('f:v');
-  clauses.push('not:reprint');
-  const q = encodeURIComponent(clauses.join(' '));
-  return `https://scryfall.com/search/?q=${q}`;
+  return `https://scryfall.com/search/?q=${encodeURIComponent(buildScryfallQuery(hints))}`;
 }

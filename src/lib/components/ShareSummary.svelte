@@ -9,11 +9,12 @@
   export let label = '';
   export let hintsUsed = [];
   export let targetCard = null;
+  export let hintCounts = {};
 
   let copied = false;
 
   $: url = typeof location !== 'undefined' ? location.origin + location.pathname : '';
-  $: shareText = buildShareText({ dayKey: dayKey || label, guesses, won, maxGuesses: MAX_GUESSES, url, hintsUsed: hintsUsed, targetCard });
+  $: shareText = buildShareText({ dayKey: dayKey || label, guesses, won, maxGuesses: MAX_GUESSES, url, hintsUsed: hintsUsed, targetCard, hintCounts });
 
   async function copy() {
     try {

@@ -4,6 +4,7 @@ import {
   gatherHints,
   hintToClause,
   buildScryfallSearchUrl,
+  buildScryfallQuery,
 } from '../src/lib/game/hints.js';
 
 function makeCard(overrides = {}) {
@@ -754,5 +755,24 @@ describe('buildScryfallSearchUrl', () => {
     expect(buildScryfallSearchUrl([{ kind: 'mana', value: '{2}{R}' }])).toBe(
       'https://scryfall.com/search/?q=mana%3D%7B2%7D%7BR%7D%20f%3Av%20not%3Areprint',
     );
+  });
+});
+
+describe('buildScryfallQuery', () => {
+  it('produces the unencoded clause string the hint URL encodes', () => {
+    const hints = [
+      { kind: 'type', value: 'Creature' },
+      { kind: 'manaValue', value: '4' },
+    ];
+    expect(buildScryfallQuery(hints)).toBe('t:creature mv=4 f:v not:reprint');
+    // The URL is exactly the encoded query, so a count run against the query
+    // searches the same set the button opens.
+    expect(buildScryfallSearchUrl(hints)).toBe(
+      `https://scryfall.com/search/?q=${encodeURIComponent(buildScryfallQuery(hints))}`,
+    );
+  });
+
+  it('always appends the vintage + reprint filters even with no hints', () => {
+    expect(buildScryfallQuery([])).toBe('f:v not:reprint');
   });
 });

@@ -3,14 +3,14 @@
    * Shared game screen used by the Daily and Free Mode routes (spec §2).
    * Handles target selection, guessing, feedback, timeline, and summary.
    */
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { ensureData, dataStatus } from '../stores/backgroundFetch.js';
-  import { fetchCardByName } from '../api/scryfall.js';
+  import { fetchCardByName, countSearchResults } from '../api/scryfall.js';
   import { fetchDailyCard } from '../api/dailyApi.js';
   import { resolveVintageLegalCard, utcDateKey } from '../game/dailySeed.js';
   import { compareCards } from '../game/comparison.js';
   import { createGame, MAX_GUESSES } from '../game/gameState.js';
-  import { gatherHints, buildScryfallSearchUrl } from '../game/hints.js';
+  import { gatherHints, buildScryfallSearchUrl, buildScryfallQuery } from '../game/hints.js';
   import { scoreGuess } from '../game/scoring.js';
   import GuessInput from './GuessInput.svelte';
   import GuessFeedback from './GuessFeedback.svelte';
@@ -35,9 +35,47 @@
   let submitError = '';
   let unsubscribe = null;
   let hintUrl = '';
-  $: hintUrl = state.guesses.length > 0
-    ? buildScryfallSearchUrl(gatherHints(state.guesses))
-    : '';
+  let hintRequest = null; // AbortController for the in-flight count
+  let countedIndex = -1;
+  // The button's link and count are built from the same cumulative hint list,
+  // so the number shown always matches the set the link opens.
+  $: hintHints = state.guesses.length > 0 ? gatherHints(state.guesses) : null;
+  $: hintUrl = hintHints ? buildScryfallSearchUrl(hintHints) : '';
+  // The latest guess's stored count (undefined → still resolving → "???").
+  $: hintCount = state.hintCounts?.[state.guesses.length - 1] ?? null;
+
+  // Count each new guess's own clue set asynchronously; the game never waits.
+  // Cancel any in-flight request when the next guess lands so a slow response
+  // can't hold up (or overwrite) the newer one.
+  $: {
+    const idx = state.guesses.length - 1;
+    if (idx >= 0 && idx !== countedIndex) {
+      countedIndex = idx;
+      trackHintCount(idx);
+    }
+  }
+
+  function trackHintCount(index) {
+    hintRequest?.abort();
+    hintRequest = null;
+    if (state.guesses[index] == null || state.hintCounts?.[index] != null) return; // already counted
+    // Count the same cumulative hint set the button's link opens (hints from
+    // this and every earlier guess), so the number shown always describes that
+    // link. A per-guess set would ignore earlier clues and can even grow.
+    const hints = gatherHints(state.guesses.slice(0, index + 1));
+    const controller = new AbortController();
+    hintRequest = controller;
+    countSearchResults(buildScryfallQuery(hints), { signal: controller.signal })
+      .then((n) => {
+        if (hintRequest === controller) game.setHintCount(index, n);
+      })
+      .catch(() => {
+        // Aborted (next guess) or offline: leave the count unresolved so it
+        // renders "???" instead of blocking or showing a wrong number.
+      });
+  }
+
+  onDestroy(() => hintRequest?.abort());
 
   $: guessedNames = state.guesses.map((g) => g.card.name);
   $: gameOver = state.status !== 'playing';
@@ -149,16 +187,38 @@
           </p>
         </div>
         {#if mode === 'daily'}
-          <ShareSummary guesses={state.guesses} won={state.status === 'won'} {dayKey} hintsUsed={state.hintsUsed ?? []} {targetCard} />
+          <ShareSummary
+            guesses={state.guesses}
+            won={state.status === 'won'}
+            {dayKey}
+            hintsUsed={state.hintsUsed ?? []}
+            hintCounts={state.hintCounts ?? {}}
+            {targetCard}
+          />
           <CommunityStats stats={state.communityStats} />
         {:else}
           <p class="muted">Free mode — no stats recorded.</p>
+        {/if}
+        {#if state.guesses.length > 0}
+          <div class="hint-counts">
+            <h3>Cards still matching after each guess</h3>
+            <ol>
+              {#each state.guesses as g, i (g.card.name)}
+                <li>
+                  <span class="guess-name">{g.card.name}</span>
+                  <span class="guess-count">
+                    {state.hintCounts?.[i] != null ? state.hintCounts[i].toLocaleString() : '???'}
+                  </span>
+                </li>
+              {/each}
+            </ol>
+          </div>
         {/if}
       </div>
     {:else}
       <GuessInput {names} exclude={guessedNames} disabled={!state.loaded} on:select={onSelect} />
       <div class="hint-row">
-        <HintButton disabled={state.guesses.length === 0} on:press={onHintPress} />
+        <HintButton disabled={state.guesses.length === 0} count={hintCount} on:press={onHintPress} />
       </div>
       {#if submitError}
         <p class="error-msg">{submitError}</p>
@@ -245,5 +305,40 @@
   .muted {
     color: var(--muted);
     font-size: 0.8rem;
+  }
+  .hint-counts {
+    margin: 1rem 0;
+    text-align: left;
+  }
+  .hint-counts h3 {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    text-align: center;
+    margin: 0 0 0.4rem;
+  }
+  .hint-counts ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.85rem;
+  }
+  .hint-counts li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-bottom: 1px solid var(--border);
+    padding: 0.2rem 0;
+  }
+  .guess-name {
+    color: var(--fg);
+  }
+  .guess-count {
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
   }
 </style>
