@@ -4,6 +4,7 @@ import {
   normalizeManaCost,
   compareCards,
   propertyTokens,
+  oracleLineTokens,
 } from '../src/lib/game/comparison.js';
 
 function makeCard(overrides = {}) {
@@ -405,8 +406,8 @@ describe('compareCards — release date and oracle text', () => {
     const results = compareCards(guess, target);
     const line = byKey(results, 'oracle');
     expect(line).toMatchObject({ status: 'wrong', applicable: true });
-    expect(line.correct).toEqual(['flying', 'vigilance']);
-    expect(line.wrong).toEqual(['cycling']);
+    expect(line.correct).toEqual(['Flying', 'Vigilance']);
+    expect(line.wrong).toEqual(['Cycling']);
     expect(line.segments).toEqual([
       { text: 'Flying', token: true, status: 'correct' },
       { text: '\n' },
@@ -415,48 +416,34 @@ describe('compareCards — release date and oracle text', () => {
       { text: 'Cycling', token: true, status: 'wrong' },
     ]);
   });
-  it('preserves punctuation and braced symbols as separate tokens', () => {
-    const guess = makeCard({ oracle_text: 'Add {G}: Flying, Vigilance.' });
+  it('keeps braced symbols inline within a line token', () => {
+    const guess = makeCard({ oracle_text: 'Add {G}: Flying' });
     const target = makeCard({ oracle_text: 'Add {G}: Flying' });
     const line = byKey(compareCards(guess, target), 'oracle');
-    expect(line.status).toBe('wrong');
-    // correct/wrong list the lowercased token texts only
-    expect(line.correct).toEqual(['add', '{g}', 'flying']);
-    expect(line.wrong).toEqual(['vigilance']);
+    expect(line.status).toBe('correct');
+    expect(line.correct).toEqual(['Add {G}: Flying']);
+    expect(line.wrong).toEqual([]);
     expect(line.segments).toEqual([
-      { text: 'Add', token: true, status: 'correct' },
-      { text: ' ' },
-      { text: '{G}', token: true, status: 'correct' },
-      { text: ': ' },
-      { text: 'Flying', token: true, status: 'correct' },
-      { text: ', ' },
-      { text: 'Vigilance', token: true, status: 'wrong' },
-      { text: '.' },
+      { text: 'Add {G}: Flying', token: true, status: 'correct' },
     ]);
   });
-  it('treats braced groups as single tokens and matches case-insensitively', () => {
+
+  it('treats a line as one verbatim token and matches case-insensitively', () => {
     const guess = makeCard({ oracle_text: 'Add {2}{W/U}: Storm (This spell can\'t be countered).' });
     const target = makeCard({ oracle_text: 'add {2}{W/U}: storm (This spell can\'t be countered).' });
     const line = byKey(compareCards(guess, target), 'oracle');
     expect(line.status).toBe('correct');
+    // The parenthesised reminder span is isolated as its own token; braces
+    // stay inline with the plain run; the lone trailing period is dropped.
+    expect(line.correct).toEqual([
+      'Add {2}{W/U}: Storm',
+      '(This spell can\'t be countered)',
+    ]);
     expect(line.segments).toEqual([
-      { text: 'Add', token: true, status: 'correct' },
+      { text: 'Add {2}{W/U}: Storm', token: true, status: 'correct' },
       { text: ' ' },
-      { text: '{2}', token: true, status: 'correct' },
-      { text: '{W/U}', token: true, status: 'correct' },
-      { text: ': ' },
-      { text: 'Storm', token: true, status: 'correct' },
-      { text: ' (' },
-      { text: 'This', token: true, status: 'correct' },
-      { text: ' ' },
-      { text: 'spell', token: true, status: 'correct' },
-      { text: ' ' },
-      { text: 'can\'t', token: true, status: 'correct' },
-      { text: ' ' },
-      { text: 'be', token: true, status: 'correct' },
-      { text: ' ' },
-      { text: 'countered', token: true, status: 'correct' },
-      { text: ').' },
+      { text: '(This spell can\'t be countered)', token: true, status: 'correct' },
+      { text: '.' },
     ]);
   });
 
@@ -650,5 +637,57 @@ describe('propertyTokens', () => {
 
   it('emits the layout token only for non-normal layouts', () => {
     expect(propertyTokens(makeCard({ layout: 'transform' })).layout).toEqual(['transform']);
+  });
+});
+
+describe('oracleLineTokens', () => {
+  const tokensOf = (text) => oracleLineTokens(text).tokens;
+
+  it('splits on newlines into one token per non-empty line', () => {
+    expect(tokensOf('Flying\nVigilance')).toEqual(['Flying', 'Vigilance']);
+  });
+
+  it('isolates parenthesised and bracketed spans as their own tokens', () => {
+    expect(tokensOf('Flying (This creature can\'t be blocked.)'))
+      .toEqual(['Flying', '(This creature can\'t be blocked.)']);
+    expect(tokensOf('Trample [reminder]')).toEqual(['Trample', '[reminder]']);
+  });
+
+  it('keeps braced mana symbols inline with the plain run', () => {
+    expect(tokensOf('{T}: Add {G}.')).toEqual(['{T}: Add {G}.']);
+    expect(tokensOf('Add {2}{W/U}')).toEqual(['Add {2}{W/U}']);
+  });
+
+  it('trims only the ends, preserving internal whitespace', () => {
+    const { tokens, segments } = oracleLineTokens('  Flying,  Vigilance  ');
+    expect(tokens).toEqual(['Flying,  Vigilance']);
+    expect(segments.map((s) => s.text).join('')).toBe('  Flying,  Vigilance  ');
+  });
+
+  it('drops pure-punctuation and too-short tokens', () => {
+    expect(tokensOf('Flying, Vigilance.')).toEqual(['Flying, Vigilance.']);
+    expect(tokensOf('.')).toEqual([]);
+    expect(tokensOf('-')).toEqual([]);
+    expect(tokensOf('a')).toEqual([]); // single character below the floor
+  });
+
+  it('splits on the double quote so a token can never contain one', () => {
+    const tokens = tokensOf('I — This Saga gains "When you sacrifice a permanent, add {C}."');
+    expect(tokens).toEqual(['I — This Saga gains', 'When you sacrifice a permanent, add {C}.']);
+    expect(tokens.some((t) => t.includes('"'))).toBe(false);
+  });
+
+  it('reconstructs the source exactly from its segments', () => {
+    const text = 'Flying (This creature can\'t be blocked.)\nWard {2} "quoted" [note]';
+    const { segments } = oracleLineTokens(text);
+    expect(segments.map((s) => s.text).join('')).toBe(text);
+  });
+
+  it('every emitted token is a verbatim substring of the newline-free text', () => {
+    const text = '(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — This Saga gains "When you sacrifice a permanent, add {C}."';
+    const flat = text.replace(/\n/g, '');
+    for (const token of oracleLineTokens(text).tokens) {
+      expect(flat).toContain(token);
+    }
   });
 });

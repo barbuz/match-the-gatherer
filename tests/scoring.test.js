@@ -30,10 +30,25 @@ describe('scoreGuess', () => {
     expect(scoreGuess(instant, creature).ratio).toBeCloseTo(0.5);
   });
 
-  it('collapses repeated tokens so duplicates cannot inflate a property', () => {
+  it('collapses repeated line tokens so duplicates cannot inflate a property', () => {
     const a = { ...target, oracle_text: 'Flying' };
-    const b = { ...target, oracle_text: 'Flying Flying' };
+    const b = { ...target, oracle_text: 'Flying\nFlying' };
     expect(scoreGuess(a, b).ratio).toBeCloseTo(1);
+  });
+
+  it('scores oracle text at line granularity: distinct lines share no token', () => {
+    const a = { ...target, oracle_text: 'Flying' };
+    const b = { ...target, oracle_text: 'Vigilance' };
+    // mana + colors + type match (3); oracle is the only mismatched property
+    // (whole-line tokens 'Flying' vs 'Vigilance') → mean 3/4.
+    expect(scoreGuess(a, b).ratio).toBeCloseTo(3 / 4);
+  });
+
+  it('gives oracle partial credit for a shared line', () => {
+    const a = { ...target, oracle_text: 'Flying\nVigilance' };
+    const b = { ...target, oracle_text: 'Flying\nTrample' };
+    // oracle: 1 shared line over 4 → 0.5; mana/colors/type match → (1+1+1+0.5)/4.
+    expect(scoreGuess(a, b).ratio).toBeCloseTo((1 + 1 + 1 + 0.5) / 4);
   });
 
   it('handles an empty property set without dividing by zero', () => {

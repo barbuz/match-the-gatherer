@@ -43,11 +43,11 @@ function pushUnique(hints, seen, hint) {
 export function gatherHints(guesses,) {
   // First pass: track which property lines were ever fully matched, so
   // their wrong counterparts elsewhere can be ignored. Exceptions:
-  // `type` and `colors` — both are set-valued and compared by containment,
-  // so a "correct" row only proves the guess's tokens are a SUBSET of the
-  // target's, never that the sets are equal. Scryfall's `t:` and `c:` are
-  // contains-matches with no exact operator for either, so negated hints
-  // from other guesses stay informative even after a fully-matched row
+  // `type`, `colors` and `oracle` — all set-valued and compared by
+  // containment, so a "correct" row only proves the guess's tokens are a
+  // SUBSET of the target's, never that the sets are equal. Scryfall's `t:`,
+  // `c:` and `fo:` are contains-matches with no exact operator, so negated
+  // hints from other guesses stay informative even after a fully-matched row
   // (e.g. a B,G guess shows a correct colors row against a B,G,U target).
 
 
@@ -74,7 +74,7 @@ export function gatherHints(guesses,) {
 
   for (const entry of guesses ?? []) {
     for (const r of entry?.results ?? []) {
-      if (fullyMatched.has(r.key) && r.status !== 'correct' && r.key !== 'type' && r.key !== 'colors') continue; // fully matched property: wrong values are irrelevant (except type/colors: see above)
+      if (fullyMatched.has(r.key) && r.status !== 'correct' && r.key !== 'type' && r.key !== 'colors' && r.key !== 'oracle') continue; // fully matched property: wrong values are irrelevant (except type/colors/oracle: see above)
       if (r.absentOnTarget) continue; // guessed-only property: no Scryfall operator for it
       switch (r.key) {
         case 'mana': {
@@ -158,10 +158,13 @@ export function gatherHints(guesses,) {
           break;
         }
         case 'oracle':
-          // Oracle-text hints are intentionally dropped: positive fo: clauses
-          // give away the whole text (making the hint search too easy)and
-          // negated -fo: is unreliable (Scryfall matches substrings,, so
-          // neither direction is emitted..
+          // `fo:` indexes the full oracle text (reminder text included), so a
+          // token from the shared tokenizer is a verbatim substring of the
+          // target's own text: a positive clause always keeps the answer and a
+          // negation only excludes literal occurrences. Dedupe (pushUnique)
+          // bounds the clause count across guesses.
+          pushSetValues(r.correct, 'oracle');
+          pushSetValues(r.wrong, 'oracle', true);
           break;
         case 'rarity':
           pushSetValues(r.correct, 'rarity');
@@ -247,6 +250,12 @@ export function hintToClause(hint,) {
     }
     case 'rarity':
       return `${negated ? '-' : ''}r:${quoteIfNeeded(String(value).toLowerCase())}`;
+    case 'oracle':
+      // `fo:` searches the full oracle text (reminder text included), matching
+      // the string the client tokenizes. The tokenizer strips `"`, so the
+      // quoted value is well formed; quoteIfNeeded quotes any token with
+      // spaces/punctuation.
+      return `${negated ? '-' : ''}fo:${quoteIfNeeded(String(value))}`;
     case 'released':
       if (negated) return dir === '>' ? `date<=${value}` : dir === '<' ? `date>=${value}` : `date!=${value}`;
       return dir ? `date${dir}${value}` : `date=${value}`;

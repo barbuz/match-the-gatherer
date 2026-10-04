@@ -171,29 +171,70 @@ function scalarTokens(card, key) {
   return collect(card, pick);
 }
 
-/** Word or braced mana-symbol token ({G},{2}{W/U}}) — each brace pair is one
- * token — followed by words with internal apostrophes/hyphens kept. The gaps
- * between matches are punctuation/whitespace and render as-is with no status..
- */
-const ORACLE_TOKEN = /\{[^\{\}]+\}|[\p{L}\p{N}]+(?:['\u2019\-][\p{L}\p{N}]+)*/gu;
+const ORACLE_BRACKET = /\([^()]*\)|\[[^\[\]]*\]/g;
+const ORACLE_HAS_ALNUM = /[\p{L}\p{N}]/u;
+const ORACLE_MIN_TOKEN = 2;
 
-export function oracleSegments(text = '') {
+/**
+ * Split one face's oracle text into the ordered verbatim tokens shared by the
+ * oracle feedback row and the `fo:` hint search. Rules:
+ *  - split on newlines: a newline can never appear in a URL query value;
+ *  - split on the double-quote character: the quote stays as plain display text
+ *    but is never inside a token, since an embedded `"` would terminate a quoted
+ *    `fo:"..."` clause and make Scryfall silently discard it;
+ *  - isolate parenthesised/bracketed spans as their own tokens (reminder text);
+ *  - keep `{...}` mana symbols inline with the surrounding plain text;
+ *  - trim only the ends, so each token stays a verbatim substring of the text.
+ * Returns `{ tokens, segments }`; `segments` reproduces the text in order and
+ * flags each emitted token so the row highlights exactly what the search uses.
+ */
+export function oracleLineTokens(text = '') {
+  const src = String(text ?? '');
+  const tokens = [];
   const segments = [];
-  let last = 0;
-  for (const m of text.matchAll(ORACLE_TOKEN)) {
-    if (m.index > last) segments.push({ text: text.slice(last,m.index) });
-    segments.push({ text: m[0], token: true });
-    last = m.index + m[0].length;
+
+  const pushPlain = (s) => { if (s) segments.push({ text: s }); };
+  const pushChunk = (chunk) => {
+    const trimmed = chunk.trim();
+    if (!trimmed) { pushPlain(chunk); return; }
+    const start = chunk.indexOf(trimmed);
+    pushPlain(chunk.slice(0, start));
+    if (trimmed.length >= ORACLE_MIN_TOKEN && ORACLE_HAS_ALNUM.test(trimmed)) {
+      tokens.push(trimmed);
+      segments.push({ text: trimmed, token: true });
+    } else {
+      segments.push({ text: trimmed });
+    }
+    pushPlain(chunk.slice(start + trimmed.length));
+  };
+
+  const lines = src.split('\n');
+  for (let li = 0; li < lines.length; li++) {
+    if (li > 0) pushPlain('\n');
+    const pieces = lines[li].split('"');
+    for (let pi = 0; pi < pieces.length; pi++) {
+      // Keep the quote as plain display text, but never inside a token: an
+      // embedded `"` would terminate the quoted `fo:"..."` clause.
+      if (pi > 0) pushPlain('"');
+      const piece = pieces[pi];
+      if (!piece) continue;
+      let last = 0;
+      for (const m of piece.matchAll(ORACLE_BRACKET)) {
+        if (m.index > last) pushChunk(piece.slice(last, m.index));
+        pushChunk(m[0]);
+        last = m.index + m[0].length;
+      }
+      if (last < piece.length) pushChunk(piece.slice(last));
+    }
   }
-  if (last < text.length) segments.push({ text: text.slice(last) });
-  return segments;
+  return { tokens, segments };
 }
 
 function oracleTokens(card) {
   const out = [];
   for (const f of facesOf(card)) {
-    for (const s of oracleSegments(f.oracle_text ?? '')) {
-      if (s.token) out.push(s.text.toLocaleLowerCase());
+    for (const t of oracleLineTokens(f.oracle_text ?? '').tokens) {
+      out.push(t.toLocaleLowerCase());
     }
   }
   return out;
@@ -422,24 +463,36 @@ export function compareCards(guess, target) {
 
   const gSegs = [];
   for (const f of facesOf(guess)) {
-    const segs = oracleSegments(f.oracle_text ?? '');
+    const segs = oracleLineTokens(f.oracle_text ?? '').segments;
     if (gSegs.length > 0 && segs.length >0) gSegs.push({ sep: true, text: '//' });
     gSegs.push(...segs);
   }
   const gTokens = oracleTokens(guess);
   if (gTokens.length >0) {
-  const tTokens = oracleTokens(target);
-    const targetSet = new Set(tTokens);
-    const correct = gTokens.filter((w) => targetSet.has(w));
-    const wrong = gTokens.filter((w) => !targetSet.has(w));
-    const status = wrong.length === 0 ? 'correct' : 'wrong';
+    // `fo:` is a case-insensitive substring match, so a guessed line is correct
+    // when it appears anywhere in the target's text, not only when it equals a
+    // whole target line. Matching this way keeps the negated hints sound: a line
+    // the target contains as part of a longer line must never emit a `-fo:` that
+    // would exclude the answer (e.g. guess "Flying" vs target "Flying, vigilance").
+    const targetSearch = facesOf(target)
+      .map((f) => f.oracle_text ?? '')
+      .join('\n')
+      .toLocaleLowerCase();
+    // correct/wrong carry the ORIGINAL-case tokens: `fo:` matches literally, so
+    // lowercasing would break the verbatim-substring guarantee. Matching itself
+    // stays case-insensitive via the lowercased comparison text.
+    const correct = [];
+    const wrong = [];
     const segments = gSegs.map((s) => {
       const seg = { ...s };
       if (s.token) {
-        seg.status = targetSet.has(s.text.toLocaleLowerCase()) ? 'correct' : 'wrong';
+        const ok = targetSearch.includes(s.text.toLocaleLowerCase());
+        (ok ? correct : wrong).push(s.text);
+        seg.status = ok ? 'correct' : 'wrong';
       }
       return seg;
     });
+    const status = wrong.length === 0 ? 'correct' : 'wrong';
     results.push({ key: 'oracle', label: 'Oracle text', status, correct, wrong, applicable: true, segments });
   }
   return results;

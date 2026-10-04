@@ -48,14 +48,27 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   **individual face names**, so `lib/api/scryfall.js` prefers a whole-card name
   match, then face-name match, then first result.
 
-- Oracle-text row: every word token of the guessed card's text (`card.oracle_text`,
-  primary face only)is highlighted green when it appears anywhere in the target's
-  text (punctuation stripped, words lowercased via `oracleWords()`);only rendered
-  when the guess has text,so a text-less target is never leaked. Oracle text is
-  **not** used for the hint search URL: positive `fo:` clauses give away the whole
-  text (making the hint search too easy)and negated `-fo:` clauses are
-  unreliable (Scryfall's `fo:` matches substrings,e.g. `-fo:if` would also
-  exclude every card containing "different"),so oracle hints are dropped entirely..
+- Oracle-text row + hints: a single shared tokenizer (`comparison.js
+  oracleLineTokens`) feeds both the row and the hint URL, so what the player sees
+  marked is exactly what the search filters on. It splits each face's
+  `oracle_text` on newlines and on `"` (a quote inside a token would make a quoted
+  `fo:"..."` clause malformed and Scryfall silently drops it), isolates
+  `(...)`/`[...]` reminder spans as their own tokens, keeps `{...}` mana symbols
+  inline with the plain run, trims only the ends, and drops tokens with no
+  letter/digit or below a 2-char floor. Tokens are therefore verbatim substrings of
+  the text (newlines removed). Hints use `fo:`/`fulloracle:` (full text, reminder
+  text **included**) so the client and Scryfall index the same string; positive
+  `fo:"<token>"` keeps the answer and `-fo:"<token>"` excludes only literal
+  occurrences. Because a guessed whole line can sit inside a longer target line,
+  the row matches by case-insensitive **substring** (mirroring `fo:`) rather than
+  whole-line equality, so a contained line reads correct instead of emitting a
+  `-fo:` that would exclude the answer. `compareCards`' `correct`/`wrong` carry
+  the **original-case** token (matching stays case-insensitive), since `fo:` is
+  literal. `oracle` joins `type`/`colors` as a contains-match exception: negated
+  hints survive a fully-matched row. The row renders only when the guess has text, so a text-less
+  target is never leaked; the token-overlap score also runs on these line tokens.
+  Substring semantics are deliberate: over-broad positives are harmless and
+  negatives exclude only literal occurrences.
 - `catalog/card-names` needs `A-` prefix filtering (Alchemy-only cards. The
   names download is a singleton in-flight promise (`stores/backgroundFetch.js`), cached
   in idb-keyval (`storage/dataCache.js`), falling back to the cache when offline.
@@ -87,7 +100,7 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
 - Hints (`src/lib/game/hints.js`): `gatherHints()` distills every guess's feedback into a
   deduplicated minimal hint list; `buildScryfallSearchUrl()` turns it into a
   `https://scryfall.com/search/?q=...` link with clauses `t:`, `c:`, `layout:`,
-  `mana=`, `mv=`, `pow=`, `tou=`, `loy=`, `r:`, `date>`/`date<`, negations via
+  `mana=`, `mv=`, `pow=`, `tou=`, `loy=`, `r:`, `fo:`, `date>`/`date<`, negations via
   `-`/`!=`, and always ending `not:reprint`. Defense stats have no Scryfall operator, so
   those hints are dropped. Scryfall's `pow`/`tou`/`loy` operators are
   numeric-only but **coerce** a variable stat rather than rejecting it: the
@@ -98,13 +111,13 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   URL — without it a `1+*` guess against a `1` target would read "wrong" and
   emit `tou!=1`, filtering out the answer. Only values with no numeric reading
   (`∞`) are unexpressible and dropped.
-  **exception**: Scryfall's `t:` is a contains-match
-  with no exact-type-line operator, so negated type hints survive even after a
-  fully-matched type row. Colors likewise never use the exact-set `c=` operator:
-  a fully matched colors row only proves the guessed colors are a subset of the
-  target's, so `c:` contains hints (positive and negated) are used throughout,
-  and a `//` face separator is never emitted as a filter value. Same-direction
-  date bounds fold down to the
+  **exception**: Scryfall's `t:`, `c:` and `fo:` are all
+  contains-matches with no exact operator, so negated hints for `type`, `colors`
+  and `oracle` survive even after a fully-matched row. Colors never use the
+  exact-set `c=` operator: a fully matched colors row only proves the guessed
+  colors are a subset of the target's, so `c:` contains hints (positive and
+  negated) are used throughout, and a `//` face separator is never emitted as a
+  filter value. Same-direction date bounds fold down to the
   tightest,and an exact date subsumes all date hints. The HintButton opens that URL, and
   each used hint press marks its share row with 🔦 (`buildShareText` `hintsUsed`).
 
