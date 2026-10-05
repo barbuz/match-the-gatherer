@@ -171,71 +171,255 @@ function scalarTokens(card, key) {
   return collect(card, pick);
 }
 
-const ORACLE_BRACKET = /\([^()]*\)|\[[^\[\]]*\]/g;
 const ORACLE_HAS_ALNUM = /[\p{L}\p{N}]/u;
 const ORACLE_MIN_TOKEN = 2;
 
 /**
- * Split one face's oracle text into the ordered verbatim tokens shared by the
- * oracle feedback row and the `fo:` hint search. Rules:
- *  - split on newlines: a newline can never appear in a URL query value;
- *  - split on the double-quote character: the quote stays as plain display text
- *    but is never inside a token, since an embedded `"` would terminate a quoted
- *    `fo:"..."` clause and make Scryfall silently discard it;
- *  - isolate parenthesised/bracketed spans as their own tokens (reminder text);
- *  - keep `{...}` mana symbols inline with the surrounding plain text;
- *  - trim only the ends, so each token stays a verbatim substring of the text.
- * Returns `{ tokens, segments }`; `segments` reproduces the text in order and
- * flags each emitted token so the row highlights exactly what the search uses.
+ * Keywords whose printed form may carry an alphabetic parameter after the name
+ * (`Protection from red`, `Partner with Rory Williams`, `Enchant creature`,
+ * `Equip legendary creature {1}`). Everything else takes a numeric/braced
+ * parameter or none.
  */
-export function oracleLineTokens(text = '') {
+const TEXT_PARAM_KEYWORDS = new Set(['partner with', 'partner', 'protection', 'enchant', 'equip']);
+
+/**
+ * Text-parameter keywords whose value may itself contain a comma — partner
+ * names like `Krav, the Unredeemed`. For every other keyword a comma ends the
+ * parameter, so `Protection from red, flying` splits into two keywords instead
+ * of swallowing `flying`.
+ */
+const COMMA_IN_PARAM_KEYWORDS = new Set(['partner with', 'partner']);
+
+/** A keyword parameter starts with a mana symbol, number, X, or a dash
+ *  (`Kicker {2}`, `Crew 3`, `Monstrosity X`, `Escape—{2}{R}`, `Channel — {6}`). */
+const PARAM_START = /^[{\dXx*?+\-—–]/;
+
+/**
+ * Remove parenthesised reminder spans, tracking depth so nested parentheses
+ * (`Rocket-Powered Turbo Slug`) are removed cleanly. An unmatched `)` at depth 0
+ * stays literal. Square brackets are NOT reminder text: Scryfall indexes cleave
+ * brackets under `o:`, so they are kept.
+ */
+export function stripReminderText(text = '') {
   const src = String(text ?? '');
+  let out = '';
+  let depth = 0;
+  for (const ch of src) {
+    if (ch === '(') { depth += 1; continue; }
+    if (ch === ')') { if (depth > 0) depth -= 1; else out += ch; continue; }
+    if (depth === 0) out += ch;
+  }
+  return out;
+}
+
+/** A card's canonical keywords as recognition vocabulary, longest name first. */
+function keywordVocabulary(card) {
+  const seen = new Set();
+  const out = [];
+  for (const k of Array.isArray(card?.keywords) ? card.keywords : []) {
+    const name = String(k ?? '').trim();
+    if (!name) continue;
+    const lower = name.toLocaleLowerCase();
+    if (seen.has(lower)) continue;
+    seen.add(lower);
+    out.push(name);
+  }
+  return out.sort((a, b) => b.length - a.length);
+}
+
+/** Offset in `rest` where a keyword parameter ends (start of `(`, `.`, `;`, and
+ *  `,` unless the keyword's text value may itself contain commas). */
+function parameterEnd(rest, allowComma) {
+  const stops = allowComma ? ['(', '.', ';'] : ['(', '.', ';', ','];
+  let idx = -1;
+  for (const ch of stops) {
+    const i = rest.indexOf(ch);
+    if (i !== -1 && (idx === -1 || i < idx)) idx = i;
+  }
+  return idx;
+}
+
+/** True when `param` is a plausible keyword parameter: empty, numeric/braced, or
+ *  a short text value for the keywords that take one. */
+function isKeywordParameter(name, param) {
+  const p = param.trim();
+  if (!p) return true;
+  if (PARAM_START.test(p)) return true;
+  if (TEXT_PARAM_KEYWORDS.has(name.toLocaleLowerCase())) {
+    return p.split(/\s+/).length <= 5 && /^[A-Za-z'’\-][A-Za-z'’\-,\s]*$/.test(p);
+  }
+  return false;
+}
+
+/** Match one vocabulary keyword at the start of `text` (longest first, requiring
+ *  a word boundary and a plausible parameter). */
+function matchKeywordAt(text, vocab) {
+  const lower = text.toLocaleLowerCase();
+  for (const name of vocab) {
+    const n = name.toLocaleLowerCase();
+    if (!lower.startsWith(n)) continue;
+    const after = text[name.length];
+    if (after && ORACLE_HAS_ALNUM.test(after)) continue; // not a whole word
+    const rest = text.slice(name.length);
+    const stop = parameterEnd(rest, COMMA_IN_PARAM_KEYWORDS.has(n));
+    let paramEnd = stop === -1 ? rest.length : stop;
+    while (paramEnd > 0 && /\s/.test(rest[paramEnd - 1])) paramEnd -= 1; // never a trailing space
+    const param = rest.slice(0, paramEnd);
+    if (!isKeywordParameter(name, param)) continue;
+    return { name, end: name.length + paramEnd };
+  }
+  return null;
+}
+
+/**
+ * Consume a leading keyword occurrence from one reminder-free line. Handles an
+ * ability-word prefix (`Landfall — …`, but not a keyword cost like
+ * `Channel — {6}`), a comma/semicolon-separated keyword list
+ * (`Flying, first strike, vigilance`), and per-keyword parameters
+ * (`Kicker {2}`, `Protection from red`). Returns `{ items, end }` with each
+ * item's character span and canonical name, or null for a plain rules line.
+ */
+function parseKeywordPrefix(line, vocab) {
+  const lower = line.toLocaleLowerCase();
+  for (const name of vocab) {
+    if (lower.slice(0, name.length) !== name.toLocaleLowerCase()) continue;
+    const rest = line.slice(name.length);
+    const dm = rest.match(/^\s*[—–-]\s*(.*)$/s);
+    if (!dm) continue;
+    const after = dm[1];
+    if (PARAM_START.test(after)) continue; // keyword cost, e.g. `Channel — {6}`
+    // Consume the dash and any following whitespace, but leave `after` itself so
+    // the rules text keeps its exact characters (and no stray leading space).
+    const end = name.length + (dm[0].length - after.length);
+    return { items: [{ start: 0, end: name.length, name }], end };
+  }
+  const items = [];
+  let cursor = 0;
+  while (cursor < line.length) {
+    const m = matchKeywordAt(line.slice(cursor), vocab);
+    if (!m) break;
+    items.push({ start: cursor, end: cursor + m.end, name: m.name });
+    cursor += m.end;
+    const after = line[cursor];
+    if (after === ',' || after === ';') { cursor += 1; if (line[cursor] === ' ') cursor += 1; continue; }
+    break;
+  }
+  if (items.length === 0) return null;
+  return { items, end: items[items.length - 1].end };
+}
+
+/** Split rules text into tokens on `"` (a quote inside a quoted clause would make
+ *  Scryfall discard it) and on line ends, keeping only the ends trimmed. */
+function tokenizeRuleText(ruleText) {
   const tokens = [];
   const segments = [];
-
-  const pushPlain = (s) => { if (s) segments.push({ text: s }); };
-  const pushChunk = (chunk) => {
-    const trimmed = chunk.trim();
-    if (!trimmed) { pushPlain(chunk); return; }
-    const start = chunk.indexOf(trimmed);
-    pushPlain(chunk.slice(0, start));
+  const pieces = String(ruleText ?? '').split('"');
+  for (let i = 0; i < pieces.length; i++) {
+    if (i > 0) segments.push({ text: '"' });
+    const piece = pieces[i];
+    const trimmed = piece.trim();
+    if (!trimmed) { if (piece) segments.push({ text: piece }); continue; }
+    const start = piece.indexOf(trimmed);
+    if (start > 0) segments.push({ text: piece.slice(0, start) });
     if (trimmed.length >= ORACLE_MIN_TOKEN && ORACLE_HAS_ALNUM.test(trimmed)) {
       tokens.push(trimmed);
-      segments.push({ text: trimmed, token: true });
+      segments.push({ text: trimmed, token: true, kind: 'oracle' });
     } else {
       segments.push({ text: trimmed });
     }
-    pushPlain(chunk.slice(start + trimmed.length));
-  };
-
-  const lines = src.split('\n');
-  for (let li = 0; li < lines.length; li++) {
-    if (li > 0) pushPlain('\n');
-    const pieces = lines[li].split('"');
-    for (let pi = 0; pi < pieces.length; pi++) {
-      // Keep the quote as plain display text, but never inside a token: an
-      // embedded `"` would terminate the quoted `fo:"..."` clause.
-      if (pi > 0) pushPlain('"');
-      const piece = pieces[pi];
-      if (!piece) continue;
-      let last = 0;
-      for (const m of piece.matchAll(ORACLE_BRACKET)) {
-        if (m.index > last) pushChunk(piece.slice(last, m.index));
-        pushChunk(m[0]);
-        last = m.index + m[0].length;
-      }
-      if (last < piece.length) pushChunk(piece.slice(last));
-    }
+    const end = start + trimmed.length;
+    if (end < piece.length) segments.push({ text: piece.slice(end) });
   }
   return { tokens, segments };
 }
 
+/**
+ * Split one face's oracle text into the rules-text tokens and the printed
+ * keyword spans shared by the feedback rows and the Scryfall hint search.
+ *
+ * Reminder `(...)` spans are stripped (depth-aware) and excluded from matching.
+ * A leading keyword ability on each line is removed from the rules text and
+ * returned separately, verbatim (punctuation and parameters included): the
+ * comma/semicolon-separated keyword list, ability words (`Landfall — …`), and
+ * keyword costs (`Kicker {2}`, `Protection from red`). The remaining rules text
+ * is split on newlines and on `"`, keeps `{...}` mana symbols inline, and trims
+ * only the ends, so every rules token is a verbatim substring of the stripped
+ * text — which is exactly what Scryfall's `o:` indexes.
+ *
+ * Returns `{ rules, keywords, segments, keywordSegments, rulesSegments }`:
+ * `rules` is the per-line rules text, `keywords` the `{ text, name }` printed
+ * keyword items, `segments` the full ordered display (keyword spans + rules
+ * text), and `keywordSegments`/`rulesSegments` the two streams separately so the
+ * Keywords and Oracle-text rows can render without leaking into each other.
+ */
+export function parseOracleText(text = '', keywords = []) {
+  const vocab = Array.isArray(keywords) ? [...keywords].sort((a, b) => b.length - a.length) : [];
+  const stripped = stripReminderText(text);
+  const rules = [];
+  const keywordItems = [];
+  const segments = [];
+  const keywordSegments = [];
+  const rulesSegments = [];
+  const lines = stripped.split('\n');
+  for (let li = 0; li < lines.length; li++) {
+    if (li > 0) {
+      segments.push({ text: '\n' });
+      rulesSegments.push({ text: '\n' });
+    }
+    const line = lines[li];
+    const parsed = parseKeywordPrefix(line, vocab);
+    let remainder = line;
+    if (parsed) {
+      let prevEnd = 0;
+      for (const item of parsed.items) {
+        const sep = line.slice(prevEnd, item.start);
+        if (sep) { segments.push({ text: sep }); keywordSegments.push({ text: sep }); }
+        const span = line.slice(item.start, item.end);
+        keywordItems.push({ text: span, name: item.name });
+        const seg = { text: span, token: true, kind: 'keyword', name: item.name };
+        segments.push(seg);
+        keywordSegments.push(seg);
+        prevEnd = item.end;
+      }
+      remainder = line.slice(parsed.end);
+    }
+    const { tokens, segments: ruleSegments } = tokenizeRuleText(remainder);
+    for (const t of tokens) rules.push(t);
+    segments.push(...ruleSegments);
+    rulesSegments.push(...ruleSegments);
+  }
+  return { rules, keywords: keywordItems, segments, keywordSegments, rulesSegments };
+}
+
+/** Lowercased rules-text tokens for a whole card (union of faces). */
 function oracleTokens(card) {
+  const vocab = keywordVocabulary(card);
   const out = [];
   for (const f of facesOf(card)) {
-    for (const t of oracleLineTokens(f.oracle_text ?? '').tokens) {
+    for (const t of parseOracleText(f.oracle_text ?? '', vocab).rules) {
       out.push(t.toLocaleLowerCase());
     }
+  }
+  return out;
+}
+
+/** Printed keyword items for a whole card (union of faces), in reading order. */
+function keywordItems(card) {
+  const vocab = keywordVocabulary(card);
+  const out = [];
+  for (const f of facesOf(card)) {
+    for (const k of parseOracleText(f.oracle_text ?? '', vocab).keywords) out.push(k);
+  }
+  return out;
+}
+
+/** Lowercased canonical keyword names actually printed on the card (deduplicated). */
+function keywordTokens(card) {
+  const out = [];
+  const seen = new Set();
+  for (const k of keywordItems(card)) {
+    const n = k.name.toLocaleLowerCase();
+    if (!seen.has(n)) { seen.add(n); out.push(n); }
   }
   return out;
 }
@@ -373,7 +557,7 @@ function scalarRow(key, label, guessCard, targetCard, targetKey) {
 /**
  * Token sets for every scored property of a card, keyed the same way as the
  * comparison rows (`mana`, `colors`, `type`, `pt`, `loyalty`, `defense`,
- * `layout`, `released`, `rarity`, `oracle`). Used by the token-overlap score
+ * `layout`, `released`, `rarity`, `keywords`, `oracle`). Used by the token-overlap score
  * in `scoring.js`, which needs the same tokenization on both cards rather than
  * just the guessed-side tokens the comparison result lines carry.
  *
@@ -412,6 +596,9 @@ export function propertyTokens(card) {
 
   const rarity = String(card?.rarity ?? '').trim();
   if (rarity) out.rarity = [rarity];
+
+  const keywords = keywordTokens(card);
+  if (keywords.length > 0) out.keywords = keywords;
 
   const oracle = oracleTokens(card);
   if (oracle.length > 0) out.oracle = oracle;
@@ -461,24 +648,56 @@ export function compareCards(guess, target) {
 
 
 
+  // Keywords row: only when the GUESS prints keyword abilities (anti-leak). The
+  // printed spans are compared by canonical-name membership, exactly as
+  // Scryfall's `kw:` matches, so parameters (`Kicker {2}` vs `{1}`) don't matter.
+  const gKeywords = keywordItems(guess);
+  if (gKeywords.length > 0) {
+    const targetKeywords = new Set(keywordTokens(target));
+    const segments = [];
+    for (const f of facesOf(guess)) {
+      const parsed = parseOracleText(f.oracle_text ?? '', keywordVocabulary(guess));
+      if (!parsed.keywordSegments.some((s) => s.token && s.kind === 'keyword')) continue;
+      if (segments.length > 0) segments.push({ sep: true, text: '//' });
+      // Keep the non-token separators (`, `) so the row reads exactly as
+      // printed, and colour only the keyword spans.
+      segments.push(...parsed.keywordSegments.map((s) => (
+        s.token && s.kind === 'keyword'
+          ? { ...s, status: targetKeywords.has(s.name.toLocaleLowerCase()) ? 'correct' : 'wrong' }
+          : s
+      )));
+    }
+    const ok = (k) => targetKeywords.has(k.name.toLocaleLowerCase());
+    const correct = gKeywords.filter(ok).map((k) => k.text);
+    const wrong = gKeywords.filter((k) => !ok(k)).map((k) => k.text);
+    // Canonical names (lowercased) for `kw:` hints; the verbatim `text` is for
+    // display only, since `kw:` matches by name and ignores parameters.
+    const correctNames = gKeywords.filter(ok).map((k) => k.name.toLocaleLowerCase());
+    const wrongNames = gKeywords.filter((k) => !ok(k)).map((k) => k.name.toLocaleLowerCase());
+    const status = wrong.length === 0 ? 'correct' : 'wrong';
+    results.push({ key: 'keywords', label: 'Keywords', status, correct, wrong, correctNames, wrongNames, applicable: true, segments });
+  }
+
+  // Oracle-text row: only the rules text (reminder spans and printed keywords
+  // removed). `o:` is a case-insensitive substring match over that same text, so
+  // a guessed line is correct when it appears anywhere in the target's rules
+  // text. Matching this way keeps the negated hints sound: a line the target
+  // contains as part of a longer line must never emit a `-o:` that would exclude
+  // the answer (e.g. guess "Flying" vs target "Flying, vigilance").
   const gSegs = [];
   for (const f of facesOf(guess)) {
-    const segs = oracleLineTokens(f.oracle_text ?? '').segments;
-    if (gSegs.length > 0 && segs.length >0) gSegs.push({ sep: true, text: '//' });
+    const vocab = keywordVocabulary(guess);
+    const segs = parseOracleText(f.oracle_text ?? '', vocab).rulesSegments;
+    if (gSegs.length > 0 && segs.length > 0) gSegs.push({ sep: true, text: '//' });
     gSegs.push(...segs);
   }
   const gTokens = oracleTokens(guess);
-  if (gTokens.length >0) {
-    // `fo:` is a case-insensitive substring match, so a guessed line is correct
-    // when it appears anywhere in the target's text, not only when it equals a
-    // whole target line. Matching this way keeps the negated hints sound: a line
-    // the target contains as part of a longer line must never emit a `-fo:` that
-    // would exclude the answer (e.g. guess "Flying" vs target "Flying, vigilance").
+  if (gTokens.length > 0) {
     const targetSearch = facesOf(target)
-      .map((f) => f.oracle_text ?? '')
+      .map((f) => stripReminderText(f.oracle_text ?? ''))
       .join('\n')
       .toLocaleLowerCase();
-    // correct/wrong carry the ORIGINAL-case tokens: `fo:` matches literally, so
+    // correct/wrong carry the ORIGINAL-case tokens: `o:` matches literally, so
     // lowercasing would break the verbatim-substring guarantee. Matching itself
     // stays case-insensitive via the lowercased comparison text.
     const correct = [];

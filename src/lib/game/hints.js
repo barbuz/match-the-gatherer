@@ -43,10 +43,10 @@ function pushUnique(hints, seen, hint) {
 export function gatherHints(guesses,) {
   // First pass: track which property lines were ever fully matched, so
   // their wrong counterparts elsewhere can be ignored. Exceptions:
-  // `type`, `colors` and `oracle` — all set-valued and compared by
+  // `type`, `colors`, `keywords` and `oracle` — all set-valued and compared by
   // containment, so a "correct" row only proves the guess's tokens are a
   // SUBSET of the target's, never that the sets are equal. Scryfall's `t:`,
-  // `c:` and `fo:` are contains-matches with no exact operator, so negated
+  // `c:`, `kw:` and `o:` are contains-matches with no exact operator, so negated
   // hints from other guesses stay informative even after a fully-matched row
   // (e.g. a B,G guess shows a correct colors row against a B,G,U target).
 
@@ -74,7 +74,7 @@ export function gatherHints(guesses,) {
 
   for (const entry of guesses ?? []) {
     for (const r of entry?.results ?? []) {
-      if (fullyMatched.has(r.key) && r.status !== 'correct' && r.key !== 'type' && r.key !== 'colors' && r.key !== 'oracle') continue; // fully matched property: wrong values are irrelevant (except type/colors/oracle: see above)
+      if (fullyMatched.has(r.key) && r.status !== 'correct' && r.key !== 'type' && r.key !== 'colors' && r.key !== 'oracle' && r.key !== 'keywords') continue; // fully matched property: wrong values are irrelevant (except type/colors/oracle/keywords: see above)
       if (r.absentOnTarget) continue; // guessed-only property: no Scryfall operator for it
       switch (r.key) {
         case 'mana': {
@@ -157,10 +157,21 @@ export function gatherHints(guesses,) {
           }
           break;
         }
+        case 'keywords':
+          // The Keywords row only renders printed keyword abilities, and only
+          // those emit a `kw:` filter — a keyword in `card.keywords` that is not
+          // a printed keyword line (e.g. `Treasure`, or `Monstrosity` on an
+          // activated ability) stays in the oracle text and is never hinted here.
+          // `kw:` matches by canonical keyword name, so the printed span's
+          // parameters are irrelevant: the row carries the canonical names.
+          pushSetValues(r.correctNames, 'keyword');
+          pushSetValues(r.wrongNames, 'keyword', true);
+          break;
         case 'oracle':
-          // `fo:` indexes the full oracle text (reminder text included), so a
-          // token from the shared tokenizer is a verbatim substring of the
-          // target's own text: a positive clause always keeps the answer and a
+          // `o:` indexes the oracle text with reminder `(...)` spans removed and
+          // the printed keyword abilities still present, so a rules token from
+          // the shared tokenizer is a verbatim substring of the target's own
+          // stripped text: a positive clause always keeps the answer and a
           // negation only excludes literal occurrences. Dedupe (pushUnique)
           // bounds the clause count across guesses.
           pushSetValues(r.correct, 'oracle');
@@ -226,6 +237,10 @@ export function hintToClause(hint,) {
     case 'color':
       return `${negated ? '-' : ''}c:${quoteIfNeeded(String(value).toLowerCase())}`;
     case 'keyword':
+      // `kw:` matches by keyword name; values come from `card.keywords` (which
+      // Scryfall treats as the keyword vocabulary), so they are valid. Guard the
+      // characters anyway — an unparseable expression makes Scryfall discard the
+      // whole query.
       return `${negated ? '-' : ''}kw:${quoteIfNeeded(String(value).toLowerCase())}`;
     case 'layout':
       return `${negated ? '-' : ''}layout:${quoteIfNeeded(String(value).toLowerCase())}`;
@@ -251,11 +266,11 @@ export function hintToClause(hint,) {
     case 'rarity':
       return `${negated ? '-' : ''}r:${quoteIfNeeded(String(value).toLowerCase())}`;
     case 'oracle':
-      // `fo:` searches the full oracle text (reminder text included), matching
-      // the string the client tokenizes. The tokenizer strips `"`, so the
-      // quoted value is well formed; quoteIfNeeded quotes any token with
+      // `o:` searches the oracle text with reminder `(...)` spans removed,
+      // matching the string the client tokenizes. The tokenizer strips `"`, so
+      // the quoted value is well formed; quoteIfNeeded quotes any token with
       // spaces/punctuation.
-      return `${negated ? '-' : ''}fo:${quoteIfNeeded(String(value))}`;
+      return `${negated ? '-' : ''}o:${quoteIfNeeded(String(value))}`;
     case 'released':
       if (negated) return dir === '>' ? `date<=${value}` : dir === '<' ? `date>=${value}` : `date!=${value}`;
       return dir ? `date${dir}${value}` : `date=${value}`;

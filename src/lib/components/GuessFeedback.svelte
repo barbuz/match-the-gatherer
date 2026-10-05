@@ -38,7 +38,7 @@
       <div class="line {r.status}">
         <span class="prop-label" class:absent={r.absentOnTarget}>{r.label}</span>
         {#if r.segments}
-          <span class="values seg-values" class:mana={r.key === 'mana'} class:oracle={r.key === 'oracle'}>
+          <span class="values seg-values" class:mana={r.key === 'mana'} class:oracle={r.key === 'oracle'} class:keywords={r.key === 'keywords'}>
             {#each r.segments as seg, i (i)}
               {#if seg.dash}
                 <span class="dash">—</span>
@@ -46,6 +46,11 @@
                 <span class="pt-sep">/</span>
               {:else if seg.sep}
                 <span class="sep">//</span>
+              {:else if seg.kind === 'keyword'}
+                <!-- Keyword abilities render verbatim (punctuation and parameters
+                     included), never symbol-substituted, so the row reads exactly
+                     as printed on the card. -->
+                <span class="val keyword {seg.status}">{seg.text}</span>
               {:else if seg.token}
                 {#if $symbols && manaParts(seg.text)}
                   <span class="val mana {seg.status}">
@@ -227,6 +232,15 @@
   /* Mana rows phrase per-face costs in order, `//` between faces. */
   .values.seg-values.mana {
     align-items: center;
+  }
+  /* Keyword abilities: one chip per printed span, verbatim. */
+  .values.seg-values.keywords {
+    gap: 0.35rem;
+  }
+  .values.seg-values .val.keyword {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0 0.3rem;
   }
   .values.seg-values .plain {
     white-space: pre-wrap;

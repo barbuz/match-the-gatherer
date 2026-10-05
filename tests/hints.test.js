@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compareCards } from '../src/lib/game/comparison.js';
+import { compareCards, stripReminderText } from '../src/lib/game/comparison.js';
 import {
   gatherHints,
   hintToClause,
@@ -576,7 +576,7 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
   });
 
   it('keeps negated oracle hints even after a fully-matched oracle line', () => {
-    // `fo:` is a contains-match (no exact-oracle operator), so a fully matched
+    // `o:` is a contains-match (no exact-oracle operator), so a fully matched
     // row only proves the guessed lines are a subset of the target's: a line
     // from another guess that the target lacks still narrows the search.
     const target = makeCard({ oracle_text: 'Flying\nVigilance' });
@@ -589,16 +589,18 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
     expect(hints.filter((h) => h.kind === 'oracle' && h.value === 'Trample')).toHaveLength(1);
   });
 
-  it('renders oracle hints as quoted fo: clauses and never emits a quote or empty value', () => {
-    const target = makeCard({ oracle_text: 'Flying (This creature can\'t be blocked.)\nWard {2}' });
-    const guess = makeCard({ oracle_text: 'Flying (This creature can\'t be blocked.)\nWard {2}\n"I — This Saga gains"' });
+  it('renders oracle hints as quoted o: clauses, reminder text excluded', () => {
+    const target = makeCard({ oracle_text: 'Ward {2} (This creature can\'t be blocked.)\nDestroy target artifact.' });
+    const guess = makeCard({ oracle_text: 'Ward {2} (Different reminder.)\nDestroy target artifact.\n"I — This Saga gains"' });
     const hints = gatherHints([guessEntry(guess, target)]);
 
     const url = decodeURIComponent(buildScryfallSearchUrl(hints));
-    expect(url).toContain('fo:Flying');
-    expect(url).toContain('fo:"(This creature can\'t be blocked.)"');
-    expect(url).toContain('fo:"Ward {2}"');
-    expect(url).toContain('-fo:"I — This Saga gains"');
+    expect(url).toContain('o:"Ward {2}"');
+    expect(url).toContain('o:"Destroy target artifact."');
+    expect(url).toContain('-o:"I — This Saga gains"');
+    // Reminder text is stripped, so it never becomes a hint.
+    expect(url).not.toContain('reminder');
+    expect(url).not.toContain("can't be blocked");
 
     for (const h of hints.filter((x) => x.kind === 'oracle')) {
       expect(h.value).not.toContain('"');
@@ -607,15 +609,17 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
     }
   });
 
-  it('every emitted oracle token is a verbatim substring of the target oracle text', () => {
-    // The exactness guarantee: a positive `fo:` must match the true answer, and
-    // a negative `-fo:` must NOT, or it would filter the answer out.
+  it('every emitted oracle token is a verbatim substring of the stripped target text', () => {
+    // The exactness guarantee: a positive `o:` must match the true answer, and
+    // a negative `-o:` must NOT, or it would filter the answer out. `o:` indexes
+    // the oracle text with reminder `(...)` spans removed, so compare against
+    // that stripped text.
     const target = makeCard({
       oracle_text: 'Flying\nWard {2} (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {2}.)',
     });
     const guess = makeCard({ oracle_text: 'Flying\nTrample' });
     const hints = gatherHints([guessEntry(guess, target)]);
-    const flat = target.oracle_text.replace(/\n/g, '').toLowerCase();
+    const flat = stripReminderText(target.oracle_text).replace(/\n/g, '').toLowerCase();
     for (const h of hints.filter((x) => x.kind === 'oracle' && !x.negated)) {
       expect(flat).toContain(h.value.toLowerCase());
     }
@@ -626,8 +630,8 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
 
   it('matches a guessed line that is a substring of a longer target line', () => {
     // Regression: line tokenization means a whole guessed line can appear inside
-    // a longer target line. `fo:` is a substring match, so the row must read
-    // correct — otherwise the negation `-fo:"Flying"` would exclude a target
+    // a longer target line. `o:` is a substring match, so the row must read
+    // correct — otherwise the negation `-o:"Flying"` would exclude a target
     // whose text literally contains "Flying".
     const target = makeCard({ oracle_text: 'Flying, vigilance' });
     const guess = makeCard({ oracle_text: 'Flying' });
@@ -655,6 +659,39 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
     );
     expect(emitted).toEqual(highlighted);
   });
+
+  it('emits kw: hints from printed keywords, using the canonical name', () => {
+    const target = makeCard({ keywords: ['Flying'], oracle_text: 'Flying' });
+    const guess = makeCard({
+      keywords: ['Flying', 'Kicker'],
+      oracle_text: 'Flying, kicker {2} (You may pay {2}.)\nDraw a card.',
+    });
+    const hints = gatherHints([guessEntry(guess, target)]);
+    expect(hints).toContainEqual({ kind: 'keyword', value: 'flying', negated: false });
+    expect(hints).toContainEqual({ kind: 'keyword', value: 'kicker', negated: true });
+    // `kw:` matches by name, so the printed parameter never leaks into a hint.
+    expect(hints.some((h) => h.kind === 'keyword' && /[{}]/.test(h.value))).toBe(false);
+  });
+
+  it('keeps negated keyword hints even after a fully-matched keywords row', () => {
+    const target = makeCard({ keywords: ['Flying', 'Vigilance'], oracle_text: 'Flying, vigilance' });
+    const hints = gatherHints([
+      guessEntry(makeCard({ keywords: ['Flying'], oracle_text: 'Flying' }), target),
+      guessEntry(makeCard({ keywords: ['Flying', 'Haste'], oracle_text: 'Flying, haste' }), target),
+    ]);
+    expect(hints).toContainEqual({ kind: 'keyword', value: 'flying', negated: false });
+    expect(hints).toContainEqual({ kind: 'keyword', value: 'haste', negated: true });
+  });
+
+  it('does not emit kw: for vocabulary keywords that are not printed keyword lines', () => {
+    const target = makeCard({ keywords: ['Treasure'], oracle_text: 'Create a Treasure token.' });
+    const guess = makeCard({
+      keywords: ['Treasure'],
+      oracle_text: 'Create a Treasure token.',
+    });
+    const hints = gatherHints([guessEntry(guess, target)]);
+    expect(hints.some((h) => h.kind === 'keyword')).toBe(false);
+  });
 });
 
 describe('hintToClause', () => {
@@ -664,11 +701,12 @@ describe('hintToClause', () => {
     expect(hintToClause({ kind: 'color', value: 'R' })).toBe('c:r');
     expect(hintToClause({ kind: 'color', value: 'W', negated: true })).toBe('-c:w');
     expect(hintToClause({ kind: 'keyword', value: 'Flying' })).toBe('kw:flying');
-    // Oracle hints use `fo:` (full oracle text, reminder text included) so a
-    // token from the shared tokenizer is a verbatim substring of the target.
-    expect(hintToClause({ kind: 'oracle', value: 'Flying' })).toBe('fo:Flying');
-    expect(hintToClause({ kind: 'oracle', value: 'Flying', negated: true })).toBe('-fo:Flying');
-    expect(hintToClause({ kind: 'oracle', value: 'enter the battlefield' })).toBe('fo:"enter the battlefield"');
+    expect(hintToClause({ kind: 'keyword', value: 'Split second', negated: true })).toBe('-kw:"split second"');
+    // Oracle hints use `o:` (oracle text with reminder text removed) so a token
+    // from the shared tokenizer is a verbatim substring of the target.
+    expect(hintToClause({ kind: 'oracle', value: 'Flying' })).toBe('o:Flying');
+    expect(hintToClause({ kind: 'oracle', value: 'Flying', negated: true })).toBe('-o:Flying');
+    expect(hintToClause({ kind: 'oracle', value: 'enter the battlefield' })).toBe('o:"enter the battlefield"');
     expect(hintToClause({ kind: 'layout', value: 'transform', negated: true })).toBe('-layout:transform');
     expect(hintToClause({ kind: 'mana', value: '{2}{R}' })).toBe('mana={2}{R}');
     expect(hintToClause({ kind: 'mana', value: '{2}{R}', negated: true })).toBe('mana!={2}{R}');
@@ -688,7 +726,7 @@ describe('hintToClause', () => {
 
   it('quotes values a Scryfall would misparse bare', () => {
     expect(hintToClause({ kind: 'type', value: 'Noble Knight' })).toBe('t:"noble knight"');
-    expect(hintToClause({ kind: 'oracle', value: 'Forestcycling' })).toBe('fo:Forestcycling');
+    expect(hintToClause({ kind: 'oracle', value: 'Forestcycling' })).toBe('o:Forestcycling');
     expect(hintToClause({ kind: 'type', value: "Urza's" })).toBe('t:urza\'s'); // apostrophes are fine bare
   });
 });
