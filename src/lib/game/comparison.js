@@ -186,12 +186,15 @@ function braceEnd(text, i) {
  * `{...}` mana symbols as opaque so a `.`/`:`/`"` inside one never splits.
  * `[...]` spans are kept whole (Scryfall indexes cleave brackets under `o:`).
  *
- * Each segment carries the printed `text` (quotes kept, attached to the token
- * they bound) and the `token` actually compared/hinted: quotes are dropped from
- * the token (a quote inside a quoted `o:"…"` clause would make Scryfall silently
- * drop it), while a `:`/`.` terminator stays on the token it ends so the token
- * matches the literal text Scryfall indexes. Segments whose token is empty, too
- * short, or punctuation-only are dropped.
+ * A quote is a delimiter: it splits the line but is not part of any token (a
+ * quote inside a quoted `o:"…"` clause would make Scryfall silently drop it).
+ * Each segment records which side(s) it was quoted on (`quotes`: `'open'`,
+ * `'close'`, `'both'`, or `''`), determined by position — an opening quote
+ * (line start or after whitespace) marks the following run, a closing quote
+ * marks the preceding run. The UI renders those quotes outside the token frame.
+ * A `:`/`.` terminator stays on the token it ends, so the token matches the
+ * literal text Scryfall indexes. Segments with no letter/digit or below the
+ * 2-char floor are dropped.
  */
 function ruleLineTokens(line) {
   const text = String(line ?? '');
@@ -199,7 +202,10 @@ function ruleLineTokens(line) {
   const atoms = [];
   let start = 0;
   let i = 0;
-  const flush = (end) => atoms.push({ text: text.slice(start, end).trim() });
+  const flush = (end) => {
+    const run = text.slice(start, end).trim();
+    if (run !== '') atoms.push({ text: run });
+  };
   while (i < text.length) {
     const ch = text[i];
     if (ch === '{') {
@@ -220,12 +226,12 @@ function ruleLineTokens(line) {
   }
   flush(text.length);
 
-  // Keep each quote visible at its printed position: an opening quote (after
-  // whitespace or the line start) prefixes the next run; a closing quote suffixes
-  // the previous one. A quote with no run on the needed side falls back.
+  // Attach each quote to the run it bounds: an opening quote to the next run, a
+  // closing quote to the previous one (falling back to the other side when a run
+  // is missing). A run can end up quoted on both sides (`"…"`).
   const neighbour = (qi, step) => {
     for (let j = qi + step; j >= 0 && j < atoms.length; j += step) {
-      if (!atoms[j].quote && atoms[j].text !== '') return atoms[j];
+      if (!atoms[j].quote) return atoms[j];
     }
     return null;
   };
@@ -233,19 +239,21 @@ function ruleLineTokens(line) {
     const q = atoms[qi];
     if (!q.quote) continue;
     const opening = q.at === 0 || /\s/.test(text[q.at - 1]);
-    const before = neighbour(qi, -1);
-    const after = neighbour(qi, 1);
-    if (opening && after) after.text = '"' + after.text;
-    else if (!opening && before) before.text += '"';
-    else if (after) after.text = '"' + after.text;
-    else if (before) before.text += '"';
+    const target = opening
+      ? neighbour(qi, 1) ?? neighbour(qi, -1)
+      : neighbour(qi, -1) ?? neighbour(qi, 1);
+    if (!target) continue;
+    if (opening) target.open = true; else target.close = true;
   }
 
   const out = [];
   for (const a of atoms) {
     if (a.quote) continue;
-    const token = a.text.replace(/"/g, '').trim();
-    if (token.length >= ORACLE_MIN_TOKEN && ORACLE_HAS_ALNUM.test(token)) out.push({ text: a.text, token });
+    const token = a.text;
+    if (token.length >= ORACLE_MIN_TOKEN && ORACLE_HAS_ALNUM.test(token)) {
+      const quotes = a.open && a.close ? 'both' : a.open ? 'open' : a.close ? 'close' : '';
+      out.push({ text: token, quotes });
+    }
   }
   return out;
 }
@@ -405,9 +413,10 @@ function parseKeywordPrefix(line, vocab) {
  * Oracle-text rows separately. A keyword chip is one segment per printed
  * ability; each rules token is one segment, with `{ break: true }` between
  * printed lines so a row never renders a blank line where a keyword was removed
- * and a printed line break is always visible. Oracle segments carry the printed
- * `text` (quotes and braces verbatim) and the `oracleToken` compared/hinted
- * (quotes dropped); the UI marks the whole chip, with no per-part muting.
+ * and a printed line break is always visible. An oracle segment carries the
+ * compared/hinted `text` and a `quotes` marker (`'open'`/`'close'`/`'both'`/`''`)
+ * so the UI can draw any enclosing quotes outside the token frame; nothing is
+ * muted inside the chip.
  */
 export function parseOracleText(text = '', keywords = []) {
   const vocab = Array.isArray(keywords) ? [...keywords].sort((a, b) => b.length - a.length) : [];
@@ -442,15 +451,15 @@ export function parseOracleText(text = '', keywords = []) {
       remainder = line.slice(parsed.end);
     }
     const lineRules = ruleLineTokens(remainder);
-    rules.push(...lineRules.map((r) => r.token));
+    rules.push(...lineRules.map((r) => r.text));
     // One segment per token: the whole printed clause is the compared unit, so
-    // it is framed as a single chip. The printed text (quotes included) is shown
-    // verbatim; the compared/hinted token drops the quotes.
+    // it is framed as a single chip. `text` is the compared/hinted token; any
+    // enclosing quotes are rendered outside the frame from `quotes`.
     const lineOracle = lineRules.map((r) => ({
       text: r.text,
       token: true,
       kind: 'oracle',
-      oracleToken: r.token,
+      quotes: r.quotes,
     }));
 
     if (lineKeywords.length || lineOracle.length) {
@@ -512,9 +521,9 @@ function line(key, label, segments, extra = {}) {
   const wrong = [];
   for (const seg of segments) {
     if (seg.status !== 'correct' && seg.status !== 'wrong') continue;
-    // `oracleToken` is the compared/hinted value (quotes dropped); `text` is the
-    // verbatim display string (quotes kept). For every other row they coincide.
-    const value = seg.oracleToken ?? seg.text;
+    // `text` is the compared/hinted token (quotes never included); the enclosing
+    // quotes ride along separately as `quotes` for display only.
+    const value = seg.text;
     if (value == null) continue;
     const bucket = seg.status === 'correct' ? correct : wrong;
     if (!bucket.includes(value)) bucket.push(value);
@@ -754,10 +763,9 @@ export function compareCards(guess, target) {
       .toLocaleLowerCase();
     // The tokens keep their ORIGINAL case: `o:` matches literally, so lowercasing
     // would break the verbatim-substring guarantee. Matching itself stays
-    // case-insensitive via the lowercased comparison text. `oracleToken` (quotes
-    // dropped) is compared; `text` (quotes kept) is only for display.
+    // case-insensitive via the lowercased comparison text.
     const segments = gSegs.map((s) => (
-      s.token ? { ...s, status: targetSearch.includes((s.oracleToken ?? s.text).toLocaleLowerCase()) ? 'correct' : 'wrong' } : s
+      s.token ? { ...s, status: targetSearch.includes(s.text.toLocaleLowerCase()) ? 'correct' : 'wrong' } : s
     ));
     results.push(line('oracle', 'Oracle text', segments));
   }

@@ -56,10 +56,11 @@
                 <span class="val keyword-name {seg.status}">{seg.nameText}</span>{#if seg.nameText.length < seg.text.length}<span class="keyword-param">{seg.text.slice(seg.nameText.length)}</span>{/if}
               </span>
             {:else if seg.kind === 'oracle'}
-              <!-- One rules token = one compared chip, rendered verbatim: quotes
-                   and `{...}` braces keep their printed position and get no
-                   special highlight — only the whole chip is marked by status. -->
-              <span class="oracle-token {seg.status}">{seg.text}</span>
+              <!-- One rules token = one compared chip, rendered verbatim: `{...}`
+                   braces keep their printed position with no special highlight.
+                   Any enclosing quotes are drawn outside the frame so the token
+                   border hugs the text, not the quotes. -->
+              <span class="oracle-wrap">{#if seg.quotes === 'open' || seg.quotes === 'both'}"{/if}<span class="oracle-token {seg.status}">{seg.text}</span>{#if seg.quotes === 'close' || seg.quotes === 'both'}"{/if}</span>
             {:else if seg.token}
               {#if $symbols && manaParts(seg.text)}
                 <span class="val mana {seg.status}">
@@ -223,12 +224,18 @@
     display: block;
     height: 0;
   }
+  /* The chip's enclosing quotes are siblings of the framed token, so the frame
+     hugs the text and the quote sits just outside it. Spacing lives on the
+     wrapper, so it falls after the closing quote. */
+  .values.seg-values.oracle .oracle-wrap {
+    display: inline;
+    margin: 0 0.1rem 0 0;
+  }
   .values.seg-values.oracle .oracle-token {
     display: inline;
     border: 1px solid var(--border);
     border-radius: 4px;
     padding: 0.05rem 0.3rem;
-    margin: 0 0.1rem 0 0;
     -webkit-box-decoration-break: slice;
     box-decoration-break: slice;
   }

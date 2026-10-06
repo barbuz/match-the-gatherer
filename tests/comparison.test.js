@@ -412,9 +412,9 @@ describe('compareCards — release date and oracle text', () => {
     // One segment per compared clause, with an explicit break between printed
     // lines (no blank line where a keyword was removed).
     expect(line.segments).toEqual([
-      { text: 'Target player draws a card.', token: true, kind: 'oracle', oracleToken: 'Target player draws a card.', status: 'correct' },
+      { text: 'Target player draws a card.', token: true, kind: 'oracle', quotes: '', status: 'correct' },
       { break: true },
-      { text: 'Cycling', token: true, kind: 'oracle', oracleToken: 'Cycling', status: 'wrong' },
+      { text: 'Cycling', token: true, kind: 'oracle', quotes: '', status: 'wrong' },
     ]);
   });
 
@@ -426,8 +426,8 @@ describe('compareCards — release date and oracle text', () => {
     expect(line.correct).toEqual(['Add {G}:', 'draw a card']);
     expect(line.wrong).toEqual([]);
     expect(line.segments).toEqual([
-      { text: 'Add {G}:', token: true, kind: 'oracle', oracleToken: 'Add {G}:', status: 'correct' },
-      { text: 'draw a card', token: true, kind: 'oracle', oracleToken: 'draw a card', status: 'correct' },
+      { text: 'Add {G}:', token: true, kind: 'oracle', quotes: '', status: 'correct' },
+      { text: 'draw a card', token: true, kind: 'oracle', quotes: '', status: 'correct' },
     ]);
   });
 
@@ -733,9 +733,9 @@ describe('compareCards — layout', () => {
     });
     const line = byKey(compareCards(split, makeCard({ oracle_text: 'Flying' })), 'oracle');
     expect(line.segments).toEqual([
-      { text: 'Flying', token: true, kind: 'oracle', oracleToken: 'Flying', status: 'correct' },
+      { text: 'Flying', token: true, kind: 'oracle', quotes: '', status: 'correct' },
       { break: true },
-      { text: 'Vigilance', token: true, kind: 'oracle', oracleToken: 'Vigilance', status: 'wrong' },
+      { text: 'Vigilance', token: true, kind: 'oracle', quotes: '', status: 'wrong' },
     ]);
   });
 
@@ -857,8 +857,8 @@ describe('parseOracleText', () => {
   it('renders the whole clause verbatim, braces and all', () => {
     const { segments } = parseOracleText('{T}: Add {G}.', []);
     expect(segments.filter((s) => s.token)).toEqual([
-      { text: '{T}:', token: true, kind: 'oracle', oracleToken: '{T}:' },
-      { text: 'Add {G}.', token: true, kind: 'oracle', oracleToken: 'Add {G}.' },
+      { text: '{T}:', token: true, kind: 'oracle', quotes: '' },
+      { text: 'Add {G}.', token: true, kind: 'oracle', quotes: '' },
     ]);
   });
 
@@ -978,37 +978,34 @@ describe('parseOracleText', () => {
       'Proliferate.',
     ]);
     const seg = parsed.rulesSegments.find((s) => s.token && s.text === 'Proliferate.');
-    expect(seg).toMatchObject({ kind: 'oracle', oracleToken: 'Proliferate.' });
+    expect(seg).toMatchObject({ kind: 'oracle', quotes: '' });
   });
 
   it('keeps an in-clause brace run inside its clause token, unmuted', () => {
     const text = 'Target creature becomes a Treasure artifact with "{T}, Sacrifice this artifact: Add one mana of any color" and loses all other card types.';
     const { rulesSegments } = parseOracleText(text, []);
     const tokens = rulesSegments.filter((s) => s.token);
-    const braced = tokens.find((s) => s.text.includes('{T}'));
-    // The brace run stays verbatim inside its clause token (the opening quote
-    // prefixes it); only the whole chip is marked, with no special brace/quote
-    // highlight. The `:` still splits the clause, as for any rules text.
-    expect(braced).toMatchObject({
-      text: '"{T}, Sacrifice this artifact:',
-      oracleToken: '{T}, Sacrifice this artifact:',
-    });
-    // The closing quote stays at the printed position, suffixing its token.
-    expect(tokens.some((s) => s.text === 'Add one mana of any color"')).toBe(true);
+    // The brace run stays verbatim inside its clause token; only the whole chip
+    // is marked, with no special brace highlight. The `:` still splits the
+    // clause, as for any rules text. Quotes are metadata, not part of the token.
+    expect(tokens[0]).toMatchObject({ text: 'Target creature becomes a Treasure artifact with', quotes: '' });
+    expect(tokens[1]).toMatchObject({ text: '{T}, Sacrifice this artifact:', quotes: 'open' });
+    expect(tokens[2]).toMatchObject({ text: 'Add one mana of any color', quotes: 'close' });
+    expect(tokens[3]).toMatchObject({ text: 'and loses all other card types.', quotes: '' });
   });
 
-  it('frames each clause as its own segment, keeping quotes in the display text', () => {
+  it('frames each clause as its own segment, with quotes as outside-frame metadata', () => {
     const text = 'I — This Saga gains "When you sacrifice a permanent, add {C}."';
     const { segments, rules } = parseOracleText(text, []);
     const tokens = segments.filter((s) => s.token);
-    // Quotes stay in the printed display text, wrapped around the token they
-    // bound (opening quote prefixes the next run, closing quote suffixes it).
     expect(tokens.map((s) => s.text)).toEqual([
       'I — This Saga gains',
-      '"When you sacrifice a permanent, add {C}."',
+      'When you sacrifice a permanent, add {C}.',
     ]);
-    // ...but the compared/hinted token drops them, so no `o:"…"` clause is malformed.
-    expect(tokens.map((s) => s.oracleToken)).toEqual(rules);
+    // The quoted clause carries its quotes as display metadata, never in the
+    // compared token, so no `o:"…"` clause is malformed.
+    expect(tokens.map((s) => s.quotes)).toEqual(['', 'both']);
+    expect(tokens.map((s) => s.text)).toEqual(rules);
     expect(rules.some((t) => t.includes('"'))).toBe(false);
   });
 

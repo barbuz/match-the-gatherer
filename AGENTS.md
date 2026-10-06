@@ -1,12 +1,12 @@
-# AGENTS.md ŌĆö Match the Gatherer
+# AGENTS.md — Match the Gatherer
 
 Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spec.md`.
 
 ## Commands
 
-- `npm test` ŌĆö vitest (comparison / scoring / gameState / hints / symbology / dailySeed / dailyApi)
-- `npm run build` ŌĆö production build to `dist/` (set `BASE_PATH=/repo-name/` on GitHub Pages)
-- `npm run preview` ŌĆö serve the production build
+- `npm test` — vitest (comparison / scoring / gameState / hints / symbology / dailySeed / dailyApi)
+- `npm run build` — production build to `dist/` (set `BASE_PATH=/repo-name/` on GitHub Pages)
+- `npm run preview` — serve the production build
 
 ## Key facts
 
@@ -15,7 +15,7 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   Cloudflare Worker
   (`src/lib/api/config.js`, base URL override `VITE_API_BASE`). The daily game
   is **hard-coupled** to it (`src/lib/api/dailyApi.js`): `GameBoard.svelte`
-  fetches `GET /api/daily/<today-utc>` and shows a retry state on failure ŌĆö
+  fetches `GET /api/daily/<today-utc>` and shows a retry state on failure —
   it must **never** fall back to the local `resolveDailyTargetCard`, which is
   retained for **free mode only**. Free mode must make zero `/api/*` calls.
 - **Result reporting** (`src/lib/api/statsApi.js`, wired in
@@ -23,12 +23,12 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   with `{date, outcome, guesses, hintsUsed, clientVersion, deviceId}` and the
   response's day aggregates render via `CommunityStats.svelte`. A random
   `deviceId` is generated once per install and stored in `mtg:device-id`;
-  the server dedupes on `(date, deviceId)`. Reporting is best-effort ŌĆö offline/
+  the server dedupes on `(date, deviceId)`. Reporting is best-effort — offline/
   `400`/`429` resolve to `null` and never block the summary. A concluded game
   restored from storage refreshes its aggregates on load (`reportIfConcluded`):
   it re-`POST`s only when they never arrived, and otherwise reads them back via
-  `GET /api/stats/<date>` (`fetchDailyStats`, backend spec ┬¦4.4) so a reload
-  costs a shared-cached read, not another counted write ŌĆö keeping the day at
+  `GET /api/stats/<date>` (`fetchDailyStats`, backend spec §4.4) so a reload
+  costs a shared-cached read, not another counted write — keeping the day at
   the spec's budget of 2 requests per player (a reload adds one CDN-absorbed
   read). The read omits `target` for a live day, which the summary doesn't need
   (it already knows the card).
@@ -39,10 +39,10 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   today), so a clock-skewed client self-heals instead of mis-persisting.
 - The `/api/daily/<date>` body is **gzipped and served with no
   `Content-Encoding`** (deliberate anti-casual-cheat obfuscation, backend spec
-  ┬¦3.4), so the browser does *not* inflate it and `res.json()` fails on the raw
+  §3.4), so the browser does *not* inflate it and `res.json()` fails on the raw
   bytes. `dailyApi.js` reads the bytes and inflates them itself via
   `DecompressionStream('gzip')`; the stats response is negotiated normally and
-  still parses with `res.json()`. Re-test against the live Worker, not a mock ŌĆö
+  still parses with `res.json()`. Re-test against the live Worker, not a mock —
   a mock that sets `Content-Encoding` hides this.
 - Scryfall exact-name search (`cards/search?q=!"name" prefer:oldest`) also matches
   **individual face names**, so `lib/api/scryfall.js` prefers a whole-card name
@@ -57,22 +57,24 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   one never splits; Scryfall indexes braces literally, verified: `o:"Add {G}"`
   matches Llanowar Elves while `o:"Add G"` matches nothing) and `[...]` spans are
   kept whole. A `:`/`.` **stays on the token it ends** (`{T}:`, `Add {G}.`); a
-  `"` splits but is **kept in the printed display text**, attached to the token
-  it bounds (an opening quote prefixes the next run, a closing quote suffixes the
-  previous one) so quotes read in their original position. The compared/hinted
-  token (`oracleToken`) **drops** the quotes — a quote inside a quoted `o:"..."` 
-  clause would make Scryfall silently drop it. Only the ends are trimmed.
+  `"` splits but is **not part of any token**. Each segment records a `quotes`
+  marker (`'open'`/`'close'`/`'both'`/`''`) from the quote's position (line start
+  or after whitespace marks the following run, otherwise the preceding run), so
+  the UI draws the quotes **outside** the token frame — the border hugs the text,
+  not the quotes. Quotes are never in the compared token (a quote inside a quoted
+  `o:"..."` clause would make Scryfall silently drop it). Only the ends are trimmed.
   Tokens with no letter/digit or below a 2-char floor are dropped, so every
   compared token is a verbatim substring of the stripped text.
   - **Rendering = data.** Each display stream (`segments`, `keywordSegments`,
-    `rulesSegments`) holds one segment per compared unit ŌĆö a chip for a keyword,
-    one chip per rules **clause** ŌĆö with `{ break: true }` between printed lines.
+    `rulesSegments`) holds one segment per compared unit — a chip for a keyword,
+    one chip per rules **clause** — with `{ break: true }` between printed lines.
     A line whose keyword was removed therefore renders no blank row, and a
-    printed line break stays visible. An oracle segment carries `text` (verbatim
-    display: quotes and `{...}` braces in place) and `oracleToken` (the compared
-    value, quotes dropped). There is **no per-part muting**: a keyword that
-    appears mid-rules-text (e.g. `Proliferate`) or a brace run (`{T}`) is an
-    ordinary literal inside its clause chip and gets no distinct highlight — only
+    printed line break stays visible. An oracle segment carries `text` (the
+    compared/hinted value, verbatim `{...}` braces in place) and `quotes` (the
+    enclosing-quote marker, drawn as siblings just outside the frame). There is
+    **no per-part muting**: a keyword that appears mid-rules-text (e.g.
+    `Proliferate`) or a brace run (`{T}`) is an ordinary literal inside its
+    clause chip and gets no distinct highlight — only
     the whole chip is marked by status. A keyword segment carries `nameText` (the
     canonical name) so only the name is marked as the token, not its printed
     parameter; that muting is Keywords-row only. Both rows draw a **frame**
@@ -92,7 +94,7 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   - **Keywords** are extracted only from the *leading* keyword occurrence of
     each line, using `card.keywords` as recognition **vocabulary** (longest name
     first). Handles the comma-separated keyword list (`Flying, first strike`),
-    ability words (`Landfall ŌĆö ŌĆ”`, where the dash and following space are
+    ability words (`Landfall — …`, where the dash and following space are
     consumed but the rules text is kept verbatim), and keyword costs/parameters
     (`Kicker {2}`, `Protection from red`, `Ward {2}`, `Equip legendary creature
     {1}`). A comma ends a text parameter unless the keyword's value may contain
@@ -128,7 +130,7 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   only when the map is loaded and fall back to the ascii `{..}` placeholder otherwise
   (`manaParts()`).
 
-- Daily pick: FNV-1a(UTC 'YYYY-MM-DD') % names.length ŌåÆ deterministic, but the
+- Daily pick: FNV-1a(UTC 'YYYY-MM-DD') % names.length → deterministic, but the
   **server** is the source of truth for the served card (see above).
 
 - Game logic is DOM-freein `src/lib/game/` (incl. `gameState.js`,which imports
@@ -150,7 +152,7 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   source of truth for display, and `correct`/`wrong` (the token lists `hints.js` and
   share text consume) plus `status` are derived from the segments' statuses, so a row
   builder only describes what it renders. Plain rows (layout, released, rarity, the
-  `ŌĆö` placeholders) are just a single segment per value, so the UI has one render path.
+  `—` placeholders) are just a single segment per value, so the UI has one render path.
 
 - Hints (`src/lib/game/hints.js`): `gatherHints()` distills every guess's feedback into a
   deduplicated minimal hint list; `buildScryfallSearchUrl()` turns it into a
@@ -163,9 +165,9 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   matches Tarmogoyf's `1+*`, `pow=2` matches Angry Mob's `2+*`, `pow=0` matches
   the ~220 cards with a bare `*`; verified against the live API). `comparison.js`
   `statValue()` applies that same coercion so the feedback agrees with the hint
-  URL ŌĆö without it a `1+*` guess against a `1` target would read "wrong" and
+  URL — without it a `1+*` guess against a `1` target would read "wrong" and
   emit `tou!=1`, filtering out the answer. Only values with no numeric reading
-  (`Ōł×`) are unexpressible and dropped.
+  (`∞`) are unexpressible and dropped.
   **exception**: Scryfall's `t:`, `c:`, `kw:` and `o:` are all
   contains-matches with no exact operator, so negated hints for `type`, `colors`,
   `keywords` and `oracle` survive even after a fully-matched row. Colors never use the
@@ -174,7 +176,7 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   negated) are used throughout, and a `//` face separator is never emitted as a
   filter value. Same-direction date bounds fold down to the
   tightest,and an exact date subsumes all date hints. The HintButton opens that URL, and
-  each used hint press marks its share row with ­¤ö” (`buildShareText` `hintsUsed`).
+  each used hint press marks its share row with 🔦 (`buildShareText` `hintsUsed`).
 
 - Daily games persist per UTC day (`mtg:game:${dayKey}`, via `lib/game/gameState.js`);
   free-mode games are memory-only and never touch stats. Stats live in `storage/statsStore.js`
@@ -191,7 +193,7 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   browsers are fine.
 
 - Version string in `src/lib/version.js` is shown in footer AND embedded in the
-  service worker ŌĆö bump on every change. (`package.json` `version` is independent.)
+  service worker — bump on every change. (`package.json` `version` is independent.)
 
 - vite-plugin-pwa `injectManifest` + `workbox-precaching`; SW code lives in
   `src/service-worker.js` and must reference `self.__WB_MANIFEST`. Navigations are
@@ -201,7 +203,7 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
     the navigate `NetworkFirst` route must be registered **before**
     `precacheAndRoute()`. The precache route also answers a navigation to `/`
     with the precached `index.html`; if it went first it would win and pin the
-    app to the cached HTML shell (and thus the old hashed bundle) indefinitely ŌĆö
+    app to the cached HTML shell (and thus the old hashed bundle) indefinitely —
     a deploy would appear not to take. Offline still works via
     `PrecacheFallbackPlugin({ fallbackURL: 'index.html' })` on that route.
     The browser picks up a new worker on its own schedule and `autoUpdate`
@@ -209,4 +211,4 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
 
 
 
-- Emoji fonts may be missing in headless browsers (glyphs show as boxes) ŌĆö not a bug.
+- Emoji fonts may be missing in headless browsers (glyphs show as boxes) — not a bug.
