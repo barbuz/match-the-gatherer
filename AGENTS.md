@@ -57,6 +57,17 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   drops it), keeps `{...}` mana symbols inline with the plain run, trims only the
   ends, and drops tokens with no letter/digit or below a 2-char floor. Tokens are
   therefore verbatim substrings of the stripped text (newlines removed).
+  - **Rendering = data.** Each display stream (`segments`, `keywordSegments`,
+    `rulesSegments`) holds one segment per printed line — a chip for a keyword,
+    the whole rules line for oracle text — with `{ break: true }` between lines.
+    A line whose keyword was removed therefore renders no blank row, and a
+    printed line break stays visible. An oracle segment carries `tokens` (the
+    quote-split pieces actually matched/hinted; the display `text` is the whole
+    line) and `nameText`, the leading keyword name or mana cost the UI **mutes**:
+    that prefix is not part of the compared line and is already shown by the
+    Keywords row. A keyword segment carries `nameText` (the canonical name) so
+    only the name is marked as the token, not its printed parameter. The Oracle
+    row renders as a dotted list so it is clear the *line* is the compared unit.
   - **Reminder text** (`(...)`, depth-aware so nested spans like `Super haste`
     are removed cleanly) is **ignored for matching** and never hinted. This is
     what lets the hints use `o:` instead of `fo:`: Scryfall's `o:` indexes the

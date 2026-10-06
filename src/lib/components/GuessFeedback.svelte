@@ -40,7 +40,9 @@
         {#if r.segments}
           <span class="values seg-values" class:mana={r.key === 'mana'} class:oracle={r.key === 'oracle'} class:keywords={r.key === 'keywords'}>
             {#each r.segments as seg, i (i)}
-              {#if seg.dash}
+              {#if seg.break}
+                <span class="line-break" aria-hidden="true"></span>
+              {:else if seg.dash}
                 <span class="dash">—</span>
               {:else if seg.slash}
                 <span class="pt-sep">/</span>
@@ -49,8 +51,21 @@
               {:else if seg.kind === 'keyword'}
                 <!-- Keyword abilities render verbatim (punctuation and parameters
                      included), never symbol-substituted, so the row reads exactly
-                     as printed on the card. -->
-                <span class="val keyword {seg.status}">{seg.text}</span>
+                     as printed on the card. Only the canonical name is the
+                     compared token, so the parameter stays muted. -->
+                <span class="keyword">
+                  <span class="val keyword-name {seg.status}">{seg.nameText}</span>{#if seg.nameText.length < seg.text.length}<span class="keyword-param">{seg.text.slice(seg.nameText.length)}</span>{/if}
+                </span>
+              {:else if seg.kind === 'oracle'}
+                <!-- One printed rules line = one compared token. The leading name
+                     (a keyword ability or mana cost) is muted: it is not part of
+                     the compared line and is already shown by the Keywords row. -->
+                <span class="token-line">
+                  {#if seg.nameText}<span class="line-name">{seg.nameText}</span>{/if}
+                  {#if seg.nameText.length < seg.text.length}
+                    <span class="val {seg.status}">{seg.text.slice(seg.nameText.length)}</span>
+                  {/if}
+                </span>
               {:else if seg.token}
                 {#if $symbols && manaParts(seg.text)}
                   <span class="val mana {seg.status}">
@@ -209,19 +224,6 @@
     gap: 0.3em;
     align-items: baseline;
   }
-  /* Oracle text keeps its line breaks and punctuation:plain segments flow
-     inline (no per-segment boxes) so the row reads like the card's text. */
-  .values.seg-values.oracle {
-    display: inline;
-    gap: 0;
-  }
-  .values.seg-values.oracle .val {
-    padding: 0;
-  }
-  .values.seg-values.oracle .val.mana {
-    padding: 0 0.1rem;
-    vertical-align: middle;
-  }
   .values.seg-values .val {
     padding: 0 0.1rem;
   }
@@ -229,18 +231,69 @@
     padding: 0 0.25rem;
     color: var(--muted);
   }
+  /* A printed line break: in a wrapping row it forces a new line; in the
+     column-stacked oracle row it is simply hidden. */
+  .line-break {
+    flex-basis: 100%;
+    height: 0;
+  }
+  /* Oracle text: one printed line per compared token, stacked as a dotted list
+     so it is clear the line — not each word — is the unit being compared. */
+  .values.seg-values.oracle {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.15rem;
+  }
+  .values.seg-values.oracle .line-break {
+    display: none;
+  }
+  .values.seg-values.oracle .token-line {
+    position: relative;
+    padding-left: 0.85rem;
+  }
+  .values.seg-values.oracle .token-line::before {
+    content: '';
+    position: absolute;
+    left: 0.2rem;
+    top: 0.6em;
+    width: 0.28rem;
+    height: 0.28rem;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+  .values.seg-values.oracle .val {
+    padding: 0 0.15rem;
+  }
+  .values.seg-values.oracle .val.mana {
+    vertical-align: middle;
+  }
+  /* The leading keyword name / mana cost is not part of the compared line (the
+     Keywords row already shows it), so it is muted. */
+  .values.seg-values.oracle .line-name {
+    color: var(--muted);
+    opacity: 0.7;
+  }
   /* Mana rows phrase per-face costs in order, `//` between faces. */
   .values.seg-values.mana {
     align-items: center;
   }
-  /* Keyword abilities: one chip per printed span, verbatim. */
+  /* Keyword abilities: one chip per printed span, verbatim. Only the canonical
+     name is the compared token (highlighted); the parameter stays muted. */
   .values.seg-values.keywords {
     gap: 0.35rem;
   }
-  .values.seg-values .val.keyword {
+  .values.seg-values .keyword {
     border: 1px solid var(--border);
     border-radius: 4px;
     padding: 0 0.3rem;
+  }
+  .values.seg-values .keyword .val {
+    padding: 0;
+  }
+  .values.seg-values .keyword-param {
+    color: var(--muted);
+    opacity: 0.75;
   }
   .values.seg-values .plain {
     white-space: pre-wrap;

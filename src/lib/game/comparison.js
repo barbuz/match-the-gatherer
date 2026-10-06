@@ -271,6 +271,24 @@ function matchKeywordAt(text, vocab) {
   return null;
 }
 
+/** A leading run of `{...}` mana symbols, e.g. the cost in `{T}: Add {G}.` or
+ *  `{2}{R}: …`. Used only to mute the cost part of a rules line, never to match. */
+const MANA_COST_PREFIX = /^(?:\{[^}]*\})+/;
+
+/**
+ * The leading "name" of a rules line — the part a reader scans first: a
+ * keyword-ability name or a mana-cost run. Display-only: the whole line is still
+ * one compared token, but muting just this prefix makes the compared unit
+ * legible (the name was already shown by the Keywords row).
+ */
+function ruleNamePrefix(text, vocab = []) {
+  const kw = matchKeywordAt(text, vocab);
+  if (kw) return text.slice(0, kw.end);
+  const m = text.match(MANA_COST_PREFIX);
+  if (m) return m[0];
+  return '';
+}
+
 /**
  * Consume a leading keyword occurrence from one reminder-free line. Handles an
  * ability-word prefix (`Landfall — …`, but not a keyword cost like
@@ -308,29 +326,16 @@ function parseKeywordPrefix(line, vocab) {
   return { items, end: items[items.length - 1].end };
 }
 
-/** Split rules text into tokens on `"` (a quote inside a quoted clause would make
- *  Scryfall discard it) and on line ends, keeping only the ends trimmed. */
-function tokenizeRuleText(ruleText) {
+/** Tokens for one rules line: split on `"` (a quote inside a quoted clause would
+ *  make Scryfall discard it) and drop empty, too-short, or punctuation-only
+ *  runs. Every token stays a verbatim substring of the reminder-free line. */
+function ruleLineTokens(line) {
   const tokens = [];
-  const segments = [];
-  const pieces = String(ruleText ?? '').split('"');
-  for (let i = 0; i < pieces.length; i++) {
-    if (i > 0) segments.push({ text: '"' });
-    const piece = pieces[i];
+  for (const piece of String(line ?? '').split('"')) {
     const trimmed = piece.trim();
-    if (!trimmed) { if (piece) segments.push({ text: piece }); continue; }
-    const start = piece.indexOf(trimmed);
-    if (start > 0) segments.push({ text: piece.slice(0, start) });
-    if (trimmed.length >= ORACLE_MIN_TOKEN && ORACLE_HAS_ALNUM.test(trimmed)) {
-      tokens.push(trimmed);
-      segments.push({ text: trimmed, token: true, kind: 'oracle' });
-    } else {
-      segments.push({ text: trimmed });
-    }
-    const end = start + trimmed.length;
-    if (end < piece.length) segments.push({ text: piece.slice(end) });
+    if (trimmed.length >= ORACLE_MIN_TOKEN && ORACLE_HAS_ALNUM.test(trimmed)) tokens.push(trimmed);
   }
-  return { tokens, segments };
+  return tokens;
 }
 
 /**
@@ -347,10 +352,15 @@ function tokenizeRuleText(ruleText) {
  * text — which is exactly what Scryfall's `o:` indexes.
  *
  * Returns `{ rules, keywords, segments, keywordSegments, rulesSegments }`:
- * `rules` is the per-line rules text, `keywords` the `{ text, name }` printed
- * keyword items, `segments` the full ordered display (keyword spans + rules
- * text), and `keywordSegments`/`rulesSegments` the two streams separately so the
- * Keywords and Oracle-text rows can render without leaking into each other.
+ * `rules` is the per-line rules tokens, `keywords` the `{ text, name }` printed
+ * keyword items, and the three `*segments` are display streams — `segments` the
+ * full ordered display, `keywordSegments`/`rulesSegments` the Keywords and
+ * Oracle-text rows separately. Each stream holds one segment per printed line (a
+ * chip for a keyword, the whole rules line for oracle text) with `{ break: true }`
+ * between lines, so a row never renders a blank line where a keyword was removed
+ * and a printed line break is always visible. Oracle segments carry `nameText`,
+ * the leading keyword name or mana cost the UI mutes (it is not part of the
+ * compared line and is already shown by the Keywords row).
  */
 export function parseOracleText(text = '', keywords = []) {
   const vocab = Array.isArray(keywords) ? [...keywords].sort((a, b) => b.length - a.length) : [];
@@ -360,33 +370,57 @@ export function parseOracleText(text = '', keywords = []) {
   const segments = [];
   const keywordSegments = [];
   const rulesSegments = [];
-  const lines = stripped.split('\n');
-  for (let li = 0; li < lines.length; li++) {
-    if (li > 0) {
-      segments.push({ text: '\n' });
-      rulesSegments.push({ text: '\n' });
-    }
-    const line = lines[li];
+  for (const line of stripped.split('\n')) {
     const parsed = parseKeywordPrefix(line, vocab);
     let remainder = line;
+    const lineKeywords = [];
     if (parsed) {
       let prevEnd = 0;
       for (const item of parsed.items) {
         const sep = line.slice(prevEnd, item.start);
-        if (sep) { segments.push({ text: sep }); keywordSegments.push({ text: sep }); }
+        if (sep) lineKeywords.push({ text: sep });
         const span = line.slice(item.start, item.end);
         keywordItems.push({ text: span, name: item.name });
-        const seg = { text: span, token: true, kind: 'keyword', name: item.name };
-        segments.push(seg);
-        keywordSegments.push(seg);
+        // Only the canonical name is the compared token; the printed parameter
+        // (`{2}{W}{U}{B}{R}{G}`, `from red`, …) is shown but not marked.
+        lineKeywords.push({
+          text: span,
+          token: true,
+          kind: 'keyword',
+          name: item.name,
+          nameText: span.slice(0, item.name.length),
+        });
         prevEnd = item.end;
       }
       remainder = line.slice(parsed.end);
     }
-    const { tokens, segments: ruleSegments } = tokenizeRuleText(remainder);
-    for (const t of tokens) rules.push(t);
-    segments.push(...ruleSegments);
-    rulesSegments.push(...ruleSegments);
+    const lineRules = ruleLineTokens(remainder);
+    rules.push(...lineRules);
+    // Display segment is the whole printed line; `tokens` are the quote-split
+    // pieces actually matched/hinted, so a line containing `"` never yields a
+    // malformed `o:"…"` clause.
+    const lineOracle = lineRules.length > 0
+      ? [{
+          text: remainder.trim(),
+          token: true,
+          kind: 'oracle',
+          nameText: ruleNamePrefix(remainder.trim(), vocab),
+          tokens: lineRules,
+        }]
+      : [];
+
+    if (lineKeywords.length || lineOracle.length) {
+      if (segments.length) segments.push({ break: true });
+      segments.push(...lineKeywords, ...lineOracle);
+    }
+    if (lineKeywords.length) {
+      if (keywordSegments.length) keywordSegments.push({ break: true });
+      keywordSegments.push(...lineKeywords);
+    }
+    if (lineOracle.length) {
+      if (rulesSegments.length) rulesSegments.push({ break: true });
+      rulesSegments.push(...lineOracle);
+    }
   }
   return { rules, keywords: keywordItems, segments, keywordSegments, rulesSegments };
 }
@@ -686,9 +720,8 @@ export function compareCards(guess, target) {
   // the answer (e.g. guess "Flying" vs target "Flying, vigilance").
   const gSegs = [];
   for (const f of facesOf(guess)) {
-    const vocab = keywordVocabulary(guess);
-    const segs = parseOracleText(f.oracle_text ?? '', vocab).rulesSegments;
-    if (gSegs.length > 0 && segs.length > 0) gSegs.push({ sep: true, text: '//' });
+    const segs = parseOracleText(f.oracle_text ?? '', keywordVocabulary(guess)).rulesSegments;
+    if (gSegs.length > 0 && segs.length > 0) gSegs.push({ break: true });
     gSegs.push(...segs);
   }
   const gTokens = oracleTokens(guess);
@@ -705,8 +738,10 @@ export function compareCards(guess, target) {
     const segments = gSegs.map((s) => {
       const seg = { ...s };
       if (s.token) {
-        const ok = targetSearch.includes(s.text.toLocaleLowerCase());
-        (ok ? correct : wrong).push(s.text);
+        // Match and hint each quote-split piece, but colour the whole printed
+        // line by whether every piece matched.
+        const ok = (s.tokens ?? [s.text]).every((t) => targetSearch.includes(t.toLocaleLowerCase()));
+        (ok ? correct : wrong).push(...(s.tokens ?? [s.text]));
         seg.status = ok ? 'correct' : 'wrong';
       }
       return seg;

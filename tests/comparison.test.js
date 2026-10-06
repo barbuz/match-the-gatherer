@@ -409,10 +409,12 @@ describe('compareCards — release date and oracle text', () => {
     expect(line).toMatchObject({ status: 'wrong', applicable: true });
     expect(line.correct).toEqual(['Target player draws a card.']);
     expect(line.wrong).toEqual(['Cycling']);
+    // One segment per printed line, separated by an explicit break (no blank
+    // line where a keyword was removed).
     expect(line.segments).toEqual([
-      { text: 'Target player draws a card.', token: true, kind: 'oracle', status: 'correct' },
-      { text: '\n' },
-      { text: 'Cycling', token: true, kind: 'oracle', status: 'wrong' },
+      { text: 'Target player draws a card.', token: true, kind: 'oracle', nameText: '', tokens: ['Target player draws a card.'], status: 'correct' },
+      { break: true },
+      { text: 'Cycling', token: true, kind: 'oracle', nameText: '', tokens: ['Cycling'], status: 'wrong' },
     ]);
   });
 
@@ -424,7 +426,7 @@ describe('compareCards — release date and oracle text', () => {
     expect(line.correct).toEqual(['Add {G}: draw a card']);
     expect(line.wrong).toEqual([]);
     expect(line.segments).toEqual([
-      { text: 'Add {G}: draw a card', token: true, kind: 'oracle', status: 'correct' },
+      { text: 'Add {G}: draw a card', token: true, kind: 'oracle', nameText: '', tokens: ['Add {G}: draw a card'], status: 'correct' },
     ]);
   });
 
@@ -508,9 +510,9 @@ describe('compareCards — keywords', () => {
     expect(kw.correctNames).toEqual(['flying']);
     expect(kw.wrongNames).toEqual(['first strike']);
     expect(kw.segments).toEqual([
-      { text: 'Flying', token: true, kind: 'keyword', name: 'Flying', status: 'correct' },
+      { text: 'Flying', token: true, kind: 'keyword', name: 'Flying', nameText: 'Flying', status: 'correct' },
       { text: ', ' },
-      { text: 'first strike', token: true, kind: 'keyword', name: 'First strike', status: 'wrong' },
+      { text: 'first strike', token: true, kind: 'keyword', name: 'First strike', nameText: 'first strike', status: 'wrong' },
     ]);
     // The oracle row carries only the rules text.
     const oracle = byKey(results, 'oracle');
@@ -534,7 +536,7 @@ describe('compareCards — keywords', () => {
     expect(kw.correct).toEqual(['Kicker {2}']);
     expect(kw.correctNames).toEqual(['kicker']);
     expect(kw.segments).toEqual([
-      { text: 'Kicker {2}', token: true, kind: 'keyword', name: 'Kicker', status: 'correct' },
+      { text: 'Kicker {2}', token: true, kind: 'keyword', name: 'Kicker', nameText: 'Kicker', status: 'correct' },
     ]);
   });
 
@@ -551,7 +553,7 @@ describe('compareCards — keywords', () => {
     expect(kw.wrong).toEqual(['Channel — {6}']);
     expect(kw.wrongNames).toEqual(['channel']);
     expect(kw.segments).toEqual([
-      { text: 'Channel — {6}', token: true, kind: 'keyword', name: 'Channel', status: 'wrong' },
+      { text: 'Channel — {6}', token: true, kind: 'keyword', name: 'Channel', nameText: 'Channel', status: 'wrong' },
     ]);
     // The ability's rules text stays in the oracle row (and matches the target).
     expect(byKey(compareCards(guess, target), 'oracle').correct).toEqual([
@@ -571,7 +573,7 @@ describe('compareCards — keywords', () => {
     const kw = byKey(compareCards(guess, target), 'keywords');
     expect(kw.wrong).toEqual(['Landfall']);
     expect(kw.segments).toEqual([
-      { text: 'Landfall', token: true, kind: 'keyword', name: 'Landfall', status: 'wrong' },
+      { text: 'Landfall', token: true, kind: 'keyword', name: 'Landfall', nameText: 'Landfall', status: 'wrong' },
     ]);
     expect(byKey(compareCards(guess, target), 'oracle').correct).toEqual([
       'Whenever a land you control enters, you may draw a card.',
@@ -729,9 +731,9 @@ describe('compareCards — layout', () => {
     });
     const line = byKey(compareCards(split, makeCard({ oracle_text: 'Flying' })), 'oracle');
     expect(line.segments).toEqual([
-      { text: 'Flying', token: true, kind: 'oracle', status: 'correct' },
-      { sep: true, text: '//' },
-      { text: 'Vigilance', token: true, kind: 'oracle', status: 'wrong' },
+      { text: 'Flying', token: true, kind: 'oracle', nameText: '', tokens: ['Flying'], status: 'correct' },
+      { break: true },
+      { text: 'Vigilance', token: true, kind: 'oracle', nameText: '', tokens: ['Vigilance'], status: 'wrong' },
     ]);
   });
 
@@ -747,9 +749,9 @@ describe('compareCards — layout', () => {
     });
     const kw = byKey(compareCards(split, makeCard({ keywords: ['Flying'], oracle_text: 'Flying' })), 'keywords');
     expect(kw.segments).toEqual([
-      { text: 'Flying', token: true, kind: 'keyword', name: 'Flying', status: 'correct' },
+      { text: 'Flying', token: true, kind: 'keyword', name: 'Flying', nameText: 'Flying', status: 'correct' },
       { sep: true, text: '//' },
-      { text: 'Vigilance', token: true, kind: 'keyword', name: 'Vigilance', status: 'wrong' },
+      { text: 'Vigilance', token: true, kind: 'keyword', name: 'Vigilance', nameText: 'Vigilance', status: 'wrong' },
     ]);
   });
 });
@@ -844,7 +846,7 @@ describe('parseOracleText', () => {
   it('trims only the ends, preserving internal whitespace', () => {
     const { rules, segments } = parseOracleText('  Target player  draws a card.  ');
     expect(rules).toEqual(['Target player  draws a card.']);
-    expect(segments.map((s) => s.text).join('')).toBe('  Target player  draws a card.  ');
+    expect(segments[0].text).toBe('Target player  draws a card.');
   });
 
   it('drops pure-punctuation and too-short tokens', () => {
@@ -938,10 +940,19 @@ describe('parseOracleText', () => {
       .toEqual([{ text: 'Empower Jace 2', name: 'Empower Jace' }]);
   });
 
-  it('reconstructs the reminder-free source from its segments', () => {
+  it('reconstructs the reminder-free lines from its segments', () => {
     const text = 'Flying (This creature can\'t be blocked.)\nKicker {2} "quoted"';
     const { segments } = parseOracleText(text, ['Flying', 'Kicker']);
-    expect(segments.map((s) => s.text).join('')).toBe(stripReminderText(text));
+    const lines = segments.filter((s) => !s.break).map((s) => s.text);
+    expect(lines).toEqual(['Flying', 'Kicker {2} "quoted"']);
+  });
+
+  it('groups a quote-containing line into one display segment with split tokens', () => {
+    const text = 'I — This Saga gains "When you sacrifice a permanent, add {C}."';
+    const { segments, rules } = parseOracleText(text, []);
+    expect(segments.filter((s) => s.token).map((s) => s.text)).toEqual([text]);
+    expect(segments.find((s) => s.token).tokens).toEqual(rules);
+    expect(rules.some((t) => t.includes('"'))).toBe(false);
   });
 
   it('every emitted token is a verbatim substring of the reminder-free text', () => {
