@@ -30,9 +30,7 @@ precacheAndRoute(self.__WB_MANIFEST);
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
 self.addEventListener('message', (event) => {
-  const type = event.data && event.data.type;
-  if (type === 'SKIP_WAITING') self.skipWaiting();
-  if (type === 'GET_VERSION' && event.ports && event.ports[0]) {
+  if (event.data && event.data.type === 'GET_VERSION' && event.ports && event.ports[0]) {
     event.ports[0].postMessage(SW_VERSION);
   }
 });

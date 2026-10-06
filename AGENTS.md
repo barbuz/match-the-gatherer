@@ -183,10 +183,8 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
     app to the cached HTML shell (and thus the old hashed bundle) indefinitely —
     a deploy would appear not to take. Offline still works via
     `PrecacheFallbackPlugin({ fallbackURL: 'index.html' })` on that route.
-  - `main.js` polls `registration.update()` on focus/visibilitychange and
-    hourly, because browsers throttle SW update checks (Firefox up to 24h);
-    `autoUpdate` reloads once the new worker activates. Bump `APP_VERSION` on
-    every change so the SW bytes (and thus the update check) always differ.
+    The browser picks up a new worker on its own schedule and `autoUpdate`
+    reloads once it activates; no extra polling is done in `main.js`.
 
 
 
