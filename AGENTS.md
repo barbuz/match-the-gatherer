@@ -131,6 +131,12 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   the target. `GuessFeedback`/`GameBoard`/`ShareSummary` all pass `targetCard` so the
   score can be computed at render time (results rows no longer carry enough info).
 
+- Comparison rows are normalized in `comparison.js` `line()`: `segments` is the single
+  source of truth for display, and `correct`/`wrong` (the token lists `hints.js` and
+  share text consume) plus `status` are derived from the segments' statuses, so a row
+  builder only describes what it renders. Plain rows (layout, released, rarity, the
+  `—` placeholders) are just a single segment per value, so the UI has one render path.
+
 - Hints (`src/lib/game/hints.js`): `gatherHints()` distills every guess's feedback into a
   deduplicated minimal hint list; `buildScryfallSearchUrl()` turns it into a
   `https://scryfall.com/search/?q=...` link with clauses `t:`, `c:`, `layout:`,

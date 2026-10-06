@@ -458,49 +458,46 @@ function keywordTokens(card) {
   return out;
 }
 
-function line(key, label, status, correct, wrong, applicable, note, noteBold, segments) {
-  // Every row renders as an ordered segment list. Plain-value rows (layout,
-  // released, rarity, the `—` placeholders) pass no segments and are just one
-  // segment per value, so the UI has a single render path and one padding.
-  const segs = segments ?? [
-    ...correct.map((text) => ({ text, status: 'correct' })),
-    ...wrong.map((text) => ({ text, status: 'wrong' })),
-  ];
-  return {
-    key, label, status, correct, wrong, applicable,
-    ...(note ? { note } : {}),
-    ...(noteBold ? { noteBold } : {}),
-    segments: segs,
-  };
+/**
+ * Normalized row. `segments` is the single source of truth: `correct`/`wrong`
+ * (the token lists hints and share text consume) are derived from the segments'
+ * statuses, so every row builder just describes what it renders.
+ */
+function line(key, label, segments, extra = {}) {
+  const correct = [];
+  const wrong = [];
+  for (const seg of segments) {
+    if (seg.status !== 'correct' && seg.status !== 'wrong') continue;
+    const bucket = seg.status === 'correct' ? correct : wrong;
+    for (const t of seg.tokens ?? [seg.text]) {
+      if (t != null && !bucket.includes(t)) bucket.push(t);
+    }
+  }
+  const status = wrong.length === 0 ? 'correct' : 'wrong';
+  return { key, label, status, correct, wrong, applicable: true, segments, ...extra };
 }
 
 function colorLine(key, label, guessCard, targetCard) {
   const g = colorTokens(guessCard);
   const t = colorTokens(targetCard);
   if (g.length === 0 && t.length === 0) {
-    return line(key, label, 'correct', ['—'], [], true);
+    return line(key, label, [{ text: '—', status: 'correct' }]);
   }
   const targetSet = new Set(t);
-  const correct = g.filter((v) => targetSet.has(v));
-  const wrong = g.filter((v) => !targetSet.has(v));
-  const status = wrong.length === 0 ? 'correct' : 'wrong';
   const segments = joinFaces(facesOf(guessCard).map((f) => {
     const fc = (f.colors ?? []).length > 0 ? f.colors : [COLORLESS];
     return fc.map((c) => ({ text: c, status: targetSet.has(c) ? 'correct' : 'wrong' }));
   }));
-  return line(key, label, status, correct, wrong, true, undefined, undefined, segments);
+  return line(key, label, segments);
 }
 
 function typeLine(key, label, guessCard, targetCard) {
   const gTokens = typeTokens(guessCard);
   const tTokens = typeTokens(targetCard);
   if (gTokens.length === 0 && tTokens.length === 0) {
-    return line(key, label, 'correct', ['—'], [], true);
+    return line(key, label, [{ text: '—', status: 'correct' }]);
   }
   const targetSet = new Set(tTokens);
-  const correct = gTokens.filter((v) => targetSet.has(v));
-  const wrong = gTokens.filter((v) => !targetSet.has(v));
-  const status = wrong.length === 0 ? 'correct' : 'wrong';
   const segments = joinFaces(facesOf(guessCard).map((f) => {
     const parsed = parseTypeLine(f.type_line ?? '');
     const segs = [];
@@ -512,11 +509,10 @@ function typeLine(key, label, guessCard, targetCard) {
     }
     return segs;
   }));
-  return line(key, label, status, correct, wrong, true, undefined, undefined, segments);
+  return line(key, label, segments);
 }
 
 function manaLine(key, label, guessCard, targetCard) {
-  const g = manaCostTokens(guessCard);
   const t = manaCostTokens(targetCard);
   // Whole costs are judged as units:the negation hint and the share text need
   // the whole cost string,, so each face's cost renders as one segment — `//`-
@@ -528,9 +524,6 @@ function manaLine(key, label, guessCard, targetCard) {
   // identical whole cost, never asubset or a reordering of its symbols..
   const compare = (v) => v === NO_MANA_COST ? v : normalizeManaCost(v);
   const targetSet = new Set(t.map(compare));
-  const correct = g.filter((v) => targetSet.has(compare(v)));
-  const wrong = g.filter((v) => !targetSet.has(compare(v)));
-  const status = wrong.length === 0 ? 'correct' : 'wrong';
   const segments = [];
   const faces = facesOf(guessCard);
   for (let i = 0; i < faces.length; i++) {
@@ -545,7 +538,7 @@ function manaLine(key, label, guessCard, targetCard) {
   const mv = guessCard.cmc != null ? String(guessCard.cmc) : null;
   const mvStatus = mv == null ? null : String(targetCard.cmc) === mv ? 'correct' : 'wrong';
   const mvValue = { text: mv, status: mvStatus };
-  return { key, label, status, correct, wrong, applicable: true, mvValues: [mvValue], segments };
+  return { ...line(key, label, segments), mvValues: [mvValue] };
 }
 
 function statsLine(key, label, guessCard, targetCard) {
@@ -563,17 +556,8 @@ function statsLine(key, label, guessCard, targetCard) {
     if (t != null) segs.push({ text: t, status: tTough.has(statKey(t)) ? 'correct' : 'wrong' });
     return segs;
   }));
-  const values = segments.filter((s) => !s.slash && !s.sep);
-  const status = values.every((s) => s.status === 'correct') ? 'correct' : 'wrong';
-  const present = gPower.length + gTough.length;
-  return {
-    key, label, status,
-    correct: [],
-    wrong: [],
-    applicable: true,
-    segments,
-    ...(present > 0 && tPower.size === 0 && tTough.size === 0 ? { absentOnTarget: true } : {}),
-  };
+  const absent = gPower.length + gTough.length > 0 && tPower.size === 0 && tTough.size === 0;
+  return line(key, label, segments, absent ? { absentOnTarget: true } : {});
 }
 
 function scalarRow(key, label, guessCard, targetCard, targetKey) {
@@ -583,16 +567,11 @@ function scalarRow(key, label, guessCard, targetCard, targetKey) {
   // as the hint URL; defense has none, so its values compare raw.
   const keyOf = key === 'loyalty' ? statKey : (v) => `raw:${String(v)}`;
   const tSet = new Set(scalarTokens(targetCard, targetKey).map(keyOf));
-  const correct = g.filter((v) => tSet.has(keyOf(v)));
-  const wrong = g.filter((v) => !tSet.has(keyOf(v)));
-  const status = wrong.length === 0 ? 'correct' : 'wrong';
   const segments = joinFaces(facesOf(guessCard).map((f) => {
     const v = f[key];
     return v == null ? [] : [{ text: String(v), status: tSet.has(keyOf(v)) ? 'correct' : 'wrong' }];
   }));
-  const l = line(key, label, status, correct, wrong, true, undefined, undefined, segments);
-  if (tSet.size === 0) l.absentOnTarget = true;
-  return l;
+  return line(key, label, segments, tSet.size === 0 ? { absentOnTarget: true } : {});
 }
 
 /**
@@ -662,29 +641,22 @@ export function compareCards(guess, target) {
 
   const gLayout = guess.layout ?? 'normal';
   if (gLayout !== 'normal') {
-    results.push(
-      gLayout === (target.layout ?? 'normal')
-        ? line('layout', 'Layout', 'correct', [gLayout], [], true)
-        : line('layout', 'Layout', 'wrong', [], [gLayout], true)
-    );
+    results.push(line('layout', 'Layout', [{ text: gLayout, status: gLayout === (target.layout ?? 'normal') ? 'correct' : 'wrong' }]));
   }
 
   const sameDate = guess.released_at === target.released_at;
   const direction = sameDate ? undefined : guess.released_at < target.released_at ? 'newer' : 'older';
   results.push(
     line(
-      'released', 'First released', sameDate ? 'correct' : 'wrong',
-      sameDate ? [guess.released_at] : [],
-      sameDate ? [] : [guess.released_at],
-      true, direction ? `target is ${direction}` : undefined, direction
+      'released', 'First released',
+      [{ text: guess.released_at, status: sameDate ? 'correct' : 'wrong' }],
+      { note: direction ? `target is ${direction}` : undefined, noteBold: direction }
     )
   );
 
   const gRarity = String(guess.rarity ?? '').trim();
   results.push(
-    String(target.rarity ?? '').trim() === gRarity
-      ? line('rarity', 'Rarity', 'correct', [gRarity], [], true)
-      : line('rarity', 'Rarity', 'wrong', [], [gRarity], true)
+    line('rarity', 'Rarity', [{ text: gRarity, status: String(target.rarity ?? '').trim() === gRarity ? 'correct' : 'wrong' }])
   );
 
 
@@ -709,14 +681,11 @@ export function compareCards(guess, target) {
       )));
     }
     const ok = (k) => targetKeywords.has(k.name.toLocaleLowerCase());
-    const correct = gKeywords.filter(ok).map((k) => k.text);
-    const wrong = gKeywords.filter((k) => !ok(k)).map((k) => k.text);
     // Canonical names (lowercased) for `kw:` hints; the verbatim `text` is for
     // display only, since `kw:` matches by name and ignores parameters.
     const correctNames = gKeywords.filter(ok).map((k) => k.name.toLocaleLowerCase());
     const wrongNames = gKeywords.filter((k) => !ok(k)).map((k) => k.name.toLocaleLowerCase());
-    const status = wrong.length === 0 ? 'correct' : 'wrong';
-    results.push({ key: 'keywords', label: 'Keywords', status, correct, wrong, correctNames, wrongNames, applicable: true, segments });
+    results.push(line('keywords', 'Keywords', segments, { correctNames, wrongNames }));
   }
 
   // Oracle-text row: only the rules text (reminder spans and printed keywords
@@ -737,24 +706,20 @@ export function compareCards(guess, target) {
       .map((f) => stripReminderText(f.oracle_text ?? ''))
       .join('\n')
       .toLocaleLowerCase();
-    // correct/wrong carry the ORIGINAL-case tokens: `o:` matches literally, so
-    // lowercasing would break the verbatim-substring guarantee. Matching itself
-    // stays case-insensitive via the lowercased comparison text.
-    const correct = [];
-    const wrong = [];
+    // The tokens keep their ORIGINAL case: `o:` matches literally, so lowercasing
+    // would break the verbatim-substring guarantee. Matching itself stays
+    // case-insensitive via the lowercased comparison text.
     const segments = gSegs.map((s) => {
       const seg = { ...s };
       if (s.token) {
-        // Match and hint each quote-split piece, but colour the whole printed
-        // line by whether every piece matched.
+        // Match each quote-split piece, but colour the whole printed line by
+        // whether every piece matched.
         const ok = (s.tokens ?? [s.text]).every((t) => targetSearch.includes(t.toLocaleLowerCase()));
-        (ok ? correct : wrong).push(...(s.tokens ?? [s.text]));
         seg.status = ok ? 'correct' : 'wrong';
       }
       return seg;
     });
-    const status = wrong.length === 0 ? 'correct' : 'wrong';
-    results.push({ key: 'oracle', label: 'Oracle text', status, correct, wrong, applicable: true, segments });
+    results.push(line('oracle', 'Oracle text', segments));
   }
   return results;
 }
