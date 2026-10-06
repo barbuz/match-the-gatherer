@@ -56,15 +56,10 @@
                 <span class="val keyword-name {seg.status}">{seg.nameText}</span>{#if seg.nameText.length < seg.text.length}<span class="keyword-param">{seg.text.slice(seg.nameText.length)}</span>{/if}
               </span>
             {:else if seg.kind === 'oracle'}
-              <!-- One printed rules line = one compared token. The leading name
-                   (a keyword ability or mana cost) is muted: it is not part of
-                   the compared line and is already shown by the Keywords row. -->
-              <span class="token-line">
-                {#if seg.nameText}<span class="line-name">{seg.nameText}</span>{/if}
-                {#if seg.nameText.length < seg.text.length}
-                  <span class="val {seg.status}">{seg.text.slice(seg.nameText.length)}</span>
-                {/if}
-              </span>
+              <!-- One rules token = one compared chip. The leading name (a
+                   keyword ability or mana cost) is muted: it is not part of the
+                   compared token and is already shown by the Keywords row. -->
+              <span class="oracle-token">{#if seg.nameText}<span class="line-name">{seg.nameText}</span>{/if}{#if seg.nameText.length < seg.text.length}<span class="val {seg.status}">{seg.text.slice(seg.nameText.length)}</span>{/if}</span>
             {:else if seg.token}
               {#if $symbols && manaParts(seg.text)}
                 <span class="val mana {seg.status}">
@@ -214,30 +209,18 @@
     flex-basis: 100%;
     height: 0;
   }
-  /* Oracle text: one printed line per compared token, stacked as a dotted list
-     so it is clear the line — not each word — is the unit being compared. */
+  /* Oracle text: one chip per compared token. Tokens wrap within the value
+     column (not a dotted list), each drawn as a framed chip so the compared
+     unit — the clause, not each word — is clear. */
   .values.seg-values.oracle {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.15rem;
+    align-items: center;
   }
-  .values.seg-values.oracle .line-break {
-    display: none;
-  }
-  .values.seg-values.oracle .token-line {
-    position: relative;
-    padding-left: 0.85rem;
-  }
-  .values.seg-values.oracle .token-line::before {
-    content: '';
-    position: absolute;
-    left: 0.2rem;
-    top: 0.6em;
-    width: 0.28rem;
-    height: 0.28rem;
-    border-radius: 50%;
-    background: var(--muted);
+  .values.seg-values.oracle .oracle-token {
+    display: inline-flex;
+    align-items: baseline;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0 0.3rem;
   }
   .values.seg-values.oracle .val {
     padding: 0 0.15rem;
@@ -245,7 +228,7 @@
   .values.seg-values.oracle .val.mana {
     vertical-align: middle;
   }
-  /* The leading keyword name / mana cost is not part of the compared line (the
+  /* The leading keyword name / mana cost is not part of the compared token (the
      Keywords row already shows it), so it is muted. */
   .values.seg-values.oracle .line-name {
     color: var(--muted);

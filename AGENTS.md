@@ -52,22 +52,26 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   parseOracleText`) feeds both rows and the hint URL, so what the player sees
   marked is exactly what the search filters on. It strips reminder text, splits
   each face's `oracle_text` into a **Keywords** stream and an **Oracle text**
-  stream, and splits the rules text on newlines and on `"` (a quote inside a
-  token would make a quoted `o:"..."` clause malformed and Scryfall silently
-  drops it), keeps `{...}` mana symbols inline with the plain run, trims only the
-  ends, and drops tokens with no letter/digit or below a 2-char floor. Tokens are
-  therefore verbatim substrings of the stripped text (newlines removed).
+  stream, and splits the rules text into tokens at newlines, `:`, `.` and `"`
+  (`ruleLineTokens`). `{...}` mana symbols are **opaque** (a `.`/`:`/`"` inside
+  one never splits; Scryfall indexes braces literally, verified: `o:"Add {G}"`
+  matches Llanowar Elves while `o:"Add G"` matches nothing) and `[...]` spans are
+  kept whole. A `:`/`.` **stays on the token it ends** (`{T}:`, `Add {G}.`), a
+  `"` is **dropped** (a quote inside a token would make a quoted `o:"..."` clause
+  malformed and Scryfall silently drops it), and only the ends are trimmed.
+  Tokens with no letter/digit or below a 2-char floor are dropped, so every
+  token is a verbatim substring of the stripped text.
   - **Rendering = data.** Each display stream (`segments`, `keywordSegments`,
-    `rulesSegments`) holds one segment per printed line — a chip for a keyword,
-    the whole rules line for oracle text — with `{ break: true }` between lines.
+    `rulesSegments`) holds one segment per compared unit — a chip for a keyword,
+    one chip per rules **clause** — with `{ break: true }` between printed lines.
     A line whose keyword was removed therefore renders no blank row, and a
-    printed line break stays visible. An oracle segment carries `tokens` (the
-    quote-split pieces actually matched/hinted; the display `text` is the whole
-    line) and `nameText`, the leading keyword name or mana cost the UI **mutes**:
-    that prefix is not part of the compared line and is already shown by the
-    Keywords row. A keyword segment carries `nameText` (the canonical name) so
-    only the name is marked as the token, not its printed parameter. The Oracle
-    row renders as a dotted list so it is clear the *line* is the compared unit.
+    printed line break stays visible. An oracle segment carries `nameText`, the
+    leading keyword name or mana cost the UI **mutes**: that prefix is not part
+    of the compared token and is already shown by the Keywords row. A keyword
+    segment carries `nameText` (the canonical name) so only the name is marked as
+    the token, not its printed parameter. Both rows draw a **frame** around each
+    chip (the Oracle row wraps within the value column; it is no longer a dotted
+    list).
   - **Reminder text** (`(...)`, depth-aware so nested spans like `Super haste`
     are removed cleanly) is **ignored for matching** and never hinted. This is
     what lets the hints use `o:` instead of `fo:`: Scryfall's `o:` indexes the
@@ -90,9 +94,9 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   - Hints: the oracle row uses `o:"<token>"` (positive keeps the answer,
     `-o:"<token>"` excludes only literal occurrences); the keywords row uses
     `kw:<canonical-name>` (lowercased, from `card.keywords`). Because a guessed
-    whole line can sit inside a longer target line, the oracle row matches by
-    case-insensitive **substring** (mirroring `o:`) rather than whole-line
-    equality, so a contained line reads correct instead of emitting a `-o:` that
+    token can sit inside a longer target run, the oracle row matches by
+    case-insensitive **substring** (mirroring `o:`) rather than whole-token
+    equality, so a contained token reads correct instead of emitting a `-o:` that
     would exclude the answer. `compareCards`' `correct`/`wrong` carry the
     **original-case** token (matching stays case-insensitive), since `o:` is
     literal; the keywords row additionally carries `correctNames`/`wrongNames`

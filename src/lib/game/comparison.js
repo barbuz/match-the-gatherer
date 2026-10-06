@@ -174,6 +174,55 @@ function scalarTokens(card, key) {
 const ORACLE_HAS_ALNUM = /[\p{L}\p{N}]/u;
 const ORACLE_MIN_TOKEN = 2;
 
+/** End of a `{...}` mana symbol starting at `i`, or -1 when `i` is not a `{`. */
+function braceEnd(text, i) {
+  if (text[i] !== '{') return -1;
+  const close = text.indexOf('}', i + 1);
+  return close === -1 ? -1 : close + 1;
+}
+
+/**
+ * Split one rules line into tokens at `:`, `.`, and `"`, treating `{...}` mana
+ * symbols as opaque so a `.`/`:`/`"` inside one never splits. `[...]` spans are
+ * kept whole (Scryfall indexes cleave brackets under `o:`), and a `:`/`.`
+ * terminator stays on the token it ends, so every token is a verbatim substring
+ * of the reminder-free line. A `"` is dropped (it would break a quoted clause).
+ * Empty, too-short, and punctuation-only runs are dropped.
+ */
+function ruleLineTokens(line) {
+  const text = String(line ?? '');
+  const tokens = [];
+  let start = 0;
+  let i = 0;
+  const push = (end) => {
+    const piece = text.slice(start, end).trim();
+    if (piece.length >= ORACLE_MIN_TOKEN && ORACLE_HAS_ALNUM.test(piece)) tokens.push(piece);
+  };
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === '{') {
+      const end = braceEnd(text, i);
+      if (end !== -1) { i = end; continue; }
+    } else if (ch === '[') {
+      const close = text.indexOf(']', i + 1);
+      if (close !== -1) { i = close + 1; continue; }
+    } else if (ch === '"') {
+      // A quote inside a token would make a quoted `o:"…"` clause malformed and
+      // Scryfall silently drops it, so the quote is a delimiter that is dropped.
+      push(i);
+      start = i + 1;
+    } else if (ch === ':' || ch === '.') {
+      // Keep the terminator on the token it ends, so the compared string matches
+      // the literal text Scryfall indexes.
+      push(i + 1);
+      start = i + 1;
+    }
+    i += 1;
+  }
+  push(text.length);
+  return tokens;
+}
+
 /**
  * Keywords whose printed form may carry an alphabetic parameter after the name
  * (`Protection from red`, `Partner with Rory Williams`, `Enchant creature`,
@@ -326,18 +375,6 @@ function parseKeywordPrefix(line, vocab) {
   return { items, end: items[items.length - 1].end };
 }
 
-/** Tokens for one rules line: split on `"` (a quote inside a quoted clause would
- *  make Scryfall discard it) and drop empty, too-short, or punctuation-only
- *  runs. Every token stays a verbatim substring of the reminder-free line. */
-function ruleLineTokens(line) {
-  const tokens = [];
-  for (const piece of String(line ?? '').split('"')) {
-    const trimmed = piece.trim();
-    if (trimmed.length >= ORACLE_MIN_TOKEN && ORACLE_HAS_ALNUM.test(trimmed)) tokens.push(trimmed);
-  }
-  return tokens;
-}
-
 /**
  * Split one face's oracle text into the rules-text tokens and the printed
  * keyword spans shared by the feedback rows and the Scryfall hint search.
@@ -347,20 +384,21 @@ function ruleLineTokens(line) {
  * returned separately, verbatim (punctuation and parameters included): the
  * comma/semicolon-separated keyword list, ability words (`Landfall — …`), and
  * keyword costs (`Kicker {2}`, `Protection from red`). The remaining rules text
- * is split on newlines and on `"`, keeps `{...}` mana symbols inline, and trims
- * only the ends, so every rules token is a verbatim substring of the stripped
- * text — which is exactly what Scryfall's `o:` indexes.
+ * is split into tokens at newlines, `:`, `.`, and `"` (see `ruleLineTokens`),
+ * keeps `{...}` mana symbols and `[...]` spans opaque, and trims only the ends,
+ * so every rules token is a verbatim substring of the stripped text — which is
+ * exactly what Scryfall's `o:` indexes.
  *
  * Returns `{ rules, keywords, segments, keywordSegments, rulesSegments }`:
- * `rules` is the per-line rules tokens, `keywords` the `{ text, name }` printed
+ * `rules` is the ordered rules tokens, `keywords` the `{ text, name }` printed
  * keyword items, and the three `*segments` are display streams — `segments` the
  * full ordered display, `keywordSegments`/`rulesSegments` the Keywords and
- * Oracle-text rows separately. Each stream holds one segment per printed line (a
- * chip for a keyword, the whole rules line for oracle text) with `{ break: true }`
- * between lines, so a row never renders a blank line where a keyword was removed
+ * Oracle-text rows separately. A keyword chip is one segment per printed
+ * ability; each rules token is one segment, with `{ break: true }` between
+ * printed lines so a row never renders a blank line where a keyword was removed
  * and a printed line break is always visible. Oracle segments carry `nameText`,
  * the leading keyword name or mana cost the UI mutes (it is not part of the
- * compared line and is already shown by the Keywords row).
+ * compared token and is already shown by the Keywords row).
  */
 export function parseOracleText(text = '', keywords = []) {
   const vocab = Array.isArray(keywords) ? [...keywords].sort((a, b) => b.length - a.length) : [];
@@ -396,18 +434,15 @@ export function parseOracleText(text = '', keywords = []) {
     }
     const lineRules = ruleLineTokens(remainder);
     rules.push(...lineRules);
-    // Display segment is the whole printed line; `tokens` are the quote-split
-    // pieces actually matched/hinted, so a line containing `"` never yields a
-    // malformed `o:"…"` clause.
-    const lineOracle = lineRules.length > 0
-      ? [{
-          text: remainder.trim(),
-          token: true,
-          kind: 'oracle',
-          nameText: ruleNamePrefix(remainder.trim(), vocab),
-          tokens: lineRules,
-        }]
-      : [];
+    // One segment per token: the whole printed clause is the compared unit, so
+    // it is framed as a single chip. `ruleNamePrefix` mutes the leading keyword
+    // name / mana cost (not part of the compared token, already shown above).
+    const lineOracle = lineRules.map((t) => ({
+      text: t,
+      token: true,
+      kind: 'oracle',
+      nameText: ruleNamePrefix(t, vocab),
+    }));
 
     if (lineKeywords.length || lineOracle.length) {
       if (segments.length) segments.push({ break: true });
@@ -468,10 +503,9 @@ function line(key, label, segments, extra = {}) {
   const wrong = [];
   for (const seg of segments) {
     if (seg.status !== 'correct' && seg.status !== 'wrong') continue;
+    if (seg.text == null) continue;
     const bucket = seg.status === 'correct' ? correct : wrong;
-    for (const t of seg.tokens ?? [seg.text]) {
-      if (t != null && !bucket.includes(t)) bucket.push(t);
-    }
+    if (!bucket.includes(seg.text)) bucket.push(seg.text);
   }
   const status = wrong.length === 0 ? 'correct' : 'wrong';
   return { key, label, status, correct, wrong, applicable: true, segments, ...extra };
@@ -690,9 +724,9 @@ export function compareCards(guess, target) {
 
   // Oracle-text row: only the rules text (reminder spans and printed keywords
   // removed). `o:` is a case-insensitive substring match over that same text, so
-  // a guessed line is correct when it appears anywhere in the target's rules
-  // text. Matching this way keeps the negated hints sound: a line the target
-  // contains as part of a longer line must never emit a `-o:` that would exclude
+  // a guessed token is correct when it appears anywhere in the target's rules
+  // text. Matching this way keeps the negated hints sound: a token the target
+  // contains as part of a longer run must never emit a `-o:` that would exclude
   // the answer (e.g. guess "Flying" vs target "Flying, vigilance").
   const gSegs = [];
   for (const f of facesOf(guess)) {
@@ -709,16 +743,9 @@ export function compareCards(guess, target) {
     // The tokens keep their ORIGINAL case: `o:` matches literally, so lowercasing
     // would break the verbatim-substring guarantee. Matching itself stays
     // case-insensitive via the lowercased comparison text.
-    const segments = gSegs.map((s) => {
-      const seg = { ...s };
-      if (s.token) {
-        // Match each quote-split piece, but colour the whole printed line by
-        // whether every piece matched.
-        const ok = (s.tokens ?? [s.text]).every((t) => targetSearch.includes(t.toLocaleLowerCase()));
-        seg.status = ok ? 'correct' : 'wrong';
-      }
-      return seg;
-    });
+    const segments = gSegs.map((s) => (
+      s.token ? { ...s, status: targetSearch.includes(s.text.toLocaleLowerCase()) ? 'correct' : 'wrong' } : s
+    ));
     results.push(line('oracle', 'Oracle text', segments));
   }
   return results;

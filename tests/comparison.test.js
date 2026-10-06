@@ -401,7 +401,7 @@ describe('compareCards — release date and oracle text', () => {
     expect(byKey(same, 'released').status).toBe('correct');
   });
 
-  it('oracle text compares rules lines as verbatim tokens', () => {
+  it('oracle text compares rules clauses as verbatim tokens', () => {
     const guess = makeCard({ name: 'A', oracle_text: 'Target player draws a card.\nCycling' });
     const target = makeCard({ oracle_text: 'Target player draws a card.' });
     const results = compareCards(guess, target);
@@ -409,24 +409,25 @@ describe('compareCards — release date and oracle text', () => {
     expect(line).toMatchObject({ status: 'wrong', applicable: true });
     expect(line.correct).toEqual(['Target player draws a card.']);
     expect(line.wrong).toEqual(['Cycling']);
-    // One segment per printed line, separated by an explicit break (no blank
-    // line where a keyword was removed).
+    // One segment per compared clause, with an explicit break between printed
+    // lines (no blank line where a keyword was removed).
     expect(line.segments).toEqual([
-      { text: 'Target player draws a card.', token: true, kind: 'oracle', nameText: '', tokens: ['Target player draws a card.'], status: 'correct' },
+      { text: 'Target player draws a card.', token: true, kind: 'oracle', nameText: '', status: 'correct' },
       { break: true },
-      { text: 'Cycling', token: true, kind: 'oracle', nameText: '', tokens: ['Cycling'], status: 'wrong' },
+      { text: 'Cycling', token: true, kind: 'oracle', nameText: '', status: 'wrong' },
     ]);
   });
 
-  it('keeps braced symbols inline within a line token', () => {
+  it('splits a line at the colon, keeping braced symbols inline', () => {
     const guess = makeCard({ oracle_text: 'Add {G}: draw a card' });
     const target = makeCard({ oracle_text: 'Add {G}: draw a card' });
     const line = byKey(compareCards(guess, target), 'oracle');
     expect(line.status).toBe('correct');
-    expect(line.correct).toEqual(['Add {G}: draw a card']);
+    expect(line.correct).toEqual(['Add {G}:', 'draw a card']);
     expect(line.wrong).toEqual([]);
     expect(line.segments).toEqual([
-      { text: 'Add {G}: draw a card', token: true, kind: 'oracle', nameText: '', tokens: ['Add {G}: draw a card'], status: 'correct' },
+      { text: 'Add {G}:', token: true, kind: 'oracle', nameText: '', status: 'correct' },
+      { text: 'draw a card', token: true, kind: 'oracle', nameText: '', status: 'correct' },
     ]);
   });
 
@@ -435,7 +436,7 @@ describe('compareCards — release date and oracle text', () => {
     const target = makeCard({ oracle_text: 'Add {2}{W/U}: storm and more.' });
     const line = byKey(compareCards(guess, target), 'oracle');
     expect(line.status).toBe('correct');
-    expect(line.correct).toEqual(['ADD {2}{W/U}: STORM']);
+    expect(line.correct).toEqual(['ADD {2}{W/U}:', 'STORM']);
     expect(line.wrong).toEqual([]);
   });
 
@@ -557,7 +558,8 @@ describe('compareCards — keywords', () => {
     ]);
     // The ability's rules text stays in the oracle row (and matches the target).
     expect(byKey(compareCards(guess, target), 'oracle').correct).toEqual([
-      ', Discard this card: Draw a card.',
+      ', Discard this card:',
+      'Draw a card.',
     ]);
   });
 
@@ -603,7 +605,7 @@ describe('compareCards — keywords', () => {
     });
     const results = compareCards(card, card);
     expect(byKey(results, 'keywords')).toBeUndefined();
-    expect(byKey(results, 'oracle').correct).toEqual(['{5}{B}{G}: Monstrosity 4.']);
+    expect(byKey(results, 'oracle').correct).toEqual(['{5}{B}{G}:', 'Monstrosity 4.']);
   });
 });
 
@@ -731,9 +733,9 @@ describe('compareCards — layout', () => {
     });
     const line = byKey(compareCards(split, makeCard({ oracle_text: 'Flying' })), 'oracle');
     expect(line.segments).toEqual([
-      { text: 'Flying', token: true, kind: 'oracle', nameText: '', tokens: ['Flying'], status: 'correct' },
+      { text: 'Flying', token: true, kind: 'oracle', nameText: '', status: 'correct' },
       { break: true },
-      { text: 'Vigilance', token: true, kind: 'oracle', nameText: '', tokens: ['Vigilance'], status: 'wrong' },
+      { text: 'Vigilance', token: true, kind: 'oracle', nameText: '', status: 'wrong' },
     ]);
   });
 
@@ -838,9 +840,26 @@ describe('parseOracleText', () => {
       .toEqual(['Destroy target artifact.']);
   });
 
-  it('keeps braced mana symbols inline with the plain run', () => {
-    expect(rulesOf('{T}: Add {G}.')).toEqual(['{T}: Add {G}.']);
+  it('splits on the colon and keeps braced mana symbols opaque', () => {
+    expect(rulesOf('{T}: Add {G}.')).toEqual(['{T}:', 'Add {G}.']);
     expect(rulesOf('Add {2}{W/U}')).toEqual(['Add {2}{W/U}']);
+  });
+
+  it('splits on the sentence period, keeping it on the token it ends', () => {
+    expect(rulesOf('Draw a card. Discard a card.'))
+      .toEqual(['Draw a card.', 'Discard a card.']);
+  });
+
+  it('keeps square-bracket spans opaque', () => {
+    expect(rulesOf('Add {C} [note, with: punctuation.]')).toEqual(['Add {C} [note, with: punctuation.]']);
+  });
+
+  it('mutes a leading mana-cost name on the token it starts', () => {
+    const { segments } = parseOracleText('{T}: Add {G}.', []);
+    expect(segments.filter((s) => s.token)).toEqual([
+      { text: '{T}:', token: true, kind: 'oracle', nameText: '{T}' },
+      { text: 'Add {G}.', token: true, kind: 'oracle', nameText: '' },
+    ]);
   });
 
   it('trims only the ends, preserving internal whitespace', () => {
@@ -900,7 +919,7 @@ describe('parseOracleText', () => {
       ['Channel'],
     );
     expect(channel.keywords).toEqual([{ text: 'Channel — {6}', name: 'Channel' }]);
-    expect(channel.rules).toEqual([', Discard this card: Draw a card.']);
+    expect(channel.rules).toEqual([', Discard this card:', 'Draw a card.']);
   });
 
   it('extracts text-parameter keywords', () => {
@@ -947,11 +966,14 @@ describe('parseOracleText', () => {
     expect(lines).toEqual(['Flying', 'Kicker {2} "quoted"']);
   });
 
-  it('groups a quote-containing line into one display segment with split tokens', () => {
+  it('frames each clause as its own segment; a quote-split line yields several', () => {
     const text = 'I — This Saga gains "When you sacrifice a permanent, add {C}."';
     const { segments, rules } = parseOracleText(text, []);
-    expect(segments.filter((s) => s.token).map((s) => s.text)).toEqual([text]);
-    expect(segments.find((s) => s.token).tokens).toEqual(rules);
+    expect(segments.filter((s) => s.token).map((s) => s.text)).toEqual([
+      'I — This Saga gains',
+      'When you sacrifice a permanent, add {C}.',
+    ]);
+    expect(segments.filter((s) => s.token).map((s) => s.text)).toEqual(rules);
     expect(rules.some((t) => t.includes('"'))).toBe(false);
   });
 

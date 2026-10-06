@@ -36,7 +36,7 @@ describe('scoreGuess', () => {
     expect(scoreGuess(a, b).ratio).toBeCloseTo(1);
   });
 
-  it('scores oracle text at line granularity: distinct lines share no token', () => {
+  it('scores oracle text at token granularity: distinct lines share no token', () => {
     const a = { ...target, oracle_text: 'Flying' };
     const b = { ...target, oracle_text: 'Vigilance' };
     // mana + colors + type match (3); oracle is the only mismatched property
@@ -44,10 +44,17 @@ describe('scoreGuess', () => {
     expect(scoreGuess(a, b).ratio).toBeCloseTo(3 / 4);
   });
 
-  it('gives oracle partial credit for a shared line', () => {
+  it('gives oracle partial credit for a shared token', () => {
     const a = { ...target, oracle_text: 'Flying\nVigilance' };
     const b = { ...target, oracle_text: 'Flying\nTrample' };
-    // oracle: 1 shared line over 4 → 0.5; mana/colors/type match → (1+1+1+0.5)/4.
+    // oracle: 1 shared token over 4 → 0.5; mana/colors/type match → (1+1+1+0.5)/4.
+    expect(scoreGuess(a, b).ratio).toBeCloseTo((1 + 1 + 1 + 0.5) / 4);
+  });
+
+  it('scores oracle text per clause, so a shared clause earns credit', () => {
+    const a = { ...target, oracle_text: 'Flying. Vigilance.' };
+    const b = { ...target, oracle_text: 'Flying. Trample.' };
+    // Two clause tokens each; the shared `Flying.` is 1 over 4 → 0.5.
     expect(scoreGuess(a, b).ratio).toBeCloseTo((1 + 1 + 1 + 0.5) / 4);
   });
 
