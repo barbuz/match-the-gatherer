@@ -150,15 +150,17 @@
     flex-direction: column;
     gap: 0.2rem;
   }
+  /* No wrap here: the value block must stay in its own column next to the
+     label, so a long row (keywords, oracle) wraps internally and stays
+     indented rather than dropping below the label at the container edge. */
   .line {
     display: flex;
-    flex-wrap: wrap;
     align-items: baseline;
     gap: 0.4rem;
     font-size: 0.8rem;
   }
   .prop-label {
-    min-width: 7.5rem;
+    flex: 0 0 7.5rem;
     color: var(--muted);
   }
   .prop-label.absent {
@@ -166,13 +168,16 @@
     text-decoration: line-through;
   }
   .mv-label {
-    min-width: 0;
+    flex: 0 0 auto;
     margin-left: 0.5rem;
   }
   .values {
     display: flex;
     flex-wrap: wrap;
     gap: 0.25rem;
+    /* Let the block shrink below its content width so it wraps internally
+       instead of pushing the row wider than the container. */
+    min-width: 0;
   }
   .val {
     border-radius: 4px;
