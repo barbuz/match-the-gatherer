@@ -56,10 +56,10 @@
                 <span class="val keyword-name {seg.status}">{seg.nameText}</span>{#if seg.nameText.length < seg.text.length}<span class="keyword-param">{seg.text.slice(seg.nameText.length)}</span>{/if}
               </span>
             {:else if seg.kind === 'oracle'}
-              <!-- One rules token = one compared chip. The leading name (a
-                   keyword ability or mana cost) is muted: it is not part of the
-                   compared token and is already shown by the Keywords row. -->
-              <span class="oracle-token">{#if seg.nameText}<span class="line-name">{seg.nameText}</span>{/if}{#if seg.nameText.length < seg.text.length}<span class="val {seg.status}">{seg.text.slice(seg.nameText.length)}</span>{/if}</span>
+              <!-- One rules token = one compared chip, rendered verbatim: quotes
+                   and `{...}` braces keep their printed position and get no
+                   special highlight — only the whole chip is marked by status. -->
+              <span class="oracle-token {seg.status}">{seg.text}</span>
             {:else if seg.token}
               {#if $symbols && manaParts(seg.text)}
                 <span class="val mana {seg.status}">
@@ -232,17 +232,14 @@
     -webkit-box-decoration-break: slice;
     box-decoration-break: slice;
   }
-  .values.seg-values.oracle .val {
-    padding: 0 0.15rem;
+  /* Status colour/background on the chip itself so it fills the frame padding. */
+  .values.seg-values.oracle .oracle-token.correct {
+    background: var(--ok-bg);
+    color: var(--ok-fg);
   }
-  .values.seg-values.oracle .val.mana {
-    vertical-align: middle;
-  }
-  /* The leading keyword name / mana cost is not part of the compared token (the
-     Keywords row already shows it), so it is muted. */
-  .values.seg-values.oracle .line-name {
-    color: var(--muted);
-    opacity: 0.7;
+  .values.seg-values.oracle .oracle-token.wrong {
+    color: var(--bad-fg);
+    text-decoration: line-through;
   }
   /* Mana rows phrase per-face costs in order, `//` between faces. */
   .values.seg-values.mana {

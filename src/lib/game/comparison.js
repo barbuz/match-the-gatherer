@@ -182,22 +182,24 @@ function braceEnd(text, i) {
 }
 
 /**
- * Split one rules line into tokens at `:`, `.`, and `"`, treating `{...}` mana
- * symbols as opaque so a `.`/`:`/`"` inside one never splits. `[...]` spans are
- * kept whole (Scryfall indexes cleave brackets under `o:`), and a `:`/`.`
- * terminator stays on the token it ends, so every token is a verbatim substring
- * of the reminder-free line. A `"` is dropped (it would break a quoted clause).
- * Empty, too-short, and punctuation-only runs are dropped.
+ * Split one rules line into display segments at `:`, `.`, and `"`, treating
+ * `{...}` mana symbols as opaque so a `.`/`:`/`"` inside one never splits.
+ * `[...]` spans are kept whole (Scryfall indexes cleave brackets under `o:`).
+ *
+ * Each segment carries the printed `text` (quotes kept, attached to the token
+ * they bound) and the `token` actually compared/hinted: quotes are dropped from
+ * the token (a quote inside a quoted `o:"…"` clause would make Scryfall silently
+ * drop it), while a `:`/`.` terminator stays on the token it ends so the token
+ * matches the literal text Scryfall indexes. Segments whose token is empty, too
+ * short, or punctuation-only are dropped.
  */
 function ruleLineTokens(line) {
   const text = String(line ?? '');
-  const tokens = [];
+  // Atoms are either a text run or a dropped quote marker carrying its index.
+  const atoms = [];
   let start = 0;
   let i = 0;
-  const push = (end) => {
-    const piece = text.slice(start, end).trim();
-    if (piece.length >= ORACLE_MIN_TOKEN && ORACLE_HAS_ALNUM.test(piece)) tokens.push(piece);
-  };
+  const flush = (end) => atoms.push({ text: text.slice(start, end).trim() });
   while (i < text.length) {
     const ch = text[i];
     if (ch === '{') {
@@ -207,20 +209,45 @@ function ruleLineTokens(line) {
       const close = text.indexOf(']', i + 1);
       if (close !== -1) { i = close + 1; continue; }
     } else if (ch === '"') {
-      // A quote inside a token would make a quoted `o:"…"` clause malformed and
-      // Scryfall silently drops it, so the quote is a delimiter that is dropped.
-      push(i);
+      flush(i);
+      atoms.push({ quote: true, at: i });
       start = i + 1;
     } else if (ch === ':' || ch === '.') {
-      // Keep the terminator on the token it ends, so the compared string matches
-      // the literal text Scryfall indexes.
-      push(i + 1);
+      flush(i + 1);
       start = i + 1;
     }
     i += 1;
   }
-  push(text.length);
-  return tokens;
+  flush(text.length);
+
+  // Keep each quote visible at its printed position: an opening quote (after
+  // whitespace or the line start) prefixes the next run; a closing quote suffixes
+  // the previous one. A quote with no run on the needed side falls back.
+  const neighbour = (qi, step) => {
+    for (let j = qi + step; j >= 0 && j < atoms.length; j += step) {
+      if (!atoms[j].quote && atoms[j].text !== '') return atoms[j];
+    }
+    return null;
+  };
+  for (let qi = 0; qi < atoms.length; qi++) {
+    const q = atoms[qi];
+    if (!q.quote) continue;
+    const opening = q.at === 0 || /\s/.test(text[q.at - 1]);
+    const before = neighbour(qi, -1);
+    const after = neighbour(qi, 1);
+    if (opening && after) after.text = '"' + after.text;
+    else if (!opening && before) before.text += '"';
+    else if (after) after.text = '"' + after.text;
+    else if (before) before.text += '"';
+  }
+
+  const out = [];
+  for (const a of atoms) {
+    if (a.quote) continue;
+    const token = a.text.replace(/"/g, '').trim();
+    if (token.length >= ORACLE_MIN_TOKEN && ORACLE_HAS_ALNUM.test(token)) out.push({ text: a.text, token });
+  }
+  return out;
 }
 
 /**
@@ -320,24 +347,6 @@ function matchKeywordAt(text, vocab) {
   return null;
 }
 
-/** A leading run of `{...}` mana symbols, e.g. the cost in `{T}: Add {G}.` or
- *  `{2}{R}: …`. Used only to mute the cost part of a rules line, never to match. */
-const MANA_COST_PREFIX = /^(?:\{[^}]*\})+/;
-
-/**
- * The leading "name" of a rules line — the part a reader scans first: a
- * keyword-ability name or a mana-cost run. Display-only: the whole line is still
- * one compared token, but muting just this prefix makes the compared unit
- * legible (the name was already shown by the Keywords row).
- */
-function ruleNamePrefix(text, vocab = []) {
-  const kw = matchKeywordAt(text, vocab);
-  if (kw) return text.slice(0, kw.end);
-  const m = text.match(MANA_COST_PREFIX);
-  if (m) return m[0];
-  return '';
-}
-
 /**
  * Consume a leading keyword occurrence from one reminder-free line. Handles an
  * ability-word prefix (`Landfall — …`, but not a keyword cost like
@@ -396,9 +405,9 @@ function parseKeywordPrefix(line, vocab) {
  * Oracle-text rows separately. A keyword chip is one segment per printed
  * ability; each rules token is one segment, with `{ break: true }` between
  * printed lines so a row never renders a blank line where a keyword was removed
- * and a printed line break is always visible. Oracle segments carry `nameText`,
- * the leading keyword name or mana cost the UI mutes (it is not part of the
- * compared token and is already shown by the Keywords row).
+ * and a printed line break is always visible. Oracle segments carry the printed
+ * `text` (quotes and braces verbatim) and the `oracleToken` compared/hinted
+ * (quotes dropped); the UI marks the whole chip, with no per-part muting.
  */
 export function parseOracleText(text = '', keywords = []) {
   const vocab = Array.isArray(keywords) ? [...keywords].sort((a, b) => b.length - a.length) : [];
@@ -433,15 +442,15 @@ export function parseOracleText(text = '', keywords = []) {
       remainder = line.slice(parsed.end);
     }
     const lineRules = ruleLineTokens(remainder);
-    rules.push(...lineRules);
+    rules.push(...lineRules.map((r) => r.token));
     // One segment per token: the whole printed clause is the compared unit, so
-    // it is framed as a single chip. `ruleNamePrefix` mutes the leading keyword
-    // name / mana cost (not part of the compared token, already shown above).
-    const lineOracle = lineRules.map((t) => ({
-      text: t,
+    // it is framed as a single chip. The printed text (quotes included) is shown
+    // verbatim; the compared/hinted token drops the quotes.
+    const lineOracle = lineRules.map((r) => ({
+      text: r.text,
       token: true,
       kind: 'oracle',
-      nameText: ruleNamePrefix(t, vocab),
+      oracleToken: r.token,
     }));
 
     if (lineKeywords.length || lineOracle.length) {
@@ -503,9 +512,12 @@ function line(key, label, segments, extra = {}) {
   const wrong = [];
   for (const seg of segments) {
     if (seg.status !== 'correct' && seg.status !== 'wrong') continue;
-    if (seg.text == null) continue;
+    // `oracleToken` is the compared/hinted value (quotes dropped); `text` is the
+    // verbatim display string (quotes kept). For every other row they coincide.
+    const value = seg.oracleToken ?? seg.text;
+    if (value == null) continue;
     const bucket = seg.status === 'correct' ? correct : wrong;
-    if (!bucket.includes(seg.text)) bucket.push(seg.text);
+    if (!bucket.includes(value)) bucket.push(value);
   }
   const status = wrong.length === 0 ? 'correct' : 'wrong';
   return { key, label, status, correct, wrong, applicable: true, segments, ...extra };
@@ -742,9 +754,10 @@ export function compareCards(guess, target) {
       .toLocaleLowerCase();
     // The tokens keep their ORIGINAL case: `o:` matches literally, so lowercasing
     // would break the verbatim-substring guarantee. Matching itself stays
-    // case-insensitive via the lowercased comparison text.
+    // case-insensitive via the lowercased comparison text. `oracleToken` (quotes
+    // dropped) is compared; `text` (quotes kept) is only for display.
     const segments = gSegs.map((s) => (
-      s.token ? { ...s, status: targetSearch.includes(s.text.toLocaleLowerCase()) ? 'correct' : 'wrong' } : s
+      s.token ? { ...s, status: targetSearch.includes((s.oracleToken ?? s.text).toLocaleLowerCase()) ? 'correct' : 'wrong' } : s
     ));
     results.push(line('oracle', 'Oracle text', segments));
   }

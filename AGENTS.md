@@ -56,22 +56,28 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   (`ruleLineTokens`). `{...}` mana symbols are **opaque** (a `.`/`:`/`"` inside
   one never splits; Scryfall indexes braces literally, verified: `o:"Add {G}"`
   matches Llanowar Elves while `o:"Add G"` matches nothing) and `[...]` spans are
-  kept whole. A `:`/`.` **stays on the token it ends** (`{T}:`, `Add {G}.`), a
-  `"` is **dropped** (a quote inside a token would make a quoted `o:"..."` clause
-  malformed and Scryfall silently drops it), and only the ends are trimmed.
+  kept whole. A `:`/`.` **stays on the token it ends** (`{T}:`, `Add {G}.`); a
+  `"` splits but is **kept in the printed display text**, attached to the token
+  it bounds (an opening quote prefixes the next run, a closing quote suffixes the
+  previous one) so quotes read in their original position. The compared/hinted
+  token (`oracleToken`) **drops** the quotes — a quote inside a quoted `o:"..."` 
+  clause would make Scryfall silently drop it. Only the ends are trimmed.
   Tokens with no letter/digit or below a 2-char floor are dropped, so every
-  token is a verbatim substring of the stripped text.
+  compared token is a verbatim substring of the stripped text.
   - **Rendering = data.** Each display stream (`segments`, `keywordSegments`,
     `rulesSegments`) holds one segment per compared unit ŌĆö a chip for a keyword,
     one chip per rules **clause** ŌĆö with `{ break: true }` between printed lines.
     A line whose keyword was removed therefore renders no blank row, and a
-    printed line break stays visible. An oracle segment carries `nameText`, the
-    leading keyword name or mana cost the UI **mutes**: that prefix is not part
-    of the compared token and is already shown by the Keywords row. A keyword
-    segment carries `nameText` (the canonical name) so only the name is marked as
-    the token, not its printed parameter. Both rows draw a **frame** around each
-    chip (the Oracle row wraps within the value column; it is no longer a dotted
-    list). Oracle chips are `display: inline` with `box-decoration-break: slice`,
+    printed line break stays visible. An oracle segment carries `text` (verbatim
+    display: quotes and `{...}` braces in place) and `oracleToken` (the compared
+    value, quotes dropped). There is **no per-part muting**: a keyword that
+    appears mid-rules-text (e.g. `Proliferate`) or a brace run (`{T}`) is an
+    ordinary literal inside its clause chip and gets no distinct highlight — only
+    the whole chip is marked by status. A keyword segment carries `nameText` (the
+    canonical name) so only the name is marked as the token, not its printed
+    parameter; that muting is Keywords-row only. Both rows draw a **frame**
+    around each chip (the Oracle row wraps within the value column; it is no
+    longer a dotted list). Oracle chips are `display: inline` with `box-decoration-break: slice`,
     so a token that wraps is framed **per line** — top/bottom on every line, the
     left edge only on the first fragment and the right only on the last — and the
     next token can continue on the same line. (The row is a block, not flex, so
