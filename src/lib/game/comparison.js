@@ -459,11 +459,18 @@ function keywordTokens(card) {
 }
 
 function line(key, label, status, correct, wrong, applicable, note, noteBold, segments) {
+  // Every row renders as an ordered segment list. Plain-value rows (layout,
+  // released, rarity, the `—` placeholders) pass no segments and are just one
+  // segment per value, so the UI has a single render path and one padding.
+  const segs = segments ?? [
+    ...correct.map((text) => ({ text, status: 'correct' })),
+    ...wrong.map((text) => ({ text, status: 'wrong' })),
+  ];
   return {
     key, label, status, correct, wrong, applicable,
     ...(note ? { note } : {}),
     ...(noteBold ? { noteBold } : {}),
-    ...(segments ? { segments } : {}),
+    segments: segs,
   };
 }
 

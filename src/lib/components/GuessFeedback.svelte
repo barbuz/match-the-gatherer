@@ -37,87 +37,60 @@
     {#each entry.results as r (r.key)}
       <div class="line {r.status}">
         <span class="prop-label" class:absent={r.absentOnTarget}>{r.label}</span>
-        {#if r.segments}
-          <span class="values seg-values" class:mana={r.key === 'mana'} class:oracle={r.key === 'oracle'} class:keywords={r.key === 'keywords'}>
-            {#each r.segments as seg, i (i)}
-              {#if seg.break}
-                <span class="line-break" aria-hidden="true"></span>
-              {:else if seg.dash}
-                <span class="dash">—</span>
-              {:else if seg.slash}
-                <span class="pt-sep">/</span>
-              {:else if seg.sep}
-                <span class="sep">//</span>
-              {:else if seg.kind === 'keyword'}
-                <!-- Keyword abilities render verbatim (punctuation and parameters
-                     included), never symbol-substituted, so the row reads exactly
-                     as printed on the card. Only the canonical name is the
-                     compared token, so the parameter stays muted. -->
-                <span class="keyword">
-                  <span class="val keyword-name {seg.status}">{seg.nameText}</span>{#if seg.nameText.length < seg.text.length}<span class="keyword-param">{seg.text.slice(seg.nameText.length)}</span>{/if}
-                </span>
-              {:else if seg.kind === 'oracle'}
-                <!-- One printed rules line = one compared token. The leading name
-                     (a keyword ability or mana cost) is muted: it is not part of
-                     the compared line and is already shown by the Keywords row. -->
-                <span class="token-line">
-                  {#if seg.nameText}<span class="line-name">{seg.nameText}</span>{/if}
-                  {#if seg.nameText.length < seg.text.length}
-                    <span class="val {seg.status}">{seg.text.slice(seg.nameText.length)}</span>
-                  {/if}
-                </span>
-              {:else if seg.token}
-                {#if $symbols && manaParts(seg.text)}
-                  <span class="val mana {seg.status}">
-                    {#each manaParts(seg.text) as p, pi (pi)}
-                      <img class="mana-img" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
-                    {/each}
-                  </span>
-                {:else}
-                  <span class="val {seg.status}">{seg.text}</span>
+        <span class="values seg-values" class:mana={r.key === 'mana'} class:oracle={r.key === 'oracle'} class:keywords={r.key === 'keywords'}>
+          {#each r.segments as seg, i (i)}
+            {#if seg.break}
+              <span class="line-break" aria-hidden="true"></span>
+            {:else if seg.dash}
+              <span class="dash">—</span>
+            {:else if seg.slash}
+              <span class="pt-sep">/</span>
+            {:else if seg.sep}
+              <span class="sep">//</span>
+            {:else if seg.kind === 'keyword'}
+              <!-- Keyword abilities render verbatim (punctuation and parameters
+                   included), never symbol-substituted, so the row reads exactly
+                   as printed on the card. Only the canonical name is the
+                   compared token, so the parameter stays muted. -->
+              <span class="keyword">
+                <span class="val keyword-name {seg.status}">{seg.nameText}</span>{#if seg.nameText.length < seg.text.length}<span class="keyword-param">{seg.text.slice(seg.nameText.length)}</span>{/if}
+              </span>
+            {:else if seg.kind === 'oracle'}
+              <!-- One printed rules line = one compared token. The leading name
+                   (a keyword ability or mana cost) is muted: it is not part of
+                   the compared line and is already shown by the Keywords row. -->
+              <span class="token-line">
+                {#if seg.nameText}<span class="line-name">{seg.nameText}</span>{/if}
+                {#if seg.nameText.length < seg.text.length}
+                  <span class="val {seg.status}">{seg.text.slice(seg.nameText.length)}</span>
                 {/if}
-              {:else if seg.status}
-                <span class="val {seg.status}">{seg.text}</span>
+              </span>
+            {:else if seg.token}
+              {#if $symbols && manaParts(seg.text)}
+                <span class="val mana {seg.status}">
+                  {#each manaParts(seg.text) as p, pi (pi)}
+                    <img class="mana-img" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
+                  {/each}
+                </span>
               {:else}
-                <span class="plain">{seg.text}</span>
+                <span class="val {seg.status}">{seg.text}</span>
               {/if}
+            {:else if seg.status}
+              <span class="val {seg.status}">{seg.text}</span>
+            {:else}
+              <span class="plain">{seg.text}</span>
+            {/if}
+          {/each}
+          {#if r.mvValues}
+            {#each r.mvValues as mv, i (i)}
+              {#if i > 0}
+                <span class="pt-sep">,</span>
+              {/if}
+              <span class="prop-label mv-label">MV</span>
+              <span class="val {mv.status}">{mv.text}</span>
             {/each}
-            {#if r.mvValues}
-              {#each r.mvValues as mv, i (i)}
-                {#if i > 0}
-                  <span class="pt-sep">,</span>
-                {/if}
-                <span class="prop-label mv-label">MV</span>
-                <span class="val {mv.status}">{mv.text}</span>
-              {/each}
-            {/if}
-          </span>
-        {:else}
-          <span class="values">
-            {#each r.correct as v}
-            {#if $symbols && manaParts(v)}
-              <span class="val mana correct">
-                {#each manaParts(v) as p, i (i)}
-                  <img class="mana-img" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
-                {/each}
-              </span>
-            {:else}
-              <span class="val correct">{v}</span>
-            {/if}
-          {/each}
-          {#each r.wrong as v}
-            {#if $symbols && manaParts(v)}
-              <span class="val mana wrong">
-                {#each manaParts(v) as p, i (i)}
-                  <img class="mana-img" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
-                {/each}
-              </span>
-            {:else}
-              <span class="val wrong">{v}</span>
-            {/if}
-          {/each}
+          {/if}
         </span>
-        {/if}
         {#if r.note}
           <span class="note">
             {#if r.noteBold}
@@ -181,7 +154,6 @@
   }
   .val {
     border-radius: 4px;
-    padding: 0 0.3rem;
   }
   .val.correct {
     background: var(--ok-bg);
@@ -230,12 +202,6 @@
     align-items: baseline;
   }
   .values.seg-values .val {
-    padding: 0 0.1rem;
-  }
-  /* Plain value rows (First released, Rarity, Layout) would otherwise use the
-     roomier generic .val padding and read as more indented than the segmented
-     rows; match the segmented padding so every value starts in one column. */
-  .values:not(.seg-values) .val {
     padding: 0 0.1rem;
   }
   .values.seg-values .dash, .values.seg-values .pt-sep, .values.seg-values .sep {

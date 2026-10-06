@@ -964,3 +964,40 @@ describe('parseOracleText', () => {
     }
   });
 });
+
+describe('compareCards — every row is segmented', () => {
+  it('plain-value rows (layout, released, rarity, placeholders) carry one segment per value', () => {
+    // The UI renders a single segment list for every row, so a plain row must
+    // not rely on the legacy `correct`/`wrong` arrays for display.
+    const dfc = makeCard({
+      name: 'A // B',
+      layout: 'transform',
+      rarity: 'mythic',
+      released_at: '2019-05-05',
+      card_faces: [
+        { name: 'A', mana_cost: '{1}{G}', colors: ['G'], type_line: 'Creature — Human', power: '2', toughness: '2' },
+        { name: 'B', mana_cost: '', colors: ['G'], type_line: 'Creature — Beast', power: '4', toughness: '4' },
+      ],
+      power: undefined,
+      toughness: undefined,
+    });
+    const target = makeCard({ rarity: 'rare', released_at: '2020-06-01' });
+    const results = compareCards(dfc, target);
+    for (const r of results) {
+      expect(Array.isArray(r.segments)).toBe(true);
+      expect(r.segments.length).toBeGreaterThan(0);
+    }
+    const released = byKey(results, 'released');
+    expect(released.segments).toEqual([{ text: '2019-05-05', status: 'wrong' }]);
+    expect(byKey(results, 'rarity').segments).toEqual([{ text: 'mythic', status: 'wrong' }]);
+    expect(byKey(results, 'layout').segments).toEqual([{ text: 'transform', status: 'wrong' }]);
+  });
+
+  it('placeholder rows (no type tokens) render the em-dash as a segment', () => {
+    const results = compareCards(
+      makeCard({ type_line: '' }),
+      makeCard({ type_line: '' }),
+    );
+    expect(byKey(results, 'type').segments).toEqual([{ text: '—', status: 'correct' }]);
+  });
+});
