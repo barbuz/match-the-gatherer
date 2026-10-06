@@ -232,6 +232,12 @@
   .values.seg-values .val {
     padding: 0 0.1rem;
   }
+  /* Plain value rows (First released, Rarity, Layout) would otherwise use the
+     roomier generic .val padding and read as more indented than the segmented
+     rows; match the segmented padding so every value starts in one column. */
+  .values:not(.seg-values) .val {
+    padding: 0 0.1rem;
+  }
   .values.seg-values .dash, .values.seg-values .pt-sep, .values.seg-values .sep {
     padding: 0 0.25rem;
     color: var(--muted);
