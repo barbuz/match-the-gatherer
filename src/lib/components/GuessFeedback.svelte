@@ -209,18 +209,28 @@
     flex-basis: 100%;
     height: 0;
   }
-  /* Oracle text: one chip per compared token. Tokens wrap within the value
-     column (not a dotted list), each drawn as a framed chip so the compared
-     unit — the clause, not each word — is clear. */
+  /* Oracle text: one chip per compared token. Chips are inline so a token that
+     wraps is fragmented per line (`box-decoration-break: slice`): each line
+     gets top/bottom borders, the left border only on the first fragment and the
+     right only on the last, so a wrapped chip reads as an open-sided frame that
+     the next token can follow on the same line. The row is a block (not flex)
+     so the chips live in an inline formatting context and can fragment. */
   .values.seg-values.oracle {
-    align-items: center;
+    display: block;
+    line-height: 1.6;
+  }
+  .values.seg-values.oracle .line-break {
+    display: block;
+    height: 0;
   }
   .values.seg-values.oracle .oracle-token {
-    display: inline-flex;
-    align-items: baseline;
+    display: inline;
     border: 1px solid var(--border);
     border-radius: 4px;
-    padding: 0 0.3rem;
+    padding: 0.05rem 0.3rem;
+    margin: 0 0.1rem 0 0;
+    -webkit-box-decoration-break: slice;
+    box-decoration-break: slice;
   }
   .values.seg-values.oracle .val {
     padding: 0 0.15rem;
