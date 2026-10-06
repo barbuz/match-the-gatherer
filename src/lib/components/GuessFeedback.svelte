@@ -278,15 +278,11 @@
   .values.seg-values.mana {
     align-items: center;
   }
-  /* Keyword abilities: one chip per printed span, verbatim. Only the canonical
-     name is the compared token (highlighted); the parameter stays muted. */
+  /* Keyword abilities: one span per printed ability, verbatim. Only the canonical
+     name is the compared token (highlighted); the parameter stays muted. Printed
+     punctuation already separates them, so no frame is drawn. */
   .values.seg-values.keywords {
     gap: 0.35rem;
-  }
-  .values.seg-values .keyword {
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 0 0.3rem;
   }
   .values.seg-values .keyword .val {
     padding: 0;
