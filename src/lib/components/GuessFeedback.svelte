@@ -60,7 +60,7 @@
                    braces keep their printed position with no special highlight.
                    Any enclosing quotes are drawn outside the frame so the token
                    border hugs the text, not the quotes. -->
-              <span class="oracle-wrap">{#if seg.quotes === 'open' || seg.quotes === 'both'}"{/if}<span class="oracle-token {seg.status}">{seg.text}</span>{#if seg.quotes === 'close' || seg.quotes === 'both'}"{/if}</span>
+              <span class="oracle-wrap">{#if seg.quotes === 'open' || seg.quotes === 'both'}<span class="oracle-quote">"</span>{/if}<span class="oracle-token {seg.status}">{seg.text}</span>{#if seg.quotes === 'close' || seg.quotes === 'both'}<span class="oracle-quote">"</span>{/if}</span>
             {:else if seg.token}
               {#if $symbols && manaParts(seg.text)}
                 <span class="val mana {seg.status}">
@@ -230,6 +230,11 @@
   .values.seg-values.oracle .oracle-wrap {
     display: inline;
     margin: 0 0.1rem 0 0;
+  }
+  /* The quote is additional punctuation, not the compared text, so it reads as
+     muted like the other separators — never the chip's status colour. */
+  .values.seg-values.oracle .oracle-quote {
+    color: var(--muted);
   }
   .values.seg-values.oracle .oracle-token {
     display: inline;
