@@ -176,6 +176,17 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   `src/service-worker.js` and must reference `self.__WB_MANIFEST`. Navigations are
   served network-first (`mtg:navigation`); the SW answers a `GET_VERSION` message with
   `APP_VERSION` and calls `skipWaiting()` / `clients.claim()`.
+  - **Route order matters.** Workbox matches routes in registration order, so
+    the navigate `NetworkFirst` route must be registered **before**
+    `precacheAndRoute()`. The precache route also answers a navigation to `/`
+    with the precached `index.html`; if it went first it would win and pin the
+    app to the cached HTML shell (and thus the old hashed bundle) indefinitely —
+    a deploy would appear not to take. Offline still works via
+    `PrecacheFallbackPlugin({ fallbackURL: 'index.html' })` on that route.
+  - `main.js` polls `registration.update()` on focus/visibilitychange and
+    hourly, because browsers throttle SW update checks (Firefox up to 24h);
+    `autoUpdate` reloads once the new worker activates. Bump `APP_VERSION` on
+    every change so the SW bytes (and thus the update check) always differ.
 
 
 
