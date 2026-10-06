@@ -37,67 +37,56 @@
     {#each entry.results as r (r.key)}
       <div class="line {r.status}">
         <span class="prop-label" class:absent={r.absentOnTarget}>{r.label}</span>
-        {#if r.segments}
-          <span class="values seg-values" class:mana={r.key === 'mana'} class:oracle={r.key === 'oracle'}>
-            {#each r.segments as seg, i (i)}
-              {#if seg.dash}
-                <span class="dash">—</span>
-              {:else if seg.slash}
-                <span class="pt-sep">/</span>
-              {:else if seg.sep}
-                <span class="sep">//</span>
-              {:else if seg.token}
-                {#if $symbols && manaParts(seg.text)}
-                  <span class="val mana {seg.status}">
-                    {#each manaParts(seg.text) as p, pi (pi)}
-                      <img class="mana-img" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
-                    {/each}
-                  </span>
-                {:else}
-                  <span class="val {seg.status}">{seg.text}</span>
-                {/if}
-              {:else if seg.status}
-                <span class="val {seg.status}">{seg.text}</span>
+        <span class="values seg-values" class:mana={r.key === 'mana'} class:oracle={r.key === 'oracle'} class:keywords={r.key === 'keywords'}>
+          {#each r.segments as seg, i (i)}
+            {#if seg.break}
+              <span class="line-break" aria-hidden="true"></span>
+            {:else if seg.dash}
+              <span class="dash">—</span>
+            {:else if seg.slash}
+              <span class="pt-sep">/</span>
+            {:else if seg.sep}
+              <span class="sep">//</span>
+            {:else if seg.kind === 'keyword'}
+              <!-- Keyword abilities render verbatim (punctuation and parameters
+                   included), never symbol-substituted, so the row reads exactly
+                   as printed on the card. Only the canonical name is the
+                   compared token, so the parameter stays muted. -->
+              <span class="keyword">
+                <span class="val keyword-name {seg.status}">{seg.nameText}</span>{#if seg.nameText.length < seg.text.length}<span class="keyword-param">{seg.text.slice(seg.nameText.length)}</span>{/if}
+              </span>
+            {:else if seg.kind === 'oracle'}
+              <!-- One rules token = one compared chip, rendered verbatim: `{...}`
+                   braces keep their printed position with no special highlight.
+                   Any enclosing quotes are drawn outside the frame so the token
+                   border hugs the text, not the quotes. -->
+              <span class="oracle-wrap">{#if seg.quotes === 'open' || seg.quotes === 'both'}<span class="oracle-quote">"</span>{/if}<span class="oracle-token {seg.status}">{seg.text}</span>{#if seg.quotes === 'close' || seg.quotes === 'both'}<span class="oracle-quote">"</span>{/if}</span>
+            {:else if seg.token}
+              {#if $symbols && manaParts(seg.text)}
+                <span class="val mana {seg.status}">
+                  {#each manaParts(seg.text) as p, pi (pi)}
+                    <img class="mana-img" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
+                  {/each}
+                </span>
               {:else}
-                <span class="plain">{seg.text}</span>
+                <span class="val {seg.status}">{seg.text}</span>
               {/if}
+            {:else if seg.status}
+              <span class="val {seg.status}">{seg.text}</span>
+            {:else}
+              <span class="plain">{seg.text}</span>
+            {/if}
+          {/each}
+          {#if r.mvValues}
+            {#each r.mvValues as mv, i (i)}
+              {#if i > 0}
+                <span class="pt-sep">,</span>
+              {/if}
+              <span class="prop-label mv-label">MV</span>
+              <span class="val {mv.status}">{mv.text}</span>
             {/each}
-            {#if r.mvValues}
-              {#each r.mvValues as mv, i (i)}
-                {#if i > 0}
-                  <span class="pt-sep">,</span>
-                {/if}
-                <span class="prop-label mv-label">MV</span>
-                <span class="val {mv.status}">{mv.text}</span>
-              {/each}
-            {/if}
-          </span>
-        {:else}
-          <span class="values">
-            {#each r.correct as v}
-            {#if $symbols && manaParts(v)}
-              <span class="val mana correct">
-                {#each manaParts(v) as p, i (i)}
-                  <img class="mana-img" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
-                {/each}
-              </span>
-            {:else}
-              <span class="val correct">{v}</span>
-            {/if}
-          {/each}
-          {#each r.wrong as v}
-            {#if $symbols && manaParts(v)}
-              <span class="val mana wrong">
-                {#each manaParts(v) as p, i (i)}
-                  <img class="mana-img" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
-                {/each}
-              </span>
-            {:else}
-              <span class="val wrong">{v}</span>
-            {/if}
-          {/each}
+          {/if}
         </span>
-        {/if}
         {#if r.note}
           <span class="note">
             {#if r.noteBold}
@@ -130,15 +119,17 @@
     flex-direction: column;
     gap: 0.2rem;
   }
+  /* No wrap here: the value block must stay in its own column next to the
+     label, so a long row (keywords, oracle) wraps internally and stays
+     indented rather than dropping below the label at the container edge. */
   .line {
     display: flex;
-    flex-wrap: wrap;
     align-items: baseline;
     gap: 0.4rem;
     font-size: 0.8rem;
   }
   .prop-label {
-    min-width: 7.5rem;
+    flex: 0 0 7.5rem;
     color: var(--muted);
   }
   .prop-label.absent {
@@ -146,17 +137,19 @@
     text-decoration: line-through;
   }
   .mv-label {
-    min-width: 0;
+    flex: 0 0 auto;
     margin-left: 0.5rem;
   }
   .values {
     display: flex;
     flex-wrap: wrap;
     gap: 0.25rem;
+    /* Let the block shrink below its content width so it wraps internally
+       instead of pushing the row wider than the container. */
+    min-width: 0;
   }
   .val {
     border-radius: 4px;
-    padding: 0 0.3rem;
   }
   .val.correct {
     background: var(--ok-bg);
@@ -204,19 +197,6 @@
     gap: 0.3em;
     align-items: baseline;
   }
-  /* Oracle text keeps its line breaks and punctuation:plain segments flow
-     inline (no per-segment boxes) so the row reads like the card's text. */
-  .values.seg-values.oracle {
-    display: inline;
-    gap: 0;
-  }
-  .values.seg-values.oracle .val {
-    padding: 0;
-  }
-  .values.seg-values.oracle .val.mana {
-    padding: 0 0.1rem;
-    vertical-align: middle;
-  }
   .values.seg-values .val {
     padding: 0 0.1rem;
   }
@@ -224,9 +204,71 @@
     padding: 0 0.25rem;
     color: var(--muted);
   }
+  /* A printed line break: in a wrapping row it forces a new line; in the
+     column-stacked oracle row it is simply hidden. */
+  .line-break {
+    flex-basis: 100%;
+    height: 0;
+  }
+  /* Oracle text: one chip per compared token. Chips are inline so a token that
+     wraps is fragmented per line (`box-decoration-break: slice`): each line
+     gets top/bottom borders, the left border only on the first fragment and the
+     right only on the last, so a wrapped chip reads as an open-sided frame that
+     the next token can follow on the same line. The row is a block (not flex)
+     so the chips live in an inline formatting context and can fragment. */
+  .values.seg-values.oracle {
+    display: block;
+    line-height: 1.6;
+  }
+  .values.seg-values.oracle .line-break {
+    display: block;
+    height: 0;
+  }
+  /* The chip's enclosing quotes are siblings of the framed token, so the frame
+     hugs the text and the quote sits just outside it. Spacing lives on the
+     wrapper, so it falls after the closing quote. */
+  .values.seg-values.oracle .oracle-wrap {
+    display: inline;
+    margin: 0 0.1rem 0 0;
+  }
+  /* The quote is additional punctuation, not the compared text, so it reads as
+     muted like the other separators — never the chip's status colour. */
+  .values.seg-values.oracle .oracle-quote {
+    color: var(--muted);
+  }
+  .values.seg-values.oracle .oracle-token {
+    display: inline;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.05rem 0.3rem;
+    -webkit-box-decoration-break: slice;
+    box-decoration-break: slice;
+  }
+  /* Status colour/background on the chip itself so it fills the frame padding. */
+  .values.seg-values.oracle .oracle-token.correct {
+    background: var(--ok-bg);
+    color: var(--ok-fg);
+  }
+  .values.seg-values.oracle .oracle-token.wrong {
+    color: var(--bad-fg);
+    text-decoration: line-through;
+  }
   /* Mana rows phrase per-face costs in order, `//` between faces. */
   .values.seg-values.mana {
     align-items: center;
+  }
+  /* Keyword abilities: one span per printed ability, verbatim. Only the canonical
+     name is the compared token (highlighted); the parameter stays muted. Printed
+     punctuation already separates them, so no frame is drawn. */
+  .values.seg-values.keywords {
+    gap: 0.35rem;
+  }
+  .values.seg-values .keyword .val {
+    padding: 0;
+  }
+  .values.seg-values .keyword-param {
+    color: var(--muted);
+    opacity: 0.75;
   }
   .values.seg-values .plain {
     white-space: pre-wrap;

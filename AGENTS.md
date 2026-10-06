@@ -48,14 +48,78 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   **individual face names**, so `lib/api/scryfall.js` prefers a whole-card name
   match, then face-name match, then first result.
 
-- Oracle-text row: every word token of the guessed card's text (`card.oracle_text`,
-  primary face only)is highlighted green when it appears anywhere in the target's
-  text (punctuation stripped, words lowercased via `oracleWords()`);only rendered
-  when the guess has text,so a text-less target is never leaked. Oracle text is
-  **not** used for the hint search URL: positive `fo:` clauses give away the whole
-  text (making the hint search too easy)and negated `-fo:` clauses are
-  unreliable (Scryfall's `fo:` matches substrings,e.g. `-fo:if` would also
-  exclude every card containing "different"),so oracle hints are dropped entirely..
+- Oracle text + keywords: a single shared tokenizer (`comparison.js
+  parseOracleText`) feeds both rows and the hint URL, so what the player sees
+  marked is exactly what the search filters on. It strips reminder text, splits
+  each face's `oracle_text` into a **Keywords** stream and an **Oracle text**
+  stream, and splits the rules text into tokens at newlines, `:`, `.` and `"`
+  (`ruleLineTokens`). `{...}` mana symbols are **opaque** (a `.`/`:`/`"` inside
+  one never splits; Scryfall indexes braces literally, verified: `o:"Add {G}"`
+  matches Llanowar Elves while `o:"Add G"` matches nothing) and `[...]` spans are
+  kept whole. A `:`/`.` **stays on the token it ends** (`{T}:`, `Add {G}.`); a
+  `"` splits but is **not part of any token**. Each segment records a `quotes`
+  marker (`'open'`/`'close'`/`'both'`/`''`) from the quote's position (line start
+  or after whitespace marks the following run, otherwise the preceding run), so
+  the UI draws the quotes **outside** the token frame — the border hugs the text,
+  not the quotes. Quotes are never in the compared token (a quote inside a quoted
+  `o:"..."` clause would make Scryfall silently drop it). Only the ends are trimmed.
+  Tokens with no letter/digit or below a 2-char floor are dropped, so every
+  compared token is a verbatim substring of the stripped text.
+  - **Rendering = data.** Each display stream (`segments`, `keywordSegments`,
+    `rulesSegments`) holds one segment per compared unit — a chip for a keyword,
+    one chip per rules **clause** — with `{ break: true }` between printed lines.
+    A line whose keyword was removed therefore renders no blank row, and a
+    printed line break stays visible. An oracle segment carries `text` (the
+    compared/hinted value, verbatim `{...}` braces in place) and `quotes` (the
+    enclosing-quote marker, drawn as siblings just outside the frame). There is
+    **no per-part muting**: a keyword that appears mid-rules-text (e.g.
+    `Proliferate`) or a brace run (`{T}`) is an ordinary literal inside its
+    clause chip and gets no distinct highlight — only
+    the whole chip is marked by status. A keyword segment carries `nameText` (the
+    canonical name) so only the name is marked as the token, not its printed
+    parameter; that muting is Keywords-row only. Both rows draw a **frame**
+    around each chip (the Oracle row wraps within the value column; it is no
+    longer a dotted list). Oracle chips are `display: inline` with `box-decoration-break: slice`,
+    so a token that wraps is framed **per line** — top/bottom on every line, the
+    left edge only on the first fragment and the right only on the last — and the
+    next token can continue on the same line. (The row is a block, not flex, so
+    the chips sit in an inline formatting context and can fragment; a flex item
+    is atomic and would not.)
+  - **Reminder text** (`(...)`, depth-aware so nested spans like `Super haste`
+    are removed cleanly) is **ignored for matching** and never hinted. This is
+    what lets the hints use `o:` instead of `fo:`: Scryfall's `o:` indexes the
+    oracle text with reminder spans removed, so the client and Scryfall index the
+    same string. Square brackets are **not** reminder text (cleave text is
+    indexed by `o:`), and an unmatched `)` stays literal.
+  - **Keywords** are extracted only from the *leading* keyword occurrence of
+    each line, using `card.keywords` as recognition **vocabulary** (longest name
+    first). Handles the comma-separated keyword list (`Flying, first strike`),
+    ability words (`Landfall — …`, where the dash and following space are
+    consumed but the rules text is kept verbatim), and keyword costs/parameters
+    (`Kicker {2}`, `Protection from red`, `Ward {2}`, `Equip legendary creature
+    {1}`). A comma ends a text parameter unless the keyword's value may contain
+    one (`Partner with Krav, the Unredeemed`). `card.keywords` is **not** the
+    printed list: entries like `Treasure`/`Food`/`Double`/`Monstrosity` never
+    appear as a leading keyword line, so they stay in the oracle text and emit
+    **no** `kw:` hint (gating rule). The Keywords row renders the printed span
+    verbatim (punctuation and parameters included) and compares by canonical
+    name, exactly as `kw:` matches, so `Kicker {2}` vs `{4}` is still correct.
+  - Hints: the oracle row uses `o:"<token>"` (positive keeps the answer,
+    `-o:"<token>"` excludes only literal occurrences); the keywords row uses
+    `kw:<canonical-name>` (lowercased, from `card.keywords`). Because a guessed
+    token can sit inside a longer target run, the oracle row matches by
+    case-insensitive **substring** (mirroring `o:`) rather than whole-token
+    equality, so a contained token reads correct instead of emitting a `-o:` that
+    would exclude the answer. `compareCards`' `correct`/`wrong` carry the
+    **original-case** token (matching stays case-insensitive), since `o:` is
+    literal; the keywords row additionally carries `correctNames`/`wrongNames`
+    for the hint values. `oracle` and `keywords` join `type`/`colors` as
+    contains-match exceptions: negated hints survive a fully-matched row. The
+    rows render only when the guess has the property (text / a printed keyword),
+    so a text-less or keyword-less target is never leaked; the token-overlap
+    score also runs on these line tokens. Substring semantics are deliberate:
+    over-broad positives are harmless and
+  negatives exclude only literal occurrences.
 - `catalog/card-names` needs `A-` prefix filtering (Alchemy-only cards. The
   names download is a singleton in-flight promise (`stores/backgroundFetch.js`), cached
   in idb-keyval (`storage/dataCache.js`), falling back to the cache when offline.
@@ -84,10 +148,16 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   the target. `GuessFeedback`/`GameBoard`/`ShareSummary` all pass `targetCard` so the
   score can be computed at render time (results rows no longer carry enough info).
 
+- Comparison rows are normalized in `comparison.js` `line()`: `segments` is the single
+  source of truth for display, and `correct`/`wrong` (the token lists `hints.js` and
+  share text consume) plus `status` are derived from the segments' statuses, so a row
+  builder only describes what it renders. Plain rows (layout, released, rarity, the
+  `—` placeholders) are just a single segment per value, so the UI has one render path.
+
 - Hints (`src/lib/game/hints.js`): `gatherHints()` distills every guess's feedback into a
   deduplicated minimal hint list; `buildScryfallSearchUrl()` turns it into a
   `https://scryfall.com/search/?q=...` link with clauses `t:`, `c:`, `layout:`,
-  `mana=`, `mv=`, `pow=`, `tou=`, `loy=`, `r:`, `date>`/`date<`, negations via
+  `mana=`, `mv=`, `pow=`, `tou=`, `loy=`, `r:`, `kw:`, `o:`, `date>`/`date<`, negations via
   `-`/`!=`, and always ending `not:reprint`. Defense stats have no Scryfall operator, so
   those hints are dropped. Scryfall's `pow`/`tou`/`loy` operators are
   numeric-only but **coerce** a variable stat rather than rejecting it: the
@@ -98,13 +168,13 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   URL — without it a `1+*` guess against a `1` target would read "wrong" and
   emit `tou!=1`, filtering out the answer. Only values with no numeric reading
   (`∞`) are unexpressible and dropped.
-  **exception**: Scryfall's `t:` is a contains-match
-  with no exact-type-line operator, so negated type hints survive even after a
-  fully-matched type row. Colors likewise never use the exact-set `c=` operator:
-  a fully matched colors row only proves the guessed colors are a subset of the
-  target's, so `c:` contains hints (positive and negated) are used throughout,
-  and a `//` face separator is never emitted as a filter value. Same-direction
-  date bounds fold down to the
+  **exception**: Scryfall's `t:`, `c:`, `kw:` and `o:` are all
+  contains-matches with no exact operator, so negated hints for `type`, `colors`,
+  `keywords` and `oracle` survive even after a fully-matched row. Colors never use the
+  exact-set `c=` operator: a fully matched colors row only proves the guessed
+  colors are a subset of the target's, so `c:` contains hints (positive and
+  negated) are used throughout, and a `//` face separator is never emitted as a
+  filter value. Same-direction date bounds fold down to the
   tightest,and an exact date subsumes all date hints. The HintButton opens that URL, and
   each used hint press marks its share row with 🔦 (`buildShareText` `hintsUsed`).
 
@@ -129,6 +199,15 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   `src/service-worker.js` and must reference `self.__WB_MANIFEST`. Navigations are
   served network-first (`mtg:navigation`); the SW answers a `GET_VERSION` message with
   `APP_VERSION` and calls `skipWaiting()` / `clients.claim()`.
+  - **Route order matters.** Workbox matches routes in registration order, so
+    the navigate `NetworkFirst` route must be registered **before**
+    `precacheAndRoute()`. The precache route also answers a navigation to `/`
+    with the precached `index.html`; if it went first it would win and pin the
+    app to the cached HTML shell (and thus the old hashed bundle) indefinitely —
+    a deploy would appear not to take. Offline still works via
+    `PrecacheFallbackPlugin({ fallbackURL: 'index.html' })` on that route.
+    The browser picks up a new worker on its own schedule and `autoUpdate`
+    reloads once it activates; no extra polling is done in `main.js`.
 
 
 

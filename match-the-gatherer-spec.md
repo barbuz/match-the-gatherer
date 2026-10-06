@@ -31,6 +31,8 @@ A Wordle-style daily guessing game for Magic: The Gathering cards, built as a Sv
 | Rarity | common, uncommon, rare, mythic, special, bonus |
 | Dual-faced status | Including all properties above re-checked for the back face |
 | Released date (`released_at`) | Oldest printing; used to place guess in the timeline |
+| Keywords | Printed keyword abilities (rules text with reminder text removed) |
+| Oracle text | Rules text with reminder text removed (keywords are shown in their own row) |
 | Oracle tags ("otags") | All tags associated with the card |
 
 ### Comparison specifics
