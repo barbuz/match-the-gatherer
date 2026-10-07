@@ -279,16 +279,67 @@ export function hintToClause(hint,) {
   }
 }
 
+/** Scryfall rejects a `q` longer than this (docs: `/cards/search`, 1000 Unicode chars). */
+export const MAX_QUERY_LENGTH = 1000;
+
+const REQUIRED_CLAUSES = ['f:v', 'not:reprint'];
+
 /**
  * Build a Scryfall search URL from a hint list. Vintage-legal first
  * printings only, always via f:v + not:reprint (per spec §3).
+ *
+ * Scryfall rejects a `q` over 1000 characters, so the clause list is kept
+ * inside that budget: negated `o:` clauses are skipped (they are bulky and add
+ * little — a negated oracle token rarely narrows the field usefully), duplicate
+ * clauses are collapsed, and if the query is still too long the longest
+ * clauses are dropped until it fits.
+ *
  * @param {Array<{ kind, value, negated?, dir? }>} hints  gatherHints() output
- * @returns {string}
+ * @returns {{ url: string, truncated: boolean, dropped: number, warning: string|null }}
  */
 export function buildScryfallSearchUrl(hints,) {
-  const clauses = (hints ?? []).map(hintToClause).filter(Boolean);
-  clauses.push('f:v');
-  clauses.push('not:reprint');
+  const seen = new Set();
+  const clauses = [];
+  for (const hint of hints ?? []) {
+    // Negated `o:` is the single biggest contributor to query length and the
+    // least informative hint, so it is omitted rather than allowed to push the
+    // query past Scryfall's limit.
+    if (hint?.negated && hint.kind === 'oracle') continue;
+    const clause = hintToClause(hint);
+    if (!clause || seen.has(clause)) continue; // collapse redundant duplicates
+    seen.add(clause);
+    clauses.push(clause);
+  }
+  for (const required of REQUIRED_CLAUSES) {
+    if (!seen.has(required)) {
+      seen.add(required);
+      clauses.push(required);
+    }
+  }
+
+  let dropped = 0;
+  while (clauses.join(' ').length > MAX_QUERY_LENGTH && clauses.length > REQUIRED_CLAUSES.length) {
+    let longest = -1;
+    let longestIndex = -1;
+    for (let i = 0; i < clauses.length; i += 1) {
+      if (REQUIRED_CLAUSES.includes(clauses[i])) continue;
+      if (clauses[i].length > longest) {
+        longest = clauses[i].length;
+        longestIndex = i;
+      }
+    }
+    if (longestIndex === -1) break;
+    clauses.splice(longestIndex, 1);
+    dropped += 1;
+  }
+
   const q = encodeURIComponent(clauses.join(' '));
-  return `https://scryfall.com/search/?q=${q}`;
+  return {
+    url: `https://scryfall.com/search/?q=${q}`,
+    truncated: dropped > 0,
+    dropped,
+    warning: dropped > 0
+      ? `Some hints were omitted so the Scryfall link stays under its ${MAX_QUERY_LENGTH}-character limit.`
+      : null,
+  };
 }

@@ -177,6 +177,17 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
   filter value. Same-direction date bounds fold down to the
   tightest,and an exact date subsumes all date hints. The HintButton opens that URL, and
   each used hint press marks its share row with 🔦 (`buildShareText` `hintsUsed`).
+  - **The query must stay within Scryfall's 1000-character `q` limit** (docs
+    `/cards/search`); a longer `q` is rejected as "no cards match" (HTTP 404),
+    not a syntax error. A late-game daily (5 guesses) can gather ~50 clauses
+    totalling >1100 chars, which is the bug this guards against.
+    `buildScryfallSearchUrl` now returns `{ url, truncated, dropped, warning }`:
+    it omits **negated `o:`** clauses (the biggest length contributors and the
+    least informative hints), collapses **duplicate clauses**, and if the query
+    is still over budget drops the **longest clauses** first (never `f:v` /
+    `not:reprint`) until it fits, surfacing `warning` so `GameBoard.svelte`
+    shows the player a note. (Only `q` length matters — Scryfall does not limit
+    clause count, total words, or non-`o:` clause length.)
 
 - Daily games persist per UTC day (`mtg:game:${dayKey}`, via `lib/game/gameState.js`);
   free-mode games are memory-only and never touch stats. Stats live in `storage/statsStore.js`

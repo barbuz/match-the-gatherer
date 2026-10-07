@@ -451,13 +451,14 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
     }
     expect(hints.filter((h) => h.kind === 'colorSet')).toHaveLength(0);
 
-    const url = decodeURIComponent(buildScryfallSearchUrl(hints));
-    expect(url).toContain('c:b');
-    expect(url).toContain('c:g');
-    expect(url).toContain('c:u');
-    expect(url).toContain('-c:r');
-    expect(url).toContain('-c:w');
-    expect(url).not.toContain('c=');
+    const { url } = buildScryfallSearchUrl(hints);
+    const decoded = decodeURIComponent(url);
+    expect(decoded).toContain('c:b');
+    expect(decoded).toContain('c:g');
+    expect(decoded).toContain('c:u');
+    expect(decoded).toContain('-c:r');
+    expect(decoded).toContain('-c:w');
+    expect(decoded).not.toContain('c=');
   });
 
   it('coerces variable power/toughness hints instead of dropping them', () => {
@@ -491,14 +492,15 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
     expect(hints).toContainEqual({ kind: 'power', value: '0', negated: true });
     expect(hints).toContainEqual({ kind: 'toughness', value: '1', negated: true });
 
-    const url = decodeURIComponent(buildScryfallSearchUrl(hints));
-    expect(url).toContain('pow!=0');
-    expect(url).toContain('tou!=1');
-    expect(url).not.toContain('pow!=*');
-    expect(url).not.toContain('tou!=1+*');
+    const { url } = buildScryfallSearchUrl(hints);
+    const decoded = decodeURIComponent(url);
+    expect(decoded).toContain('pow!=0');
+    expect(decoded).toContain('tou!=1');
+    expect(decoded).not.toContain('pow!=*');
+    expect(decoded).not.toContain('tou!=1+*');
     // The rest of the clue set survives.
-    expect(url).toContain('t:creature');
-    expect(url).toContain('mv!=2');
+    expect(decoded).toContain('t:creature');
+    expect(decoded).toContain('mv!=2');
   });
 
   it('coerces every variable stat form Scryfall accepts', () => {
@@ -594,13 +596,17 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
     const guess = makeCard({ oracle_text: 'Ward {2} (Different reminder.)\nDestroy target artifact.\n"I — This Saga gains"' });
     const hints = gatherHints([guessEntry(guess, target)]);
 
-    const url = decodeURIComponent(buildScryfallSearchUrl(hints));
-    expect(url).toContain('o:"Ward {2}"');
-    expect(url).toContain('o:"Destroy target artifact."');
-    expect(url).toContain('-o:"I — This Saga gains"');
+    const { url } = buildScryfallSearchUrl(hints);
+    const decoded = decodeURIComponent(url);
+    expect(decoded).toContain('o:"Ward {2}"');
+    expect(decoded).toContain('o:"Destroy target artifact."');
+    // Negated `o:` clauses are omitted from the query (they are bulky and the
+    // least informative hint), but the hint itself is still gathered.
+    expect(decoded).not.toContain('-o:"I — This Saga gains"');
+    expect(hints).toContainEqual({ kind: 'oracle', value: 'I — This Saga gains', negated: true });
     // Reminder text is stripped, so it never becomes a hint.
-    expect(url).not.toContain('reminder');
-    expect(url).not.toContain("can't be blocked");
+    expect(decoded).not.toContain('reminder');
+    expect(decoded).not.toContain("can't be blocked");
 
     for (const h of hints.filter((x) => x.kind === 'oracle')) {
       expect(h.value).not.toContain('"');
@@ -733,7 +739,7 @@ describe('hintToClause', () => {
 
 describe('buildScryfallSearchUrl', () => {
   it('combines all hints and always appends not:reprint', () => {
-    const url = buildScryfallSearchUrl([
+    const { url, truncated, warning } = buildScryfallSearchUrl([
       { kind: 'type', value: 'Creature' },
       { kind: 'manaValue', value: '4' },
       { kind: 'color', value: 'U', negated: true },
@@ -742,17 +748,79 @@ describe('buildScryfallSearchUrl', () => {
     expect(url).toBe(
       'https://scryfall.com/search/?q=t%3Acreature%20mv%3D4%20-c%3Au%20date%3E2009-01-10%20f%3Av%20not%3Areprint',
     );
+    expect(truncated).toBe(false);
+    expect(warning).toBeNull();
   });
 
   it('handles an empty hint list with just the reprint filter', () => {
-    expect(buildScryfallSearchUrl([])).toBe(
+    expect(buildScryfallSearchUrl([]).url).toBe(
       'https://scryfall.com/search/?q=f%3Av%20not%3Areprint',
     );
   });
 
   it('keeps the mana-cost braces URL-encoded', () => {
-    expect(buildScryfallSearchUrl([{ kind: 'mana', value: '{2}{R}' }])).toBe(
+    expect(buildScryfallSearchUrl([{ kind: 'mana', value: '{2}{R}' }]).url).toBe(
       'https://scryfall.com/search/?q=mana%3D%7B2%7D%7BR%7D%20f%3Av%20not%3Areprint',
     );
+  });
+
+  it('omits negated o: clauses, which are bulky and the least useful hint', () => {
+    const { url } = buildScryfallSearchUrl([
+      { kind: 'oracle', value: 'Flying' },
+      { kind: 'oracle', value: 'Trample', negated: true },
+    ]);
+    const decoded = decodeURIComponent(url);
+    expect(decoded).toContain('o:Flying');
+    expect(decoded).not.toContain('-o:Trample');
+  });
+
+  it('never emits the same clause twice', () => {
+    // Redundant duplicate hints (identical kind/value/negation) collapse to one
+    // clause instead of lengthening the query.
+    const { url } = buildScryfallSearchUrl([
+      { kind: 'type', value: 'Creature' },
+      { kind: 'type', value: 'Creature' },
+      { kind: 'color', value: 'G' },
+      { kind: 'color', value: 'g' },
+      { kind: 'oracle', value: 'Flying' },
+      { kind: 'oracle', value: 'Flying' },
+    ]);
+    const decoded = decodeURIComponent(url);
+    const q = decoded.split('q=')[1];
+    expect(q.split(' ').filter((c) => c === 't:creature')).toHaveLength(1);
+    expect(q.split(' ').filter((c) => c === 'c:g')).toHaveLength(1);
+    expect(q.split(' ').filter((c) => c === 'o:Flying')).toHaveLength(1);
+  });
+
+  it('drops the longest clauses until the query fits Scryfall\'s limit', () => {
+    // A real game can gather dozens of long oracle clauses. The query must stay
+    // within Scryfall's 1000-character `q` limit or the search 404s, so the
+    // longest (least specific) clauses are dropped and a warning is surfaced.
+    const hints = [];
+    for (let i = 0; i < 40; i += 1) {
+      hints.push({ kind: 'oracle', value: `Clause number ${i} that is deliberately quite long` });
+    }
+    hints.push({ kind: 'type', value: 'Creature' });
+    const { url, truncated, dropped, warning } = buildScryfallSearchUrl(hints);
+    const q = decodeURIComponent(url).split('q=')[1];
+    expect(q.length).toBeLessThanOrEqual(1000);
+    expect(truncated).toBe(true);
+    expect(dropped).toBeGreaterThan(0);
+    expect(warning).toMatch(/omitted/i);
+    // The required clauses always survive.
+    expect(q).toContain('f:v');
+    expect(q).toContain('not:reprint');
+    // The shortest non-required clause survives over the longer ones.
+    expect(q).toContain('t:creature');
+  });
+
+  it('does not drop clauses when the query already fits', () => {
+    const { truncated, dropped, warning } = buildScryfallSearchUrl([
+      { kind: 'type', value: 'Creature' },
+      { kind: 'oracle', value: 'Flying' },
+    ]);
+    expect(truncated).toBe(false);
+    expect(dropped).toBe(0);
+    expect(warning).toBeNull();
   });
 });

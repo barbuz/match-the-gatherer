@@ -34,10 +34,10 @@
   let state = { guesses: [], hintsUsed: [], status: 'playing', loaded: false, communityStats: null };
   let submitError = '';
   let unsubscribe = null;
-  let hintUrl = '';
-  $: hintUrl = state.guesses.length > 0
+  let hintLink = { url: '', warning: null };
+  $: hintLink = state.guesses.length > 0
     ? buildScryfallSearchUrl(gatherHints(state.guesses))
-    : '';
+    : { url: '', warning: null };
 
   $: guessedNames = state.guesses.map((g) => g.card.name);
   $: gameOver = state.status !== 'playing';
@@ -98,7 +98,7 @@
   }
 
   function onHintPress() {
-    if (hintUrl) window.open(hintUrl, '_blank');
+    if (hintLink.url) window.open(hintLink.url, '_blank');
     game.markHintUsed();
   }
 </script>
@@ -160,6 +160,9 @@
       <div class="hint-row">
         <HintButton disabled={state.guesses.length === 0} on:press={onHintPress} />
       </div>
+      {#if hintLink.warning}
+        <p class="hint-warning" role="status">{hintLink.warning}</p>
+      {/if}
       {#if submitError}
         <p class="error-msg">{submitError}</p>
       {/if}
@@ -190,6 +193,12 @@
     display: flex;
     justify-content: center;
     margin: 0.75rem 0 0.25rem;
+  }
+  .hint-warning {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin: 0.15rem 0 0;
   }
   .status {
     text-align: center;
