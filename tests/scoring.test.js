@@ -64,15 +64,23 @@ describe('scoreGuess', () => {
 });
 
 describe('emojiBar', () => {
-  it('renders full, empty and fractional bars', () => {
-    expect(emojiBar(1)).toBe('🟩'.repeat(SHARE_BLOCKS));
-    expect(emojiBar(0)).toBe('⬜'.repeat(SHARE_BLOCKS));
-    expect(emojiBar(0.5)).toBe('🟩'.repeat(5) + '⬜'.repeat(5));
+  it('renders full, empty and fractional bars gray without a count', () => {
+    expect(emojiBar(1)).toBe('⬜'.repeat(SHARE_BLOCKS));
+    expect(emojiBar(0)).toBe('\u2B1C'.repeat(SHARE_BLOCKS));
+    expect(emojiBar(0.5)).toBe('⬜'.repeat(5) + '⬜'.repeat(5));
   });
 
   it('clamps out-of-range ratios', () => {
-    expect(emojiBar(2)).toBe('🟩'.repeat(SHARE_BLOCKS));
-    expect(emojiBar(-1)).toBe('⬜'.repeat(SHARE_BLOCKS));
+    expect(emojiBar(2)).toBe('⬜'.repeat(SHARE_BLOCKS));
+    expect(emojiBar(-1)).toBe('\u2B1C'.repeat(SHARE_BLOCKS));
+  });
+
+  it('draws the filled blocks in the still-matching count color', () => {
+    expect(emojiBar(1, SHARE_BLOCKS, 1)).toBe('\u{0001F7E6}'.repeat(SHARE_BLOCKS)); // blue
+    expect(emojiBar(1, SHARE_BLOCKS, 60)).toBe('\u{0001F7E8}'.repeat(SHARE_BLOCKS)); // yellow
+    expect(emojiBar(1, SHARE_BLOCKS, 30000)).toBe('\u{0001F7E5}'.repeat(SHARE_BLOCKS)); // red
+    // A zero-count row is blue too, with the unfilled tail staying gray.
+    expect(emojiBar(0.5, SHARE_BLOCKS, 0)).toBe('\u{0001F7E6}'.repeat(5) + '\u2B1C'.repeat(5));
   });
 });
 
@@ -93,10 +101,10 @@ describe('buildShareText', () => {
     expect(loss.split('\n')[0]).toBe('Match the Gatherer 2026-08-26 — 100% matched');
   });
 
-  it('renders one bar row per guess with proportional fill', () => {
+  it('renders one green bar row per guess (no trailing square) with proportional fill', () => {
     const rows = buildShareText({ dayKey: 'd', guesses, won: true, maxGuesses: 10, url: 'u', targetCard: target }).split('\n');
-    expect(rows[1]).toBe('🟩'.repeat(10) + ' ⬜');
-    expect(rows[2]).toBe('🟩'.repeat(3) + '⬜'.repeat(7) + ' ⬜');
+    expect(rows[1]).toBe('⬜'.repeat(10));
+    expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(7));
   });
 
   it('appends a scrying-ball marker to rows where a hint was used', () => {
@@ -114,12 +122,12 @@ describe('buildShareText', () => {
       targetCard: target,
     });
     const rows = text.split('\n');
-    expect(rows[1]).toBe('🟩'.repeat(10) + '🔮 ⬜');
-    expect(rows[2]).toBe('🟩'.repeat(3) + '⬜'.repeat(7) + ' ⬜');
-    expect(rows[3]).toBe('🟩'.repeat(10) + '🔮 ⬜');
+    expect(rows[1]).toBe('⬜'.repeat(10) + '\u{0001F52E}');
+    expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(7));
+    expect(rows[3]).toBe('⬜'.repeat(10) + '\u{0001F52E}');
   });
 
-  it('ends each row with a colored square encoding its match count', () => {
+  it('colors each bar by its still-matching count', () => {
     const rows = buildShareText({
       dayKey: 'd',
       guesses,
@@ -128,11 +136,11 @@ describe('buildShareText', () => {
       targetCard: target,
       hintCounts: { 0: 1226, 1: 60 },
     }).split('\n');
-    expect(rows[1]).toBe('🟩'.repeat(10) + ' 🟥'); // 1226 → red
-    expect(rows[2]).toBe('🟩'.repeat(3) + '⬜'.repeat(7) + ' 🟨'); // 60 → yellow
+    expect(rows[1]).toBe('\u{0001F7E5}'.repeat(10)); // 1226 → red fill
+    expect(rows[2]).toBe('\u{0001F7E8}'.repeat(3) + '\u2B1C'.repeat(7)); // 60 → yellow fill
   });
 
-  it('uses gray for a count that never resolved (and blue for a real 0)', () => {
+  it('falls back to green for a count that never resolved, and blue for a real 0', () => {
     const rows = buildShareText({
       dayKey: 'd',
       guesses,
@@ -141,7 +149,7 @@ describe('buildShareText', () => {
       targetCard: target,
       hintCounts: { 0: 0 }, // 1 is unresolved
     }).split('\n');
-    expect(rows[1]).toBe('🟩'.repeat(10) + ' 🟦'); // 0 → blue
-    expect(rows[2]).toBe('🟩'.repeat(3) + '⬜'.repeat(7) + ' ⬜'); // unresolved → gray
+    expect(rows[1]).toBe('\u{0001F7E6}'.repeat(10)); // 0 → blue fill
+    expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(7)); // unresolved → green
   });
 });

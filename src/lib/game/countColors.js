@@ -1,24 +1,25 @@
 /**
  * Shared color scheme for "how many cards still match the known information".
- * Used by the end-game summary squares and the hint button's gradient bar so
- * both speak the same visual language.
+ * Used by the end-game summary bars and the hint button's gradient bar so both
+ * speak the same visual language.
  *
  * Five bands: blue = exactly 1, green ≤ 10, yellow ≤ 100, orange ≤ 1000,
- * red > 1000. The counts span five orders of magnitude, so the bar positions
- * them on a log scale running from 0.1 to 10 000 — five equal decades, which
- * puts each band boundary at an even 20% of the bar.
+ * red > 1000. The bar positions counts on a log scale whose **left edge is the
+ * value 1** (the smallest count that can ever occur), so the blue band always
+ * starts at the far left and we never show a value below 1. The five band
+ * boundaries (1, 10, 100, 1000, 10 000) sit at even 20% intervals.
  */
 
-/** Lower edge of the bar's log scale (below 1, so the blue band has width). */
-export const MIN_COUNT = 0.1;
+/** Left edge of the bar's log scale: the minimum possible count. */
+export const MIN_COUNT = 1;
 
-/** Upper edge: 10 000, the start of the red band — ten times past the cutoff. */
+/** Right edge: 10 000, ten times past the red cutoff, so every band is equal. */
 export const MAX_COUNT = 10000;
 
 /** The five band edges, low → high, at even 20% intervals on the bar. */
 const BOUNDS = [1, 10, 100, 1000, MAX_COUNT];
 
-/** Ordered low → high; each entry's color fills up to `max` (exclusive). */
+/** Ordered low → high; each entry's color fills up to `max` (inclusive). */
 const TIERS = [
   { max: 1, color: '#2f6bff' }, // blue — exactly one
   { max: 10, color: '#1f9d55' }, // green — ≤ 10
@@ -40,9 +41,9 @@ export function countColor(n) {
 }
 
 /**
- * Position of a count on the bar, in [0, 1], on a log scale from `min` to
- * `max`. Values below `min` clamp to the left edge, values at or above `max`
- * clamp to the right.
+ * Position of a count on the bar, in [0, 1], on a log scale from `min` (1) to
+ * `max` (10 000). Counts below `min` clamp to the left edge, counts at or above
+ * `max` clamp to the right.
  */
 export function logPosition(n, min = MIN_COUNT, max = MAX_COUNT) {
   const x = Math.min(Math.max(n, min), max);
@@ -60,8 +61,10 @@ export function tierBoundaries(min = MIN_COUNT, max = MAX_COUNT) {
 /**
  * Positions of each color band's center (blue, green, yellow, orange, red),
  * low → high — the points where the gradient shows each band's pure color.
+ * Spread evenly (20% apart) so the gradient runs through all five colors
+ * roughly evenly, as the color scheme intends, rather than bunching the narrow
+ * low bands against the value boundaries.
  */
-export function tierCenters(min = MIN_COUNT, max = MAX_COUNT) {
-  const edges = [0, ...tierBoundaries(min, max)];
-  return TIER_COLORS.map((_, i) => (edges[i] + edges[i + 1]) / 2);
+export function tierCenters() {
+  return TIER_COLORS.map((_, i) => (i + 0.5) / TIER_COLORS.length);
 }

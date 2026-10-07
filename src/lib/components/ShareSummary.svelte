@@ -10,11 +10,20 @@
   export let hintsUsed = [];
   export let targetCard = null;
   export let hintCounts = {};
+  /** Still-matching count after the final guess (1 on a win), scored from the
+   * hint set built from every guess; overrides the last row's stored count so
+   * the summary reflects the fully-constrained search. */
+  export let revealCount = null;
 
   let copied = false;
 
   $: url = typeof location !== 'undefined' ? location.origin + location.pathname : '';
-  $: shareText = buildShareText({ dayKey: dayKey || label, guesses, won, maxGuesses: MAX_GUESSES, url, hintsUsed: hintsUsed, targetCard, hintCounts });
+  // The last row ends the game, so its count is the fully-constrained one.
+  $: finalCounts =
+    revealCount != null && guesses.length > 0
+      ? { ...hintCounts, [guesses.length - 1]: revealCount }
+      : hintCounts;
+  $: shareText = buildShareText({ dayKey: dayKey || label, guesses, won, maxGuesses: MAX_GUESSES, url, hintsUsed: hintsUsed, targetCard, hintCounts: finalCounts });
 
   async function copy() {
     try {

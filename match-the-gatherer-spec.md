@@ -120,6 +120,7 @@ Total cost per player per day: **2 backend requests** in the common path (one `G
 - Shows a **minimal** stats summary from previous daily games (exact fields TBD later — start with something lightweight like games played / win rate, extendable without a schema rewrite).
 - A daily game is only recorded as a win or loss once it actually concludes — the player finds the card, or exhausts all 10 guesses. Closing and reopening the tab mid-game does **not** count as a loss: in-progress guesses/state are persisted locally and resume exactly where the player left off.
 - Two entry points: **Play Today's Game** and **Free Mode**.
+- Under the **Hint** button, a log-scale gradient bar (blue → green → yellow → orange → red, left edge at the value 1) with a pointer that slides to the number of cards still matching the accumulated hints. It starts at the local name-list size before the first guess, keeps the previous value while a new one resolves (never `???`), and on conclusion slides down to 1 (a win) or the real count (a loss) before the outcome is revealed.
 - Triggers the otag + card-name background download on load if a newer otag version is available than the cached one (§4.3); this download continues uninterrupted when the player clicks into a game.
 - Displays the current app/service-worker version in small print at the bottom (see §12).
 
@@ -139,7 +140,7 @@ At the end of a **daily** game (win or loss), show a summary that:
 - For each guess, computes a match score by **token overlap** (spec §11). For every property present on either the guessed or the target card, it counts how many of the guess's tokens appear anywhere on the target plus how many of the target's tokens appear on the guess, then divides that sum by the total number of tokens on both cards (the Sørensen–Dice coefficient). A property's score is therefore in [0, 1] regardless of which card has more tokens. The guess's score is the average of those per-property scores, scaled to a percentage for display. Duplicate tokens collapse, so repeated words can't inflate a property.
 - A property counts toward the average whenever *either* card has tokens for it, so a property the guess lacks but the target has (e.g. a non-creature guess against a creature) contributes 0 rather than being dropped. Because the score is an aggregate over all properties rather than a per-property reveal, the bar still does not disclose which specific properties exist on the target.
 - Renders each guess's score as a **horizontal bar made of emojis** (e.g. filled vs. empty block/square emoji), proportionally fuller the higher the match score — one row per guess.
-- Ends each row with a **colored square** encoding that guess's number of still-matching cards (blue = 1, green ≤ 10, yellow ≤ 100, orange ≤ 1000, red > 1000; gray = unknown), the same color scheme shown next to the Hint button.
+- Draws each row's bar in the **color of that guess's number of still-matching cards** (blue = 1, green ≤ 10, yellow ≤ 100, orange ≤ 1000, red > 1000; gray = unknown) rather than appending a separate square, so the same color scheme as the Hint button's bar is carried by the bar itself. The last row uses the count after all guesses (1 on a win).
 - Is copy-pasteable as a single shareable text block (the emoji bars).
 - Always ends with the URL to the game.
 

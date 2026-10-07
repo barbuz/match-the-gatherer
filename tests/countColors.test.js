@@ -28,22 +28,24 @@ describe('countColor', () => {
 });
 
 describe('logPosition', () => {
-  it('spaces the color-band boundaries at even 20% intervals', () => {
+  it('spaces the color-band boundaries at even 25% intervals', () => {
     const b = tierBoundaries();
     expect(b).toHaveLength(5);
-    b.forEach((v, i) => expect(v).toBeCloseTo((i + 1) / 5, 6));
+    b.forEach((v, i) => expect(v).toBeCloseTo(i / 4, 6));
   });
 
   it('is monotonic and clamps out-of-range values to [0, 1]', () => {
     expect(logPosition(1)).toBeLessThan(logPosition(10));
     expect(logPosition(10)).toBeLessThan(logPosition(1000));
-    expect(logPosition(0.001)).toBe(0);
+    expect(logPosition(0.5)).toBe(0);
     expect(logPosition(1_000_000)).toBe(1);
   });
 
-  it('places each band boundary at its band edge', () => {
-    expect(logPosition(1)).toBeCloseTo(0.2, 6);
-    expect(logPosition(1000)).toBeCloseTo(0.8, 6);
+  it('starts the blue band at the left edge and ends red at the right', () => {
+    expect(logPosition(1)).toBeCloseTo(0, 6); // 1 is the left edge
+    expect(logPosition(10)).toBeCloseTo(0.25, 6);
+    expect(logPosition(1000)).toBeCloseTo(0.75, 6);
+    expect(logPosition(10_000)).toBeCloseTo(1, 6);
   });
 });
 

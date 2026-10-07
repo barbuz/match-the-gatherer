@@ -3,7 +3,7 @@
    * Shared game screen used by the Daily and Free Mode routes (spec §2).
    * Handles target selection, guessing, feedback, timeline, and summary.
    */
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { ensureData, dataStatus } from '../stores/backgroundFetch.js';
   import { fetchCardByName, countSearchResults } from '../api/scryfall.js';
   import { fetchDailyCard } from '../api/dailyApi.js';
@@ -41,8 +41,70 @@
   // so the number shown always matches the set the link opens.
   $: hintHints = state.guesses.length > 0 ? gatherHints(state.guesses) : null;
   $: hintUrl = hintHints ? buildScryfallSearchUrl(hintHints) : '';
-  // The latest guess's stored count (undefined → still resolving → "???").
-  $: hintCount = state.hintCounts?.[state.guesses.length - 1] ?? null;
+  // The bar's value: the latest guess's count, kept from the previous guess
+  // while a new one resolves, and starting from the local name-list size before
+  // any guess (we never show a count below the list).
+  $: latestCount = state.hintCounts?.[state.guesses.length - 1] ?? null;
+  $: barCount =
+    state.guesses.length === 0
+      ? names.length || null
+      : revealCount ?? latestCount ?? state.hintCounts?.[state.guesses.length - 2] ?? (names.length || null);
+  // Count the final, fully-constrained hint set once the game has ended, so the
+  // bar can slide down to the true number (1 on a win) before the outcome shows.
+  $: finalHints =
+    state.status !== 'playing' && state.guesses.length > 0 ? gatherHints(state.guesses) : null;
+  $: revealCount = finalCountsResolved ? finalCountValue : null;
+
+  // The final count (1 on a win, the real value on a loss) is scored from the
+  // accumulated hints; on a win we know it is exactly the answer, so it is 1
+  // without a request.
+  let finalCountValue = null;
+  let finalCountsResolved = false;
+  let finalCountToken = null;
+
+  $: if (finalHints) {
+    if (state.status === 'won') {
+      finalCountValue = 1;
+      finalCountsResolved = true;
+    } else {
+      const query = buildScryfallQuery(finalHints);
+      if (query !== finalCountToken) {
+        finalCountToken = query;
+        finalCountValue = null;
+        finalCountsResolved = false;
+        countSearchResults(query)
+          .then((n) => {
+            finalCountValue = n;
+            finalCountsResolved = true;
+          })
+          .catch(() => {
+            finalCountsResolved = true; // keep whatever the bar already shows
+          });
+      }
+    }
+  } else {
+    finalCountValue = null;
+    finalCountsResolved = false;
+    finalCountToken = null;
+  }
+
+  // While the game has just ended but the final count is still resolving (or
+  // sliding into place), hold the outcome back; then reveal it after the bar has
+  // had time to animate.
+  let gameOverVisible = false;
+  let revealTimer = null;
+  $: if (state.status === 'playing') {
+    if (gameOverVisible) gameOverVisible = false;
+    if (revealTimer) {
+      clearTimeout(revealTimer);
+      revealTimer = null;
+    }
+  } else if (!gameOverVisible && !revealTimer && finalCountsResolved) {
+    revealTimer = setTimeout(() => {
+      gameOverVisible = true;
+      revealTimer = null;
+    }, 1200);
+  }
 
   // Count each new guess's cumulative clue set asynchronously; the game never
   // waits. A request for an earlier guess is left to finish: its result is
@@ -50,7 +112,7 @@
   // drives the button, which only ever reads the latest guess's count.
   $: {
     const idx = state.guesses.length - 1;
-    if (idx >= 0 && idx !== countedIndex) {
+    if (idx >= 0 && idx !== countedIndex && state.status === 'playing') {
       countedIndex = idx;
       trackHintCount(idx);
     }
@@ -78,6 +140,10 @@
   onMount(() => {
     setup();
     return () => unsubscribe?.();
+  });
+
+  onDestroy(() => {
+    if (revealTimer) clearTimeout(revealTimer);
   });
 
   async function setup() {
@@ -150,12 +216,12 @@
   {:else}
     <p class="hint">
       {mode === 'daily' ? `Daily puzzle — ${dayKey} (UTC)` : 'Free mode'}
-      {#if !gameOver}
+      {#if !gameOverVisible}
         · {remaining} {remaining === 1 ? 'guess' : 'guesses'} left
       {/if}
     </p>
 
-    {#if gameOver}
+    {#if gameOverVisible}
       <div class="game-over">
         {#if state.status === 'won'}
           <h2>{state.hintsUsed?.length === 0 ? '🔮 Peerless!' : '🎉 You found it!'}</h2>
@@ -186,6 +252,7 @@
             {dayKey}
             hintsUsed={state.hintsUsed ?? []}
             hintCounts={state.hintCounts ?? {}}
+            {revealCount}
             {targetCard}
           />
           <CommunityStats stats={state.communityStats} />
@@ -194,11 +261,16 @@
         {/if}
       </div>
     {:else}
-      <GuessInput {names} exclude={guessedNames} disabled={!state.loaded} on:select={onSelect} />
+      <GuessInput
+        {names}
+        exclude={guessedNames}
+        disabled={!state.loaded || gameOver}
+        on:select={onSelect}
+      />
       <div class="hint-row">
-        <HintButton disabled={state.guesses.length === 0} on:press={onHintPress} />
+        <HintButton disabled={state.guesses.length === 0 || gameOver} on:press={onHintPress} />
       </div>
-      <HintBar count={hintCount} disabled={state.guesses.length === 0} />
+      <HintBar count={barCount} initialCount={names.length} />
       {#if submitError}
         <p class="error-msg">{submitError}</p>
       {/if}

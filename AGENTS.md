@@ -222,25 +222,35 @@ Pitfalls that make this silently lie:
   new guess. An earlier guess's request is **left to finish, not aborted** — its
   result is still saved per guess index so it can appear in the endgame summary,
   while the bar only ever reads the *latest* guess's count, so a slow older
-  response can't interfere with the number shown. Until the latest resolves the
-  bar's pointer stays put and the number reads `???`, and a failed request leaves
-  it unresolved (never a wrong number). Resolved counts live in `gameState.js`
-  `hintCounts` keyed by guess index and persist with the daily game; they surface
-  in the share text (`buildShareText` tags each emoji row with the count's color).
-  The `Hint` button itself is label-only and stays enabled while unresolved —
-  only the `HintBar`'s number is pending.
+  response can't interfere with the number shown. A new guess shows the previous
+  guess's count (never `???`) until its own resolves; before the first guess the
+  bar starts at the local **name-list size** (`ensureData()` length), since no
+  smaller set has been implied yet. A failed request keeps the previous value —
+  never a wrong number. Resolved counts live in `gameState.js` `hintCounts` keyed
+  by guess index and persist with the daily game; they surface in the share text
+  (`buildShareText` colors each emoji row by its count). The `Hint` button itself
+  is label-only.
 - **Count color scheme** (`game/countColors.js`): shared by the share summary
   and the hint bar. Bands: blue = exactly 1, green ≤ 10, yellow ≤ 100, orange
-  ≤ 1000, red > 1000 (gray = unknown). In the end-game summary each guess row
-  ends with a colored square for that guess's `hintCounts` value (in the
-  copy-pasteable share text as 🟦/🟩/🟨/🟧/🟥/⬜ emoji) instead of the digits.
-  The hint bar's gradient maps these colors onto a log scale from 0.1 to
-  10 000 (five equal decades), so every band boundary sits at an even 20% of the
-  bar; `logPosition()` converts a count to a `[0, 1]` position. `HintBar.svelte`
-  draws the gradient under the button with a caret pointer that slides to the
-  latest count (CSS `transition: left 1s`; the first placement is applied with no
-  transition so a freshly created pointer doesn't fly in from the edge) and shows
-  the actual number beneath the pointer, tinted with the band color.
+  ≤ 1000, red > 1000 (gray = unknown). In the end-game summary each guess row's
+  emoji bar is **drawn in that guess's count color** (the filled blocks are
+  🟦/🟩/🟨/🟧/🟥, gray when unknown), so the bar itself encodes the count — there
+  is no separate trailing square. The hint bar's gradient maps these colors onto
+  a log scale whose **left edge is 1** (the minimum possible count) up to
+  10 000, so we never render a value below 1; `logPosition()` converts a count to
+  a `[0, 1]` position and the five colors are spread evenly across the bar
+  (`tierCenters()`). `HintBar.svelte` draws the gradient under the button with a
+  caret pointer that slides to the latest count (CSS `transition: left 1s`; the
+  first placement is applied with no transition so a freshly created pointer
+  doesn't fly in from the edge) and shows the actual number beneath the pointer,
+  tinted with the band color.
+- **Endgame reveal** (`GameBoard.svelte`): when the game concludes the board holds
+  the outcome back while the bar slides to the fully-constrained count — 1 on a
+  win (known without a request), or the real `countSearchResults()` value on a
+  loss — then reveals it ~1.2 s later. The final count is scored once from
+  `gatherHints(guesses)` (all guesses) and overrides the last summary row's
+  stored count via `ShareSummary`'s `revealCount`, so the summary and the bar
+  agree.
 
 - Daily games persist per UTC day (`mtg:game:${dayKey}`, via `lib/game/gameState.js`);
   free-mode games are memory-only and never touch stats. Stats live in `storage/statsStore.js`
