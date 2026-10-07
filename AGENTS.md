@@ -258,6 +258,10 @@ Pitfalls that make this silently lie:
   count query is in flight (`pending` from `GameBoard.svelte`'s `countPending`) a
   small **spinner** shows beside the number, from the moment a guess is submitted
   until its count resolves and the pointer starts moving — no minimum duration.
+  `countPending` is raised **at submit**, before the Scryfall name lookup that
+  precedes `addGuess` (the guess is not recorded until that round-trip returns),
+  so the spinner is not delayed by it; it is kept imperative rather than derived
+  so the submit→count hand-off cannot be reordered by Svelte's scheduling.
   The number itself keeps the previous value until the new one arrives (never
   `???`). The bar's value comes from the pure `barTarget.js` `barCountFor()`:
   while the current

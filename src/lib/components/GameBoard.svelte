@@ -114,8 +114,12 @@
   // still saved per guess index (for the endgame summary), but it no longer
   // drives the button, which only ever reads the latest guess's count.
   let pendingForIndex = -1;
-  $: countPending =
-    pendingForIndex >= 0 && pendingForIndex === state.guesses.length - 1;
+  // True from the moment a guess is submitted until its count query settles.
+  // Kept imperative (not derived) so the submit→count hand-off cannot be
+  // reordered by Svelte's reactive-statement scheduling: the Scryfall name
+  // lookup happens *before* the guess is recorded, so without raising this at
+  // submit the spinner would only appear once that round-trip finished.
+  let countPending = false;
   $: {
     const idx = state.guesses.length - 1;
     if (idx >= 0 && idx !== countedIndex && state.status === 'playing') {
@@ -125,12 +129,17 @@
   }
 
   function trackHintCount(index) {
-    if (state.guesses[index] == null || state.hintCounts?.[index] != null) return; // already counted
+    // Already counted (e.g. restored) — no query, so nothing to wait for.
+    if (state.guesses[index] == null || state.hintCounts?.[index] != null) {
+      countPending = false;
+      return;
+    }
     // Count the same cumulative hint set the button's link opens (hints from
     // this and every earlier guess), so the number shown always describes that
     // link. A per-guess set would ignore earlier clues and can even grow.
     const hints = gatherHints(state.guesses.slice(0, index + 1));
     pendingForIndex = index;
+    countPending = true;
     countSearchResults(buildScryfallQuery(hints))
       .then((n) => game.setHintCount(index, n))
       .catch(() => {
@@ -138,7 +147,10 @@
         // instead of blocking or showing a wrong number.
       })
       .finally(() => {
-        if (pendingForIndex === index) pendingForIndex = -1;
+        if (pendingForIndex === index) {
+          pendingForIndex = -1;
+          countPending = false;
+        }
       });
   }
 
@@ -206,16 +218,25 @@
   async function onSelect(e) {
     submitError = '';
     const name = e.detail;
+    countPending = true; // spin from the moment of submit, before the lookup
     try {
       const card = await fetchCardByName(name);
       if (!card) {
         submitError = `Couldn't find "${name}" on Scryfall.`;
+        countPending = false;
         return;
       }
       const results = compareCards(card, targetCard);
-      game.addGuess({ card, results });
+      // `addGuess` records the guess (and kicks off its count query)
+      // synchronously; only its best-effort stats reporting is awaited, and
+      // that must not hold the spinner — it hands off to the count the moment
+      // the guess lands.
+      const recorded = game.addGuess({ card, results });
+      countPending = false;
+      await recorded;
     } catch (err) {
       submitError = `Lookup failed: ${err?.message ?? err}`;
+      countPending = false;
     }
   }
 
