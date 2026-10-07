@@ -80,38 +80,78 @@
 
   onDestroy(() => {
     if (rafId) cancelAnimationFrame(rafId);
+    if (spinnerTimer) clearTimeout(spinnerTimer);
   });
+
+  // The spinner is driven by `pending`, but a fast query would flash it for a
+  // few milliseconds (effectively invisible). Keep it up for a short minimum so
+  // the wait is perceptible without lingering after the answer is in.
+  let showSpinner = false;
+  let spinnerTimer = null;
+
+  function syncSpinner(p) {
+    if (p) {
+      if (spinnerTimer) {
+        clearTimeout(spinnerTimer);
+        spinnerTimer = null;
+      }
+      showSpinner = true;
+    } else if (showSpinner && !spinnerTimer) {
+      spinnerTimer = setTimeout(() => {
+        showSpinner = false;
+        spinnerTimer = null;
+      }, 400);
+    }
+  }
+  $: syncSpinner(pending);
 
   $: value = ready ? shown.toLocaleString() : '…';
   $: valueColor = ready ? countColor(shown) : 'var(--muted)';
 </script>
 
-<div class="bar">
-  <div class="track" style={`background: ${gradient}`}></div>
-  {#if ready}
-    <div class="pointer" style={`left: ${(pos * 100).toFixed(3)}%`} title={`${shown.toLocaleString()} matching cards`}>
-      <span class="caret" aria-hidden="true"></span>
-      <span class="value" style={`color: ${valueColor}`}>
-        {value}
-        {#if pending}
-          <span class="spinner" role="status" aria-label="counting"></span>
-        {/if}
+<div class="hintbar">
+  <span class="label">Possible cards:</span>
+  <div class="bar">
+    <div class="track" style={`background: ${gradient}`}></div>
+    {#if ready}
+      <div class="pointer" style={`left: ${(pos * 100).toFixed(3)}%`} title={`${shown.toLocaleString()} matching cards`}>
+        <span class="caret" aria-hidden="true"></span>
+        <span class="value" style={`color: ${valueColor}`}>
+          {value}
+          {#if showSpinner}
+            <span class="spinner" role="status" aria-label="counting"></span>
+          {/if}
+        </span>
+      </div>
+    {:else}
+      <span class="value pending">
+        <span class="spinner" role="status" aria-label="loading"></span>
       </span>
-    </div>
-  {:else}
-    <span class="value pending">
-      <span class="spinner" role="status" aria-label="loading"></span>
-    </span>
-  {/if}
+    {/if}
+  </div>
 </div>
 
 <style>
-  .bar {
-    position: relative;
+  .hintbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     width: 100%;
     max-width: 20rem;
-    height: 2.1rem;
     margin: 0.5rem auto 0;
+  }
+  .label {
+    flex: 0 0 auto;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .bar {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 2.1rem;
     overflow: visible;
   }
   .track {

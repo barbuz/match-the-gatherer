@@ -120,7 +120,7 @@ Total cost per player per day: **2 backend requests** in the common path (one `G
 - Shows a **minimal** stats summary from previous daily games (exact fields TBD later — start with something lightweight like games played / win rate, extendable without a schema rewrite).
 - A daily game is only recorded as a win or loss once it actually concludes — the player finds the card, or exhausts all 10 guesses. Closing and reopening the tab mid-game does **not** count as a loss: in-progress guesses/state are persisted locally and resume exactly where the player left off.
 - Two entry points: **Play Today's Game** and **Free Mode**.
-- Under the **Hint** button, a log-scale gradient bar (blue → green → yellow → orange → red, from the value 1 to 50 000) with a pointer that slides to the number of cards still matching the accumulated hints while the number visibly counts to it. Because the bands are defined on a log scale, blue (exactly 1) is a thin tip and red (> 1000) owns the right portion. It starts at the local name-list size before the first guess, keeps the previous value (with a small spinner) while a new one resolves, and on conclusion counts down to 1 (a win) or the real count (a loss) before the outcome is revealed.
+- Under the **Hint** button, a log-scale gradient bar (blue → green → yellow → orange → red, from the value 1 to 50 000) labelled **Possible cards:**, with a pointer that slides to the number of cards still matching the accumulated hints while the number visibly counts to it. Because the bands are defined on a log scale, blue (exactly 1) is a thin tip and red (> 1000) owns the right portion. It starts at the local name-list size before the first guess, keeps the previous value (with a small spinner, held up briefly so a fast lookup is still visible) while a new one resolves, and only ever shows a resolved count for the current guess — never a fallback that would jump the pointer toward the top. On conclusion it counts down to 1 (a win) or the real count (a loss) before the outcome is revealed.
 - Triggers the otag + card-name background download on load if a newer otag version is available than the cached one (§4.3); this download continues uninterrupted when the player clicks into a game.
 - Displays the current app/service-worker version in small print at the bottom (see §12).
 
@@ -193,6 +193,8 @@ match-the-gatherer/
 │   │   │   ├── dailySeed.js      # §5 — UTC date → deterministic card index
 │   │   │   ├── comparison.js     # §3 — per-property comparison rules (mana, color, type, otags…)
 │   │   │   ├── scoring.js        # §11 — token-overlap match score (per-property Dice, averaged)
+│   │   │   ├── countColors.js    # §8/§11 — shared match-count color bands + log scale
+│   │   │   ├── barTarget.js      # §8 — pure chooser for the Hint bar's displayed count
 │   │   │   └── gameState.js      # store: guesses, remaining attempts, win/loss, persisted per day
 │   │   │
 │   │   ├── storage/

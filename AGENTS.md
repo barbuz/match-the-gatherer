@@ -244,21 +244,29 @@ Pitfalls that make this silently lie:
   immediately, and red owns the last ~third — `bandEdges()`/`gradientStops()`
   place each color flat across the middle of its band and blend to its neighbor
   at the edges, rather than spreading the five colors evenly.
-- **HintBar animation** (`HintBar.svelte`): a pointer slides to the latest count
-  and the number **visibly counts up or down** to the new value (a ~0.7 s
-  `requestAnimationFrame` ease-out; the pointer position is derived from the
-  animated value so digits and caret stay in lockstep). The jump can span tens of
-  thousands, but only the ~42 painted frames are computed, so the cost is
-  independent of the gap. While a count query is in flight (`pending` from
-  `GameBoard.svelte`'s `countPending`) a small **spinner** shows beside the
-  number; the number itself keeps the previous value until the new one arrives
-  (never `???`). Before the first guess the bar starts at the local **name-list
-  size** (`ensureData()` length). On conclusion the board holds the outcome back
-  while the bar counts down to the fully-constrained count — 1 on a win (known
-  without a request), or the real `countSearchResults()` value on a loss — then
-  reveals it ~1.2 s later. The final count is scored once from
-  `gatherHints(guesses)` (all guesses) and overrides the last summary row's
-  stored count via `ShareSummary`'s `revealCount`, so summary and bar agree.
+- **HintBar animation** (`HintBar.svelte`): a **"Possible cards:"** label sits to
+  the left of the bar. A pointer slides to the latest count and the number
+  **visibly counts up or down** to the new value (a ~0.7 s `requestAnimationFrame`
+  ease-out; the pointer position is derived from the animated value so digits and
+  caret stay in lockstep). The jump can span tens of thousands, but only the ~42
+  painted frames are computed, so the cost is independent of the gap. While a
+  count query is in flight (`pending` from `GameBoard.svelte`'s `countPending`) a
+  small **spinner** shows beside the number — held up for a short minimum (~0.4 s)
+  so a fast Scryfall response does not make it flash invisibly. The number itself
+  keeps the previous value until the new one arrives (never `???`). The bar's
+  value comes from the pure `barTarget.js` `barCountFor()`: while the current
+  guess's count is resolving (or after it failed) it holds the most recent
+  *resolved* count, so the bar only ever moves down into the true value — it never
+  falls back to an older guess or the name-list size, which would make the pointer
+  jump toward the top when a backgrounded query failed and a later guess was made.
+  Before the first guess the bar starts at the local **name-list size**
+  (`ensureData()` length). On conclusion the board holds the outcome back while the
+  bar counts down to the fully-constrained count — 1 on a win (known without a
+  request), or the real `countSearchResults()` value on a loss — then reveals it
+  ~1.2 s later.
+  The final count is scored once from `gatherHints(guesses)` (all guesses) and
+  overrides the last summary row's stored count via `ShareSummary`'s
+  `revealCount`, so summary and bar agree.
 
 - Daily games persist per UTC day (`mtg:game:${dayKey}`, via `lib/game/gameState.js`);
   free-mode games are memory-only and never touch stats. Stats live in `storage/statsStore.js`

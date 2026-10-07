@@ -12,6 +12,7 @@
   import { createGame, MAX_GUESSES } from '../game/gameState.js';
   import { gatherHints, buildScryfallSearchUrl, buildScryfallQuery } from '../game/hints.js';
   import { scoreGuess } from '../game/scoring.js';
+  import { barCountFor } from '../game/barTarget.js';
   import GuessInput from './GuessInput.svelte';
   import GuessFeedback from './GuessFeedback.svelte';
   import CardTimeline from './CardTimeline.svelte';
@@ -41,21 +42,20 @@
   // so the number shown always matches the set the link opens.
   $: hintHints = state.guesses.length > 0 ? gatherHints(state.guesses) : null;
   $: hintUrl = hintHints ? buildScryfallSearchUrl(hintHints) : '';
-  // The bar's value: the latest guess's count, kept from the previous guess
-  // while a new one resolves, and starting from the local name-list size before
-  // any guess (we never show a count below the list). Once the game ends, the
-  // final target (1 on a win, the real count on a loss) takes over.
-  $: latestCount = state.hintCounts?.[state.guesses.length - 1] ?? null;
   // Count the final, fully-constrained hint set once the game has ended, so the
   // bar can slide down to the true number (1 on a win) before the outcome shows.
   $: finalHints =
     state.status !== 'playing' && state.guesses.length > 0 ? gatherHints(state.guesses) : null;
   $: revealCount = finalCountsResolved ? finalCountValue : null;
-  $: finalBarTarget = state.status === 'won' ? 1 : revealCount;
-  $: barCount =
-    state.guesses.length === 0
-      ? names.length || null
-      : finalBarTarget ?? latestCount ?? state.hintCounts?.[state.guesses.length - 2] ?? (names.length || null);
+  // The bar's value (see `barTarget.js`): the latest resolved count, holding the
+  // previous resolved value (never an unrelated fallback) while one resolves.
+  $: barCount = barCountFor({
+    guesses: state.guesses,
+    hintCounts: state.hintCounts,
+    status: state.status,
+    revealCount,
+    initialCount: names.length,
+  });
 
   // The final count (1 on a win, the real value on a loss) is scored from the
   // accumulated hints; on a win we know it is exactly the answer, so it is 1
