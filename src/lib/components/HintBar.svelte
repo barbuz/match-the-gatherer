@@ -80,30 +80,7 @@
 
   onDestroy(() => {
     if (rafId) cancelAnimationFrame(rafId);
-    if (spinnerTimer) clearTimeout(spinnerTimer);
   });
-
-  // The spinner is driven by `pending`, but a fast query would flash it for a
-  // few milliseconds (effectively invisible). Keep it up for a short minimum so
-  // the wait is perceptible without lingering after the answer is in.
-  let showSpinner = false;
-  let spinnerTimer = null;
-
-  function syncSpinner(p) {
-    if (p) {
-      if (spinnerTimer) {
-        clearTimeout(spinnerTimer);
-        spinnerTimer = null;
-      }
-      showSpinner = true;
-    } else if (showSpinner && !spinnerTimer) {
-      spinnerTimer = setTimeout(() => {
-        showSpinner = false;
-        spinnerTimer = null;
-      }, 400);
-    }
-  }
-  $: syncSpinner(pending);
 
   $: value = ready ? shown.toLocaleString() : '…';
   $: valueColor = ready ? countColor(shown) : 'var(--muted)';
@@ -118,7 +95,7 @@
         <span class="caret" aria-hidden="true"></span>
         <span class="value" style={`color: ${valueColor}`}>
           {value}
-          {#if showSpinner}
+          {#if pending}
             <span class="spinner" role="status" aria-label="counting"></span>
           {/if}
         </span>
@@ -134,7 +111,9 @@
 <style>
   .hintbar {
     display: flex;
-    align-items: center;
+    /* Align to the top so the label can be centred on the *track* (the bar
+       itself), not on the whole widget including the number hanging below. */
+    align-items: flex-start;
     gap: 0.5rem;
     width: 100%;
     max-width: 20rem;
@@ -146,6 +125,8 @@
     font-weight: 600;
     color: var(--muted);
     white-space: nowrap;
+    /* Match the track's height so the text is vertically centred on the bar. */
+    line-height: 0.55rem;
   }
   .bar {
     position: relative;

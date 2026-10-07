@@ -251,10 +251,11 @@ Pitfalls that make this silently lie:
   caret stay in lockstep). The jump can span tens of thousands, but only the ~42
   painted frames are computed, so the cost is independent of the gap. While a
   count query is in flight (`pending` from `GameBoard.svelte`'s `countPending`) a
-  small **spinner** shows beside the number — held up for a short minimum (~0.4 s)
-  so a fast Scryfall response does not make it flash invisibly. The number itself
-  keeps the previous value until the new one arrives (never `???`). The bar's
-  value comes from the pure `barTarget.js` `barCountFor()`: while the current
+  small **spinner** shows beside the number, from the moment a guess is submitted
+  until its count resolves and the pointer starts moving — no minimum duration.
+  The number itself keeps the previous value until the new one arrives (never
+  `???`). The bar's value comes from the pure `barTarget.js` `barCountFor()`:
+  while the current
   guess's count is resolving (or after it failed) it holds the most recent
   *resolved* count, so the bar only ever moves down into the true value — it never
   falls back to an older guess or the name-list size, which would make the pointer
