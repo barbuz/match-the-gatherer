@@ -237,20 +237,28 @@ Pitfalls that make this silently lie:
   🟦/🟩/🟨/🟧/🟥, gray when unknown), so the bar itself encodes the count — there
   is no separate trailing square. The hint bar's gradient maps these colors onto
   a log scale whose **left edge is 1** (the minimum possible count) up to
-  10 000, so we never render a value below 1; `logPosition()` converts a count to
-  a `[0, 1]` position and the five colors are spread evenly across the bar
-  (`tierCenters()`). `HintBar.svelte` draws the gradient under the button with a
-  caret pointer that slides to the latest count (CSS `transition: left 1s`; the
-  first placement is applied with no transition so a freshly created pointer
-  doesn't fly in from the edge) and shows the actual number beneath the pointer,
-  tinted with the band color.
-- **Endgame reveal** (`GameBoard.svelte`): when the game concludes the board holds
-  the outcome back while the bar slides to the fully-constrained count — 1 on a
-  win (known without a request), or the real `countSearchResults()` value on a
-  loss — then reveals it ~1.2 s later. The final count is scored once from
+  `MAX_COUNT` = 50 000, well past the ~35k name list, so a raw count near the
+  top is still visibly short of the right edge. Because a log scale spends a
+  decade per order of magnitude, the band widths follow the thresholds: blue
+  (a single value) is a thin tip at the far left, green starts almost
+  immediately, and red owns the last ~third — `bandEdges()`/`gradientStops()`
+  place each color flat across the middle of its band and blend to its neighbor
+  at the edges, rather than spreading the five colors evenly.
+- **HintBar animation** (`HintBar.svelte`): a pointer slides to the latest count
+  and the number **visibly counts up or down** to the new value (a ~0.7 s
+  `requestAnimationFrame` ease-out; the pointer position is derived from the
+  animated value so digits and caret stay in lockstep). The jump can span tens of
+  thousands, but only the ~42 painted frames are computed, so the cost is
+  independent of the gap. While a count query is in flight (`pending` from
+  `GameBoard.svelte`'s `countPending`) a small **spinner** shows beside the
+  number; the number itself keeps the previous value until the new one arrives
+  (never `???`). Before the first guess the bar starts at the local **name-list
+  size** (`ensureData()` length). On conclusion the board holds the outcome back
+  while the bar counts down to the fully-constrained count — 1 on a win (known
+  without a request), or the real `countSearchResults()` value on a loss — then
+  reveals it ~1.2 s later. The final count is scored once from
   `gatherHints(guesses)` (all guesses) and overrides the last summary row's
-  stored count via `ShareSummary`'s `revealCount`, so the summary and the bar
-  agree.
+  stored count via `ShareSummary`'s `revealCount`, so summary and bar agree.
 
 - Daily games persist per UTC day (`mtg:game:${dayKey}`, via `lib/game/gameState.js`);
   free-mode games are memory-only and never touch stats. Stats live in `storage/statsStore.js`

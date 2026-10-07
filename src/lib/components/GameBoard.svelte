@@ -43,17 +43,19 @@
   $: hintUrl = hintHints ? buildScryfallSearchUrl(hintHints) : '';
   // The bar's value: the latest guess's count, kept from the previous guess
   // while a new one resolves, and starting from the local name-list size before
-  // any guess (we never show a count below the list).
+  // any guess (we never show a count below the list). Once the game ends, the
+  // final target (1 on a win, the real count on a loss) takes over.
   $: latestCount = state.hintCounts?.[state.guesses.length - 1] ?? null;
-  $: barCount =
-    state.guesses.length === 0
-      ? names.length || null
-      : revealCount ?? latestCount ?? state.hintCounts?.[state.guesses.length - 2] ?? (names.length || null);
   // Count the final, fully-constrained hint set once the game has ended, so the
   // bar can slide down to the true number (1 on a win) before the outcome shows.
   $: finalHints =
     state.status !== 'playing' && state.guesses.length > 0 ? gatherHints(state.guesses) : null;
   $: revealCount = finalCountsResolved ? finalCountValue : null;
+  $: finalBarTarget = state.status === 'won' ? 1 : revealCount;
+  $: barCount =
+    state.guesses.length === 0
+      ? names.length || null
+      : finalBarTarget ?? latestCount ?? state.hintCounts?.[state.guesses.length - 2] ?? (names.length || null);
 
   // The final count (1 on a win, the real value on a loss) is scored from the
   // accumulated hints; on a win we know it is exactly the answer, so it is 1
@@ -110,6 +112,9 @@
   // waits. A request for an earlier guess is left to finish: its result is
   // still saved per guess index (for the endgame summary), but it no longer
   // drives the button, which only ever reads the latest guess's count.
+  let pendingForIndex = -1;
+  $: countPending =
+    pendingForIndex >= 0 && pendingForIndex === state.guesses.length - 1;
   $: {
     const idx = state.guesses.length - 1;
     if (idx >= 0 && idx !== countedIndex && state.status === 'playing') {
@@ -124,11 +129,15 @@
     // this and every earlier guess), so the number shown always describes that
     // link. A per-guess set would ignore earlier clues and can even grow.
     const hints = gatherHints(state.guesses.slice(0, index + 1));
+    pendingForIndex = index;
     countSearchResults(buildScryfallQuery(hints))
       .then((n) => game.setHintCount(index, n))
       .catch(() => {
-        // Offline: leave the count unresolved so it renders "???" instead of
-        // blocking or showing a wrong number.
+        // Offline: leave the count unresolved so it keeps the previous value
+        // instead of blocking or showing a wrong number.
+      })
+      .finally(() => {
+        if (pendingForIndex === index) pendingForIndex = -1;
       });
   }
 
@@ -270,7 +279,7 @@
       <div class="hint-row">
         <HintButton disabled={state.guesses.length === 0 || gameOver} on:press={onHintPress} />
       </div>
-      <HintBar count={barCount} initialCount={names.length} />
+      <HintBar count={barCount} initialCount={names.length} pending={countPending} />
       {#if submitError}
         <p class="error-msg">{submitError}</p>
       {/if}

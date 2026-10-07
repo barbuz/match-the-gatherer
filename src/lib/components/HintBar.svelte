@@ -1,57 +1,107 @@
 <script>
   /**
    * Horizontal gradient bar under the Hint button showing how many cards still
-   * match the gathered hints. The gradient runs through the shared count-color
-   * scheme on a log scale whose left edge is 1 (see `game/countColors.js`), and
-   * a pointer carrying the count slides to the matching position whenever a new
-   * count resolves.
+   * match the gathered hints. The gradient runs the shared count-color scheme on
+   * a log scale from 1 to `MAX_COUNT` (see `game/countColors.js`), so the blue
+   * band is a thin tip and red fills the right. A pointer carrying the count
+   * slides to the matching position, and the number visibly counts up or down to
+   * the new value.
    */
-  import { logPosition, tierCenters, countColor, TIER_COLORS } from '../game/countColors.js';
+  import { onDestroy } from 'svelte';
+  import { logPosition, gradientStops, countColor } from '../game/countColors.js';
 
   /** Latest still-matching count, or null while it is still resolving. */
   export let count = null;
   /** Starting value shown before any guess (the local card-name count). */
   export let initialCount = null;
+  /** True while a Scryfall count query is in flight (shows the spinner). */
+  export let pending = false;
 
-  // One color stop per band, at the band's center (evenly spaced on the log
-  // scale), plus a deeper red at the far edge so the "> 1000" tail darkens
-  // instead of sitting flat.
-  const centers = tierCenters();
-  const stops = TIER_COLORS.map((c, i) => `${c} ${(centers[i] * 100).toFixed(2)}%`);
-  const gradient = `linear-gradient(90deg, ${stops.join(', ')}, #b03030 100%)`;
+  // Gradient stops are static for a given scale; compute once.
+  const stops = gradientStops();
+  const gradient = `linear-gradient(90deg, ${stops
+    .map(([c, p]) => `${c} ${(p * 100).toFixed(2)}%`)
+    .join(', ')})`;
 
-  // The value on show. A null count (still resolving) keeps the previous value,
-  // so we never flash "???" once we have a number; before the first count it
-  // starts from the local name-list size.
-  let displayed = null;
-  $: if (count != null) displayed = count;
-  $: if (displayed == null && initialCount != null) displayed = initialCount;
-
-  let pos = null; // pointer position in [0, 1], or null before any value
-  let lastTarget = null;
-
-  $: target = displayed != null ? logPosition(displayed) : null;
-
-  // First value places the pointer (a freshly created element does not
-  // animate); later values transition smoothly via CSS.
-  $: if (target != null && target !== lastTarget) {
-    lastTarget = target;
-    pos = target;
+  // The target value: the latest count, or — while it resolves — the previous
+  // one, so we never flash "???" once we have a number. Before the first count
+  // it starts from the local name-list size.
+  let target = null;
+  $: if (count != null) {
+    target = count;
+  } else if (target == null && initialCount != null) {
+    target = initialCount;
   }
 
-  $: value = displayed != null ? displayed.toLocaleString() : '???';
-  $: valueColor = displayed != null ? countColor(displayed) : 'var(--muted)';
+  // The number actually painted, animated towards `target`. Drives both the
+  // digits and the pointer so the two stay in lockstep.
+  let animated = null;
+  let shown = 0;
+  let pos = 0;
+  let ready = false;
+  let rafId = null;
+
+  // Restart the count animation whenever the target changes.
+  $: if (target != null) animateTo(target);
+
+  // Slide the pointer proportionally to the animated value so its movement and
+  // the digits stay in lockstep (the caret follows the number, not a jump).
+  $: if (ready) pos = logPosition(shown);
+
+  function animateTo(to) {
+    if (rafId) cancelAnimationFrame(rafId);
+    const from = animated == null ? to : animated;
+    const start = performance.now();
+    const duration = 700;
+    ready = true;
+    const step = (now) => {
+      if (from === to) {
+        shown = to;
+        animated = to;
+        rafId = null;
+        return;
+      }
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      animated = Math.round(from + (to - from) * eased);
+      shown = animated;
+      if (t < 1) rafId = requestAnimationFrame(step);
+      else {
+        animated = to;
+        shown = to;
+        rafId = null;
+      }
+    };
+    // Paint the starting value immediately (no flash of 0), then ease.
+    shown = from;
+    animated = from;
+    rafId = requestAnimationFrame(step);
+  }
+
+  onDestroy(() => {
+    if (rafId) cancelAnimationFrame(rafId);
+  });
+
+  $: value = ready ? shown.toLocaleString() : '…';
+  $: valueColor = ready ? countColor(shown) : 'var(--muted)';
 </script>
 
 <div class="bar">
   <div class="track" style={`background: ${gradient}`}></div>
-  {#if pos != null}
-    <div class="pointer" style={`left: ${(pos * 100).toFixed(3)}%`} title={`${value} matching cards`}>
+  {#if ready}
+    <div class="pointer" style={`left: ${(pos * 100).toFixed(3)}%`} title={`${shown.toLocaleString()} matching cards`}>
       <span class="caret" aria-hidden="true"></span>
-      <span class="value" style={`color: ${valueColor}`}>{value}</span>
+      <span class="value" style={`color: ${valueColor}`}>
+        {value}
+        {#if pending}
+          <span class="spinner" role="status" aria-label="counting"></span>
+        {/if}
+      </span>
     </div>
   {:else}
-    <span class="value pending" style="color: var(--muted)">???</span>
+    <span class="value pending">
+      <span class="spinner" role="status" aria-label="loading"></span>
+    </span>
   {/if}
 </div>
 
@@ -80,7 +130,9 @@
     flex-direction: column;
     align-items: center;
     transform: translateX(-50%);
-    transition: left 1s ease;
+    /* The JS animation drives the digits; the pointer follows in step, with a
+       short easing so tiny frame jitter does not read as a stutter. */
+    transition: left 0.12s linear;
     white-space: nowrap;
   }
   .caret {
@@ -102,6 +154,22 @@
     top: 0.7rem;
     left: 50%;
     transform: translateX(-50%);
-    font-weight: 600;
+  }
+  /* Small "still counting" ring shown beside the number. */
+  .spinner {
+    display: inline-block;
+    width: 0.6rem;
+    height: 0.6rem;
+    margin-left: 0.3rem;
+    vertical-align: -0.05em;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: hintbar-spin 0.7s linear infinite;
+  }
+  @keyframes hintbar-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>

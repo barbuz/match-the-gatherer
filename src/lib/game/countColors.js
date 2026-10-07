@@ -4,20 +4,19 @@
  * speak the same visual language.
  *
  * Five bands: blue = exactly 1, green ≤ 10, yellow ≤ 100, orange ≤ 1000,
- * red > 1000. The bar positions counts on a log scale whose **left edge is the
- * value 1** (the smallest count that can ever occur), so the blue band always
- * starts at the far left and we never show a value below 1. The five band
- * boundaries (1, 10, 100, 1000, 10 000) sit at even 20% intervals.
+ * red > 1000. The bar positions counts on a log scale from 1 to `MAX_COUNT`.
+ *
+ * Because a log scale spends a full decade on every order of magnitude, the
+ * thresholds (1, 10, 100, 1000, max) sit at even intervals — so the blue band,
+ * which is a *single value* (exactly 1), collapses to a thin tip at the far
+ * left, green starts almost immediately, and red owns the whole right portion.
  */
 
 /** Left edge of the bar's log scale: the minimum possible count. */
 export const MIN_COUNT = 1;
 
-/** Right edge: 10 000, ten times past the red cutoff, so every band is equal. */
-export const MAX_COUNT = 10000;
-
-/** The five band edges, low → high, at even 20% intervals on the bar. */
-const BOUNDS = [1, 10, 100, 1000, MAX_COUNT];
+/** Right edge: 50 000, well past both the red cutoff and the ~35k name list. */
+export const MAX_COUNT = 50000;
 
 /** Ordered low → high; each entry's color fills up to `max` (inclusive). */
 const TIERS = [
@@ -42,7 +41,7 @@ export function countColor(n) {
 
 /**
  * Position of a count on the bar, in [0, 1], on a log scale from `min` (1) to
- * `max` (10 000). Counts below `min` clamp to the left edge, counts at or above
+ * `max` (50 000). Counts below `min` clamp to the left edge, counts at or above
  * `max` clamp to the right.
  */
 export function logPosition(n, min = MIN_COUNT, max = MAX_COUNT) {
@@ -51,20 +50,31 @@ export function logPosition(n, min = MIN_COUNT, max = MAX_COUNT) {
 }
 
 /**
- * Positions of the color-band boundaries (1, 10, 100, 1000, max) on the bar,
- * low → high. Used to place the gradient's color stops.
+ * Value edges of the five color bands, low → high, as log positions in [0, 1].
+ * Six edges delimit five bands: blue (1), green (2–10), yellow (11–100),
+ * orange (101–1000), red (> 1000 up to `max`). The blue/green edge is placed at
+ * 2 so the single-value blue band still gets a visible sliver at the tip.
  */
-export function tierBoundaries(min = MIN_COUNT, max = MAX_COUNT) {
-  return BOUNDS.map((b) => logPosition(Math.min(b, max), min, max));
+export function bandEdges(min = MIN_COUNT, max = MAX_COUNT) {
+  return [1, 2, 10, 100, 1000, max].map((v) => logPosition(v, min, max));
 }
 
 /**
- * Positions of each color band's center (blue, green, yellow, orange, red),
- * low → high — the points where the gradient shows each band's pure color.
- * Spread evenly (20% apart) so the gradient runs through all five colors
- * roughly evenly, as the color scheme intends, rather than bunching the narrow
- * low bands against the value boundaries.
+ * CSS gradient stops (`[color, position]`) that run the five tier colors across
+ * the bar in proportion to their band widths. Each color holds flat across the
+ * middle of its band and blends to its neighbor over the band's outer fifth,
+ * giving a smooth gradient that stays faithful to the boundaries rather than
+ * spreading the colors evenly.
  */
-export function tierCenters() {
-  return TIER_COLORS.map((_, i) => (i + 0.5) / TIER_COLORS.length);
+export function gradientStops(min = MIN_COUNT, max = MAX_COUNT) {
+  const edges = bandEdges(min, max);
+  const stops = [];
+  for (let i = 0; i < TIER_COLORS.length; i++) {
+    const lo = edges[i];
+    const hi = edges[i + 1];
+    const pad = (hi - lo) / 5;
+    stops.push([TIER_COLORS[i], lo + pad]);
+    stops.push([TIER_COLORS[i], hi - pad]);
+  }
+  return stops;
 }
