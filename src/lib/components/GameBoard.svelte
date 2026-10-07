@@ -38,6 +38,7 @@
   let unsubscribe = null;
   let hintUrl = '';
   let countedIndex = -1;
+  let setupToken = 0;
   // The button's link and count are built from the same cumulative hint list,
   // so the number shown always matches the set the link opens.
   $: hintHints = state.guesses.length > 0 ? gatherHints(state.guesses) : null;
@@ -156,8 +157,18 @@
   });
 
   async function setup() {
+    const token = ++setupToken;
     phase = 'loading';
     error = '';
+    // A stalled dependency (a request or a storage call that never settles)
+    // must not pin the board on "Loading game…" forever; fall back to the
+    // retry state, which a late success still recovers from.
+    const watchdog = setTimeout(() => {
+      if (token === setupToken && phase === 'loading') {
+        error = 'The game took too long to load.';
+        phase = 'error';
+      }
+    }, 20_000);
     try {
       names = await ensureData();
       if (mode === 'daily') {
@@ -172,6 +183,7 @@
         if (!targetCard) throw new Error('no vintage-legal card found in name list');
         targetName = targetCard.name;
       }
+      if (token !== setupToken) return; // superseded by a retry
       game = createGame({ mode, dayKey, targetName, targetCard });
       unsubscribe?.();
       unsubscribe = game.subscribe((s) => (state = s));
@@ -180,10 +192,14 @@
       // aggregates: it re-POSTs only if they never arrived, otherwise it reads
       // them back (backend spec §4.4), so a reload stays within budget.
       if (mode === 'daily') await game.reportIfConcluded();
-      phase = 'ready';
+      if (token === setupToken) phase = 'ready';
     } catch (e) {
-      error = String(e?.message ?? e);
-      phase = 'error';
+      if (token === setupToken) {
+        error = String(e?.message ?? e);
+        phase = 'error';
+      }
+    } finally {
+      clearTimeout(watchdog);
     }
   }
 

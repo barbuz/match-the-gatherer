@@ -47,6 +47,7 @@ describe('fetchDailyCard', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'https://match-the-gatherer.barbuz.workers.dev/api/daily/2026-09-15',
+      { signal: expect.anything() },
     );
     expect(card).toEqual(CARD);
     expect(dayKey).toBe('2026-09-15');
@@ -145,6 +146,34 @@ describe('fetchDailyCard', () => {
     await expect(fetchDailyCard('2026-09-15')).rejects.toThrow();
     await expect(fetchDailyCard('2026-09-15')).resolves.toMatchObject({ card: CARD });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('gives up on a request that never settles so the board cannot hang', async () => {
+    stubDb();
+    // A fetch that only ever rejects when its signal aborts, like a dropped
+    // connection the network stack never surfaces on its own.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (url, init) =>
+          new Promise((_, reject) =>
+            init?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('aborted', 'AbortError')),
+            ),
+          ),
+      ),
+    );
+    const { fetchDailyCard, DailyApiError } = await import('../src/lib/api/dailyApi.js');
+
+    vi.useFakeTimers();
+    try {
+      const pending = fetchDailyCard('2026-09-15');
+      const assertion = expect(pending).rejects.toBeInstanceOf(DailyApiError);
+      await vi.advanceTimersByTimeAsync(12_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

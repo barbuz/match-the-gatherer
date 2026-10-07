@@ -63,6 +63,11 @@ Pitfalls that make this silently lie:
   divergence, so the two need not stay byte-identical.
 - A response's **final URL** decides the day key (a non-today date 302s to
   today), so a clock-skewed client self-heals instead of mis-persisting.
+- Loading is **bounded**: `dailyApi.js` and `cardNames.js` abort their request
+  after 12 s, and `GameBoard.svelte`'s `setup()` has a 20 s watchdog that drops
+  into the existing retry state. A request or storage call that never settles
+  therefore cannot pin the board on "Loading game…" forever — the player always
+  gets either the game or a Retry button (a late success still recovers).
 - The `/api/daily/<date>` body is **gzipped and served with no
   `Content-Encoding`** (deliberate anti-casual-cheat obfuscation, backend spec
   §3.4), so the browser does *not* inflate it and `res.json()` fails on the raw

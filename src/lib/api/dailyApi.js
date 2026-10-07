@@ -13,6 +13,20 @@ import { API_BASE } from './config.js';
 const DATE_IN_URL = /\/api\/daily\/(\d{4}-\d{2}-\d{2})$/;
 // One slot, rewritten per day: the answer only matters until the date rolls.
 const CACHE_KEY = 'mtg:daily-card';
+// A request that never settles would leave the board stuck on "Loading game…"
+// with no way out, so give up and fall into the retry state instead.
+const REQUEST_TIMEOUT_MS = 12_000;
+
+/** `fetch` with a hard deadline; a timeout rejects like any other network error. */
+async function fetchWithTimeout(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export class DailyApiError extends Error {
   constructor(message) {
@@ -71,7 +85,7 @@ export async function fetchDailyCard(dateKey = utcDateKey()) {
 
   let res;
   try {
-    res = await fetch(`${API_BASE}/api/daily/${dateKey}`);
+    res = await fetchWithTimeout(`${API_BASE}/api/daily/${dateKey}`);
   } catch (err) {
     throw new DailyApiError(`couldn't reach the game server (${err?.message ?? err})`);
   }
