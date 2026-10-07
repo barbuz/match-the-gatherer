@@ -75,7 +75,9 @@
         <li>
           <strong>Narrow it down.</strong> The cards are laid out oldest-to-newest by first printing, with
           dividers showing what's older than, same day as, or newer than the target. Press <strong>Hint</strong> to
-          open a Scryfall search for every card still matching everything you've learned so far.
+          open a Scryfall search for every card still matching everything you've learned so far — the bar
+          beneath it colors how many cards are still in contention (blue for just one, through green,
+          yellow and orange, up to red for more than a thousand).
 
         </li>
         <li>

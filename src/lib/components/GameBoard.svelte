@@ -19,6 +19,7 @@
   import ShareSummary from './ShareSummary.svelte';
   import CommunityStats from './CommunityStats.svelte';
   import HintButton from './HintButton.svelte';
+  import HintBar from './HintBar.svelte';
 
   export let mode; // 'daily' | 'free'
 
@@ -195,8 +196,9 @@
     {:else}
       <GuessInput {names} exclude={guessedNames} disabled={!state.loaded} on:select={onSelect} />
       <div class="hint-row">
-        <HintButton disabled={state.guesses.length === 0} count={hintCount} on:press={onHintPress} />
+        <HintButton disabled={state.guesses.length === 0} on:press={onHintPress} />
       </div>
+      <HintBar count={hintCount} disabled={state.guesses.length === 0} />
       {#if submitError}
         <p class="error-msg">{submitError}</p>
       {/if}

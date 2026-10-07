@@ -4,18 +4,8 @@
   import { createEventDispatcher } from 'svelte';
 
   export let disabled = false;
-  /** Cards still matching the hints, or null while unknown/loading. */
-  export let count = null;
 
   const dispatch = createEventDispatcher();
-  // Once a guess exists the count is meaningful, so an unresolved request
-  // shows "???" rather than hiding the number.
-  $: label =
-    count != null
-      ? `Hint (${count.toLocaleString()})`
-      : disabled
-        ? 'Hint'
-        : 'Hint (???)';
 </script>
 
 <button
@@ -29,7 +19,7 @@
          bundled offline with the PWA; kept in sync manually. -->
     <img src={`${import.meta.env.BASE_URL}scryfall-logo.svg`} alt="Scryfall" />
   </span>
-  <span class="label">{label}</span>
+  <span class="label">Hint</span>
 </button>
 
 <style>

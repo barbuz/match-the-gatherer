@@ -4,7 +4,7 @@ Wordle-style MTG daily guessing game (Svelte PWA). Spec: `match-the-gatherer-spe
 
 ## Commands
 
-- `npm test` — vitest (comparison / scoring / gameState / hints / symbology / dailySeed / dailyApi)
+- `npm test` — vitest (comparison / scoring / countColors / gameState / hints / symbology / dailySeed / dailyApi)
 - `npm run build` — production build to `dist/` (set `BASE_PATH=/repo-name/` on GitHub Pages)
 - `npm run preview` — serve the production build
 
@@ -204,29 +204,43 @@ Pitfalls that make this silently lie:
   tightest,and an exact date subsumes all date hints. The HintButton opens that URL, and
   each used hint press marks its share row with 🔦 (`buildShareText` `hintsUsed`).
   `buildScryfallQuery()` returns the raw (unencoded) clause string, and
-  `buildScryfallSearchUrl()` is just it URL-encoded, so the button's count and the
+  `buildScryfallSearchUrl()` is just it URL-encoded, so the hint's count and the
   link it opens always search the same set.
 
-- **Hint count** (`lib/api/scryfall.js countSearchResults()`): the Hint button
-  shows how many cards still match (`Hint (N)`), counted after each guess from
-  the **cumulative** hint set `gatherHints(guesses.slice(0, i+1))` — the same
-  clause set the link opens, so the number always describes that link (a
-  per-guess set would ignore earlier clues and could even grow). Scryfall emits
-  `total_cards` as the first field of a search list, so the client reads only the
-  opening streamed bytes and then cancels the body — a few KB instead of the
-  ~100 KB gzipped (~900 KB raw) full page, and never paginates. A 404 (Scryfall's
-  empty-result shape) maps to 0. Requests send a User-Agent (Node's fetch 400s
-  without one).
+- **Hint count** (`lib/api/scryfall.js countSearchResults()`): how many cards
+  still match, counted after each guess from the **cumulative** hint set
+  `gatherHints(guesses.slice(0, i+1))` — the same clause set the link opens, so
+  the number always describes that link (a per-guess set would ignore earlier
+  clues and could even grow). The count is rendered as a **color** and a bar
+  position, not as digits on the button (see `game/countColors.js` below).
+  Scryfall emits `total_cards` as the first field of a search list, so the client
+  reads only the opening streamed bytes and then cancels the body — a few KB
+  instead of the ~100 KB gzipped (~900 KB raw) full page, and never paginates. A
+  404 (Scryfall's empty-result shape) maps to 0. Requests send a User-Agent
+  (Node's fetch 400s without one).
   The count is **async and non-blocking**: `GameBoard.svelte` kicks it off on each
   new guess. An earlier guess's request is **left to finish, not aborted** — its
   result is still saved per guess index so it can appear in the endgame summary,
-  while the button only ever reads the *latest* guess's count, so a slow older
+  while the bar only ever reads the *latest* guess's count, so a slow older
   response can't interfere with the number shown. Until the latest resolves the
-  button reads `Hint (???)`, and a failed request leaves it unresolved (never a
-  wrong number). Resolved counts live in `gameState.js` `hintCounts` keyed by guess
-  index and persist with the daily game; they surface in the share text
-  (`buildShareText` tags each emoji row with its count). The button stays enabled
-  while unresolved — only the number is pending.
+  bar's pointer stays put and the number reads `???`, and a failed request leaves
+  it unresolved (never a wrong number). Resolved counts live in `gameState.js`
+  `hintCounts` keyed by guess index and persist with the daily game; they surface
+  in the share text (`buildShareText` tags each emoji row with the count's color).
+  The `Hint` button itself is label-only and stays enabled while unresolved —
+  only the `HintBar`'s number is pending.
+- **Count color scheme** (`game/countColors.js`): shared by the share summary
+  and the hint bar. Bands: blue = exactly 1, green ≤ 10, yellow ≤ 100, orange
+  ≤ 1000, red > 1000 (gray = unknown). In the end-game summary each guess row
+  ends with a colored square for that guess's `hintCounts` value (in the
+  copy-pasteable share text as 🟦/🟩/🟨/🟧/🟥/⬜ emoji) instead of the digits.
+  The hint bar's gradient maps these colors onto a log scale from 0.1 to
+  10 000 (five equal decades), so every band boundary sits at an even 20% of the
+  bar; `logPosition()` converts a count to a `[0, 1]` position. `HintBar.svelte`
+  draws the gradient under the button with a caret pointer that slides to the
+  latest count (CSS `transition: left 1s`; the first placement is applied with no
+  transition so a freshly created pointer doesn't fly in from the edge) and shows
+  the actual number beneath the pointer, tinted with the band color.
 
 - Daily games persist per UTC day (`mtg:game:${dayKey}`, via `lib/game/gameState.js`);
   free-mode games are memory-only and never touch stats. Stats live in `storage/statsStore.js`

@@ -95,8 +95,8 @@ describe('buildShareText', () => {
 
   it('renders one bar row per guess with proportional fill', () => {
     const rows = buildShareText({ dayKey: 'd', guesses, won: true, maxGuesses: 10, url: 'u', targetCard: target }).split('\n');
-    expect(rows[1]).toBe('🟩'.repeat(10) + ' ???');
-    expect(rows[2]).toBe('🟩'.repeat(3) + '⬜'.repeat(7) + ' ???');
+    expect(rows[1]).toBe('🟩'.repeat(10) + ' ⬜');
+    expect(rows[2]).toBe('🟩'.repeat(3) + '⬜'.repeat(7) + ' ⬜');
   });
 
   it('appends a scrying-ball marker to rows where a hint was used', () => {
@@ -114,12 +114,12 @@ describe('buildShareText', () => {
       targetCard: target,
     });
     const rows = text.split('\n');
-    expect(rows[1]).toBe('🟩'.repeat(10) + '🔮 ???');
-    expect(rows[2]).toBe('🟩'.repeat(3) + '⬜'.repeat(7) + ' ???');
-    expect(rows[3]).toBe('🟩'.repeat(10) + '🔮 ???');
+    expect(rows[1]).toBe('🟩'.repeat(10) + '🔮 ⬜');
+    expect(rows[2]).toBe('🟩'.repeat(3) + '⬜'.repeat(7) + ' ⬜');
+    expect(rows[3]).toBe('🟩'.repeat(10) + '🔮 ⬜');
   });
 
-  it('tags each row with its per-guess match count', () => {
+  it('ends each row with a colored square encoding its match count', () => {
     const rows = buildShareText({
       dayKey: 'd',
       guesses,
@@ -128,11 +128,11 @@ describe('buildShareText', () => {
       targetCard: target,
       hintCounts: { 0: 1226, 1: 60 },
     }).split('\n');
-    expect(rows[1]).toBe('🟩'.repeat(10) + ' 1226');
-    expect(rows[2]).toBe('🟩'.repeat(3) + '⬜'.repeat(7) + ' 60');
+    expect(rows[1]).toBe('🟩'.repeat(10) + ' 🟥'); // 1226 → red
+    expect(rows[2]).toBe('🟩'.repeat(3) + '⬜'.repeat(7) + ' 🟨'); // 60 → yellow
   });
 
-  it('shows "???" for a count that never resolved (including 0 as a real count)', () => {
+  it('uses gray for a count that never resolved (and blue for a real 0)', () => {
     const rows = buildShareText({
       dayKey: 'd',
       guesses,
@@ -141,7 +141,7 @@ describe('buildShareText', () => {
       targetCard: target,
       hintCounts: { 0: 0 }, // 1 is unresolved
     }).split('\n');
-    expect(rows[1]).toBe('🟩'.repeat(10) + ' 0');
-    expect(rows[2]).toBe('🟩'.repeat(3) + '⬜'.repeat(7) + ' ???');
+    expect(rows[1]).toBe('🟩'.repeat(10) + ' 🟦'); // 0 → blue
+    expect(rows[2]).toBe('🟩'.repeat(3) + '⬜'.repeat(7) + ' ⬜'); // unresolved → gray
   });
 });

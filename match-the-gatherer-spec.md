@@ -139,6 +139,7 @@ At the end of a **daily** game (win or loss), show a summary that:
 - For each guess, computes a match score by **token overlap** (spec §11). For every property present on either the guessed or the target card, it counts how many of the guess's tokens appear anywhere on the target plus how many of the target's tokens appear on the guess, then divides that sum by the total number of tokens on both cards (the Sørensen–Dice coefficient). A property's score is therefore in [0, 1] regardless of which card has more tokens. The guess's score is the average of those per-property scores, scaled to a percentage for display. Duplicate tokens collapse, so repeated words can't inflate a property.
 - A property counts toward the average whenever *either* card has tokens for it, so a property the guess lacks but the target has (e.g. a non-creature guess against a creature) contributes 0 rather than being dropped. Because the score is an aggregate over all properties rather than a per-property reveal, the bar still does not disclose which specific properties exist on the target.
 - Renders each guess's score as a **horizontal bar made of emojis** (e.g. filled vs. empty block/square emoji), proportionally fuller the higher the match score — one row per guess.
+- Ends each row with a **colored square** encoding that guess's number of still-matching cards (blue = 1, green ≤ 10, yellow ≤ 100, orange ≤ 1000, red > 1000; gray = unknown), the same color scheme shown next to the Hint button.
 - Is copy-pasteable as a single shareable text block (the emoji bars).
 - Always ends with the URL to the game.
 
@@ -209,6 +210,7 @@ match-the-gatherer/
 │   │       ├── CardImage.svelte      # compact card image tile used by the timeline
 │   │       ├── StatsSummary.svelte   # §8 — minimal stats block on Home
 │   │       ├── ShareSummary.svelte   # §11 — emoji-bar summary + copy-to-clipboard
+│   │       ├── HintBar.svelte         # §11 — count-gradient bar under the Hint button
 │   │       ├── CommunityStats.svelte # §5.1 — worldwide by-guess distribution from the backend
 │   │       ├── ThemeToggle.svelte    # §12 — light/dark switch
 │   │       └── VersionFooter.svelte  # §11 — shows service-worker version string

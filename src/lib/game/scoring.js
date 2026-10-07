@@ -1,8 +1,20 @@
 /** Match-score calculation and share-text rendering (spec §11). */
 
 import { propertyTokens } from './comparison.js';
+import { countColor } from './countColors.js';
 
 export const SHARE_BLOCKS = 10;
+
+// The five tier colors (plus gray for unknown) as colored squares, so the
+// shareable text carries the same count-color scheme as the on-screen summary.
+const COUNT_SQUARES = {
+  '#2f6bff': '🟦',
+  '#1f9d55': '🟩',
+  '#d4b106': '🟨',
+  '#e07b1a': '🟧',
+  '#d64545': '🟥',
+  '#8b91a3': '⬜',
+};
 
 /**
  * Token-overlap (Sørensen–Dice) score for one property: the tokens shared by
@@ -59,9 +71,10 @@ export function emojiBar(ratio, blocks = SHARE_BLOCKS) {
 
 /**
  * Copy-pasteable share block: one emoji-bar row per guess, ending with the
- * game URL (§11). `targetCard` is needed to score each guess. Each row is
- * tagged with that guess's Scryfall match count (`hintCounts`), shown as
- * `???` when the count never resolved.
+ * game URL (§11). `targetCard` is needed to score each guess. Each row ends
+ * with a colored square encoding that guess's Scryfall match count
+ * (`hintCounts`) — the same color scheme as the on-screen summary — or a gray
+ * square when the count never resolved.
  */
 export function buildShareText({
   dayKey,
@@ -80,8 +93,9 @@ export function buildShareText({
   const used = new Set(hintsUsed ?? []);
   const rows = guesses.map((g, i) => {
     const marker = used.has(i) ? '\u{1F52E}' : '';
-    const count = hintCounts?.[i] != null ? String(hintCounts[i]) : '???';
-    return `${emojiBar(ratios[i])}${marker} ${count}`;
+    const count = hintCounts?.[i];
+    const square = COUNT_SQUARES[countColor(count)] ?? '⬜';
+    return `${emojiBar(ratios[i])}${marker} ${square}`;
   });
   return [header, ...rows, url].join('\n');
 }
