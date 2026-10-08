@@ -752,7 +752,9 @@ export function compareCards(guess, target) {
   const gSegs = [];
   for (const f of facesOf(guess)) {
     const segs = parseOracleText(f.oracle_text ?? '', keywordVocabulary(guess)).rulesSegments;
-    if (gSegs.length > 0 && segs.length > 0) gSegs.push({ break: true });
+    // Phrase the two faces' rules text in order, `//` between them — the same
+    // face separator the type line and mana rows use.
+    if (gSegs.length > 0 && segs.length > 0) gSegs.push({ sep: true, text: '//' });
     gSegs.push(...segs);
   }
   const gTokens = oracleTokens(guess);

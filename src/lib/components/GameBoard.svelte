@@ -316,10 +316,10 @@
       <div class="hint-row">
         <HintButton disabled={state.guesses.length === 0 || gameOver} on:press={onHintPress} />
       </div>
-      <HintBar count={barCount} initialCount={names.length} pending={countPending} />
       {#if hintLink.warning}
         <p class="hint-warning" role="status">{hintLink.warning}</p>
       {/if}
+      <HintBar count={barCount} initialCount={names.length} pending={countPending} />
       {#if submitError}
         <p class="error-msg">{submitError}</p>
       {/if}

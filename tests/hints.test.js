@@ -787,7 +787,7 @@ describe('buildScryfallSearchUrl', () => {
     expect(q.length).toBeLessThanOrEqual(MAX_QUERY_LENGTH);
     expect(truncated).toBe(true);
     expect(dropped).toBeGreaterThan(0);
-    expect(warning).toMatch(/omitted/i);
+    expect(warning).toMatch(/some longer clues were omitted/i);
     // The required clauses always survive.
     expect(q).toContain('f:v');
     expect(q).toContain('not:reprint');

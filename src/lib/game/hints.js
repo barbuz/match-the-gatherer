@@ -365,7 +365,7 @@ export function buildScryfallSearchUrl(hints,) {
     truncated,
     dropped,
     warning: truncated
-      ? `Some hints were omitted so the Scryfall link stays under its ${MAX_QUERY_LENGTH}-character limit.`
+      ? `Some longer clues were omitted so the Scryfall link stays under its ${MAX_QUERY_LENGTH}-character limit.`
       : null,
   };
 }

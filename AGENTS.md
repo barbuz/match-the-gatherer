@@ -100,7 +100,9 @@ Pitfalls that make this silently lie:
     `rulesSegments`) holds one segment per compared unit — a chip for a keyword,
     one chip per rules **clause** — with `{ break: true }` between printed lines.
     A line whose keyword was removed therefore renders no blank row, and a
-    printed line break stays visible. An oracle segment carries `text` (the
+    printed line break stays visible. A multi-faced guess joins its two faces'
+    keyword spans / rules clauses with a `{ sep: true, text: '//' }` segment, the
+    same face separator the type-line and mana rows use. An oracle segment carries `text` (the
     compared/hinted value, verbatim `{...}` braces in place) and `quotes` (the
     enclosing-quote marker, drawn as siblings just outside the frame). There is
     **no per-part muting**: a keyword that appears mid-rules-text (e.g.
@@ -223,8 +225,9 @@ Pitfalls that make this silently lie:
     `f:v`/`not:reprint`, until it fits. Because both the URL and the count go
     through the same clamp they still search the identical set.
     `buildScryfallSearchUrl()` returns `{ url, truncated, dropped, warning }`
-    and `GameBoard.svelte` renders `warning` under the Hint button when clauses
-    were dropped.
+    and `GameBoard.svelte` renders `warning` ("Some longer clues were omitted…")
+    directly under the Hint button (above the colored bar) when clauses were
+    dropped.
 
 - **Hint count** (`lib/api/scryfall.js countSearchResults()`): how many cards
   still match, counted after each guess from the **cumulative** hint set

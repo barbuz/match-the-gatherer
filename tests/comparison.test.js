@@ -734,7 +734,7 @@ describe('compareCards — layout', () => {
     const line = byKey(compareCards(split, makeCard({ oracle_text: 'Flying' })), 'oracle');
     expect(line.segments).toEqual([
       { text: 'Flying', token: true, kind: 'oracle', quotes: '', status: 'correct' },
-      { break: true },
+      { sep: true, text: '//' },
       { text: 'Vigilance', token: true, kind: 'oracle', quotes: '', status: 'wrong' },
     ]);
   });

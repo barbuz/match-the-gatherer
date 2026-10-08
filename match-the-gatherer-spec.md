@@ -39,6 +39,7 @@ A Wordle-style daily guessing game for Magic: The Gathering cards, built as a Sv
 - **Mana cost**: three possible outcomes per guess — exact mana cost match, mana value match only (cost differs), or no match.
 - **Color**: compares the card's actual color (not color identity).
 - **Type**: supertype/type/subtype are compared as separate line items, consistent with how Scryfall models `type_line`.
+- **Multi-faced cards**: a double-faced guess's per-face values are phrased in order with a `//` separator, for the mana cost, color, type line, P/T, Keywords and Oracle text rows alike.
 - **Otags**: all otags are used for the comparison (no cap for now).
 
 ### Feedback rules
