@@ -211,6 +211,20 @@ Pitfalls that make this silently lie:
   `buildScryfallQuery()` returns the raw (unencoded) clause string, and
   `buildScryfallSearchUrl()` is just it URL-encoded, so the hint's count and the
   link it opens always search the same set.
+  - **Scryfall truncates `q` at ~1024 characters**, cutting it mid-clause so a
+    long query 400s ("unclosed parentheses") or 404s as if nothing matched — not
+    a syntax error, so it is easy to mistake for a genuine empty result. A
+    late-game daily (5 guesses) can gather ~50 clauses totalling >1100 chars.
+    A single shared `clampClauses()` in `hints.js` keeps every query we build
+    (the link **and** the count) within `MAX_QUERY_LENGTH` (1000, a safe margin
+    under the observed ~1024 cut): all clauses are kept when they fit, and only
+    an over-budget query is pruned — **negated `o:`** clauses first (bulky and
+    the least specific hint), then the **longest** remaining clauses, never
+    `f:v`/`not:reprint`, until it fits. Because both the URL and the count go
+    through the same clamp they still search the identical set.
+    `buildScryfallSearchUrl()` returns `{ url, truncated, dropped, warning }`
+    and `GameBoard.svelte` renders `warning` under the Hint button when clauses
+    were dropped.
 
 - **Hint count** (`lib/api/scryfall.js countSearchResults()`): how many cards
   still match, counted after each guess from the **cumulative** hint set

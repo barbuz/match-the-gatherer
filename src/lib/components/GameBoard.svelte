@@ -36,13 +36,13 @@
   let state = { guesses: [], hintsUsed: [], status: 'playing', loaded: false, communityStats: null };
   let submitError = '';
   let unsubscribe = null;
-  let hintUrl = '';
+  let hintLink = { url: '', warning: null };
   let countedIndex = -1;
   let setupToken = 0;
   // The button's link and count are built from the same cumulative hint list,
   // so the number shown always matches the set the link opens.
   $: hintHints = state.guesses.length > 0 ? gatherHints(state.guesses) : null;
-  $: hintUrl = hintHints ? buildScryfallSearchUrl(hintHints) : '';
+  $: hintLink = hintHints ? buildScryfallSearchUrl(hintHints) : { url: '', warning: null };
   // Count the final, fully-constrained hint set once the game has ended, so the
   // bar can slide down to the true number (1 on a win) before the outcome shows.
   $: finalHints =
@@ -241,7 +241,7 @@
   }
 
   function onHintPress() {
-    if (hintUrl) window.open(hintUrl, '_blank');
+    if (hintLink.url) window.open(hintLink.url, '_blank');
     game.markHintUsed();
   }
 </script>
@@ -317,6 +317,9 @@
         <HintButton disabled={state.guesses.length === 0 || gameOver} on:press={onHintPress} />
       </div>
       <HintBar count={barCount} initialCount={names.length} pending={countPending} />
+      {#if hintLink.warning}
+        <p class="hint-warning" role="status">{hintLink.warning}</p>
+      {/if}
       {#if submitError}
         <p class="error-msg">{submitError}</p>
       {/if}
@@ -356,6 +359,12 @@
     color: var(--bad-fg);
     text-align: center;
     font-size: 0.9rem;
+  }
+  .hint-warning {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin: 0.15rem 0 0;
   }
   .error-detail {
     color: var(--muted);
