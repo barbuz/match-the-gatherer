@@ -280,15 +280,92 @@ export function hintToClause(hint,) {
 }
 
 /**
- * Build a Scryfall search URL from a hint list. Vintage-legal first
- * printings only, always via f:v + not:reprint (per spec §3).
+ * Scryfall's `q` limit (docs: `/cards/search`). A longer query is silently
+ * truncated mid-clause (producing an "unclosed parentheses" 400 or a bogus
+ * 404), so every query we build — the hint link and the count alike — is
+ * clamped to fit.
+ */
+export const MAX_QUERY_LENGTH = 1000;
+
+/** Clauses that must never be dropped: they restrict to spec §3's card set. */
+const REQUIRED_CLAUSES = ['f:v', 'not:reprint'];
+
+/**
+ * Turn a hint list into Scryfall clauses, all kept when they fit within
+ * {@link MAX_QUERY_LENGTH}. Only an over-budget query is pruned: negated `o:`
+ * clauses go first (bulky and the least specific hint), then the longest
+ * remaining clauses are dropped — never `f:v`/`not:reprint` — until it fits.
+ *
+ * @param {Array<{ kind, value, negated?, dir? }>} hints  gatherHints() output
+ * @returns {{ clauses: string[], dropped: number, truncated: boolean }}
+ */
+function clampClauses(hints) {
+  const seen = new Set();
+  const all = [];
+  for (const hint of hints ?? []) {
+    const clause = hintToClause(hint);
+    if (!clause || seen.has(clause)) continue; // collapse redundant duplicates
+    seen.add(clause);
+    all.push({ clause, negatedOracle: !!(hint?.negated && hint.kind === 'oracle') });
+  }
+  for (const required of REQUIRED_CLAUSES) {
+    if (!seen.has(required)) {
+      seen.add(required);
+      all.push({ clause: required, negatedOracle: false });
+    }
+  }
+
+  const joined = (items) => items.map((x) => x.clause).join(' ');
+  if (joined(all).length <= MAX_QUERY_LENGTH) {
+    return { clauses: all.map((x) => x.clause), dropped: 0, truncated: false };
+  }
+
+  // Over budget. Negated `o:` is the single biggest length contributor and the
+  // least informative hint, so drop it before anything else.
+  let kept = all.filter((x) => !x.negatedOracle);
+  let dropped = all.length - kept.length;
+  while (joined(kept).length > MAX_QUERY_LENGTH && kept.length > REQUIRED_CLAUSES.length) {
+    let longestIndex = -1;
+    for (let i = 0; i < kept.length; i += 1) {
+      if (REQUIRED_CLAUSES.includes(kept[i].clause)) continue;
+      if (longestIndex === -1 || kept[i].clause.length > kept[longestIndex].clause.length) {
+        longestIndex = i;
+      }
+    }
+    if (longestIndex === -1) break;
+    kept.splice(longestIndex, 1);
+    dropped += 1;
+  }
+  return { clauses: kept.map((x) => x.clause), dropped, truncated: dropped > 0 };
+}
+
+/**
+ * Build the raw Scryfall search query (unencoded) from a hint list.
+ * Vintage-legal first printings only, always via f:v + not:reprint (spec §3).
+ * Shared by the hint link and the API count so both search the same set; the
+ * query is kept within Scryfall's 1000-character `q` limit (see
+ * {@link MAX_QUERY_LENGTH}).
  * @param {Array<{ kind, value, negated?, dir? }>} hints  gatherHints() output
  * @returns {string}
  */
+export function buildScryfallQuery(hints,) {
+  return clampClauses(hints).clauses.join(' ');
+}
+
+/**
+ * Build a Scryfall search URL from a hint list.
+ *
+ * @param {Array<{ kind, value, negated?, dir? }>} hints  gatherHints() output
+ * @returns {{ url: string, truncated: boolean, dropped: number, warning: string|null }}
+ */
 export function buildScryfallSearchUrl(hints,) {
-  const clauses = (hints ?? []).map(hintToClause).filter(Boolean);
-  clauses.push('f:v');
-  clauses.push('not:reprint');
-  const q = encodeURIComponent(clauses.join(' '));
-  return `https://scryfall.com/search/?q=${q}`;
+  const { clauses, dropped, truncated } = clampClauses(hints);
+  return {
+    url: `https://scryfall.com/search/?q=${encodeURIComponent(clauses.join(' '))}`,
+    truncated,
+    dropped,
+    warning: truncated
+      ? `Some longer clues were omitted so the Scryfall link stays under its ${MAX_QUERY_LENGTH}-character limit.`
+      : null,
+  };
 }

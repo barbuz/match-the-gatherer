@@ -4,6 +4,8 @@ import {
   gatherHints,
   hintToClause,
   buildScryfallSearchUrl,
+  buildScryfallQuery,
+  MAX_QUERY_LENGTH,
 } from '../src/lib/game/hints.js';
 
 function makeCard(overrides = {}) {
@@ -451,7 +453,7 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
     }
     expect(hints.filter((h) => h.kind === 'colorSet')).toHaveLength(0);
 
-    const url = decodeURIComponent(buildScryfallSearchUrl(hints));
+    const url = decodeURIComponent(buildScryfallSearchUrl(hints).url);
     expect(url).toContain('c:b');
     expect(url).toContain('c:g');
     expect(url).toContain('c:u');
@@ -491,7 +493,7 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
     expect(hints).toContainEqual({ kind: 'power', value: '0', negated: true });
     expect(hints).toContainEqual({ kind: 'toughness', value: '1', negated: true });
 
-    const url = decodeURIComponent(buildScryfallSearchUrl(hints));
+    const url = decodeURIComponent(buildScryfallSearchUrl(hints).url);
     expect(url).toContain('pow!=0');
     expect(url).toContain('tou!=1');
     expect(url).not.toContain('pow!=*');
@@ -594,7 +596,7 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
     const guess = makeCard({ oracle_text: 'Ward {2} (Different reminder.)\nDestroy target artifact.\n"I — This Saga gains"' });
     const hints = gatherHints([guessEntry(guess, target)]);
 
-    const url = decodeURIComponent(buildScryfallSearchUrl(hints));
+    const url = decodeURIComponent(buildScryfallSearchUrl(hints).url);
     expect(url).toContain('o:"Ward {2}"');
     expect(url).toContain('o:"Destroy target artifact."');
     expect(url).toContain('-o:"I — This Saga gains"');
@@ -733,7 +735,7 @@ describe('hintToClause', () => {
 
 describe('buildScryfallSearchUrl', () => {
   it('combines all hints and always appends not:reprint', () => {
-    const url = buildScryfallSearchUrl([
+    const { url, truncated, dropped, warning } = buildScryfallSearchUrl([
       { kind: 'type', value: 'Creature' },
       { kind: 'manaValue', value: '4' },
       { kind: 'color', value: 'U', negated: true },
@@ -742,17 +744,111 @@ describe('buildScryfallSearchUrl', () => {
     expect(url).toBe(
       'https://scryfall.com/search/?q=t%3Acreature%20mv%3D4%20-c%3Au%20date%3E2009-01-10%20f%3Av%20not%3Areprint',
     );
+    expect(truncated).toBe(false);
+    expect(dropped).toBe(0);
+    expect(warning).toBeNull();
   });
 
   it('handles an empty hint list with just the reprint filter', () => {
-    expect(buildScryfallSearchUrl([])).toBe(
+    expect(buildScryfallSearchUrl([]).url).toBe(
       'https://scryfall.com/search/?q=f%3Av%20not%3Areprint',
     );
   });
 
   it('keeps the mana-cost braces URL-encoded', () => {
-    expect(buildScryfallSearchUrl([{ kind: 'mana', value: '{2}{R}' }])).toBe(
+    expect(buildScryfallSearchUrl([{ kind: 'mana', value: '{2}{R}' }]).url).toBe(
       'https://scryfall.com/search/?q=mana%3D%7B2%7D%7BR%7D%20f%3Av%20not%3Areprint',
     );
+  });
+
+  it('keeps negated o: clauses while the query fits (no needless precision loss)', () => {
+    const { url, truncated } = buildScryfallSearchUrl([
+      { kind: 'oracle', value: 'Flying' },
+      { kind: 'oracle', value: 'Trample', negated: true },
+    ]);
+    const decoded = decodeURIComponent(url);
+    expect(decoded).toContain('o:Flying');
+    expect(decoded).toContain('-o:Trample');
+    expect(truncated).toBe(false);
+  });
+
+  it("drops the longest clauses until the query fits Scryfall's limit", () => {
+    // A real game can gather dozens of long oracle clauses. The query must stay
+    // within Scryfall's 1000-character `q` limit or the search truncates mid
+    // clause, so the longest (least specific) clauses are dropped and a warning
+    // is surfaced.
+    const hints = [];
+    for (let i = 0; i < 40; i += 1) {
+      hints.push({ kind: 'oracle', value: `Clause number ${i} that is deliberately quite long` });
+    }
+    hints.push({ kind: 'type', value: 'Creature' });
+    const { url, truncated, dropped, warning } = buildScryfallSearchUrl(hints);
+    const q = decodeURIComponent(url).split('q=')[1];
+    expect(q.length).toBeLessThanOrEqual(MAX_QUERY_LENGTH);
+    expect(truncated).toBe(true);
+    expect(dropped).toBeGreaterThan(0);
+    expect(warning).toMatch(/some longer clues were omitted/i);
+    // The required clauses always survive.
+    expect(q).toContain('f:v');
+    expect(q).toContain('not:reprint');
+    // The shortest non-required clause survives over the longer ones.
+    expect(q).toContain('t:creature');
+  });
+
+  it('drops negated o: clauses before anything else when over budget', () => {
+    // Negated `o:` is the biggest length contributor and the least useful hint,
+    // so it is sacrificed first — the more specific positive clauses stay.
+    const hints = [{ kind: 'type', value: 'Creature' }, { kind: 'oracle', value: 'Flying' }];
+    for (let i = 0; i < 40; i += 1) {
+      hints.push({ kind: 'oracle', value: `Negated clause ${i} with a fairly long oracle text`, negated: true });
+    }
+    hints.push({ kind: 'manaValue', value: '4' });
+    const { url, truncated } = buildScryfallSearchUrl(hints);
+    const q = decodeURIComponent(url).split('q=')[1];
+    expect(truncated).toBe(true);
+    expect(q).not.toContain('-o:');
+    expect(q).toContain('o:Flying');
+    expect(q).toContain('t:creature');
+    expect(q).toContain('mv=4');
+  });
+
+  it('does not drop clauses when the query already fits', () => {
+    const { truncated, dropped, warning } = buildScryfallSearchUrl([
+      { kind: 'type', value: 'Creature' },
+      { kind: 'oracle', value: 'Flying' },
+    ]);
+    expect(truncated).toBe(false);
+    expect(dropped).toBe(0);
+    expect(warning).toBeNull();
+  });
+});
+
+describe('buildScryfallQuery', () => {
+  it('produces the unencoded clause string the hint URL encodes', () => {
+    const hints = [
+      { kind: 'type', value: 'Creature' },
+      { kind: 'manaValue', value: '4' },
+    ];
+    expect(buildScryfallQuery(hints)).toBe('t:creature mv=4 f:v not:reprint');
+    // The URL is exactly the encoded query, so a count run against the query
+    // searches the same set the button opens.
+    expect(buildScryfallSearchUrl(hints).url).toBe(
+      `https://scryfall.com/search/?q=${encodeURIComponent(buildScryfallQuery(hints))}`,
+    );
+  });
+
+  it('always appends the vintage + reprint filters even with no hints', () => {
+    expect(buildScryfallQuery([])).toBe('f:v not:reprint');
+  });
+
+  it('shares the length clamp with the URL builder, so link and count agree', () => {
+    const hints = [];
+    for (let i = 0; i < 60; i += 1) {
+      hints.push({ kind: 'oracle', value: `A fairly long oracle clause number ${i}` });
+    }
+    const query = buildScryfallQuery(hints);
+    expect(query.length).toBeLessThanOrEqual(MAX_QUERY_LENGTH);
+    // The count searches exactly the set the button opens.
+    expect(decodeURIComponent(buildScryfallSearchUrl(hints).url).split('q=')[1]).toBe(query);
   });
 });

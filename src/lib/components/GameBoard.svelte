@@ -3,15 +3,16 @@
    * Shared game screen used by the Daily and Free Mode routes (spec §2).
    * Handles target selection, guessing, feedback, timeline, and summary.
    */
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { ensureData, dataStatus } from '../stores/backgroundFetch.js';
-  import { fetchCardByName } from '../api/scryfall.js';
+  import { fetchCardByName, countSearchResults } from '../api/scryfall.js';
   import { fetchDailyCard } from '../api/dailyApi.js';
   import { resolveVintageLegalCard, utcDateKey } from '../game/dailySeed.js';
   import { compareCards } from '../game/comparison.js';
   import { createGame, MAX_GUESSES } from '../game/gameState.js';
-  import { gatherHints, buildScryfallSearchUrl } from '../game/hints.js';
+  import { gatherHints, buildScryfallSearchUrl, buildScryfallQuery } from '../game/hints.js';
   import { scoreGuess } from '../game/scoring.js';
+  import { barCountFor } from '../game/barTarget.js';
   import GuessInput from './GuessInput.svelte';
   import GuessFeedback from './GuessFeedback.svelte';
   import CardTimeline from './CardTimeline.svelte';
@@ -19,6 +20,7 @@
   import ShareSummary from './ShareSummary.svelte';
   import CommunityStats from './CommunityStats.svelte';
   import HintButton from './HintButton.svelte';
+  import HintBar from './HintBar.svelte';
 
   export let mode; // 'daily' | 'free'
 
@@ -34,10 +36,123 @@
   let state = { guesses: [], hintsUsed: [], status: 'playing', loaded: false, communityStats: null };
   let submitError = '';
   let unsubscribe = null;
-  let hintUrl = '';
-  $: hintUrl = state.guesses.length > 0
-    ? buildScryfallSearchUrl(gatherHints(state.guesses))
-    : '';
+  let hintLink = { url: '', warning: null };
+  let countedIndex = -1;
+  let setupToken = 0;
+  // The button's link and count are built from the same cumulative hint list,
+  // so the number shown always matches the set the link opens.
+  $: hintHints = state.guesses.length > 0 ? gatherHints(state.guesses) : null;
+  $: hintLink = hintHints ? buildScryfallSearchUrl(hintHints) : { url: '', warning: null };
+  // Count the final, fully-constrained hint set once the game has ended, so the
+  // bar can slide down to the true number (1 on a win) before the outcome shows.
+  $: finalHints =
+    state.status !== 'playing' && state.guesses.length > 0 ? gatherHints(state.guesses) : null;
+  $: revealCount = finalCountsResolved ? finalCountValue : null;
+  // The bar's value (see `barTarget.js`): the latest resolved count, holding the
+  // previous resolved value (never an unrelated fallback) while one resolves.
+  $: barCount = barCountFor({
+    guesses: state.guesses,
+    hintCounts: state.hintCounts,
+    status: state.status,
+    revealCount,
+    initialCount: names.length,
+  });
+
+  // The final count (1 on a win, the real value on a loss) is scored from the
+  // accumulated hints; on a win we know it is exactly the answer, so it is 1
+  // without a request.
+  let finalCountValue = null;
+  let finalCountsResolved = false;
+  let finalCountToken = null;
+
+  $: if (finalHints) {
+    if (state.status === 'won') {
+      finalCountValue = 1;
+      finalCountsResolved = true;
+    } else {
+      const query = buildScryfallQuery(finalHints);
+      if (query !== finalCountToken) {
+        finalCountToken = query;
+        finalCountValue = null;
+        finalCountsResolved = false;
+        countSearchResults(query)
+          .then((n) => {
+            finalCountValue = n;
+            finalCountsResolved = true;
+          })
+          .catch(() => {
+            finalCountsResolved = true; // keep whatever the bar already shows
+          });
+      }
+    }
+  } else {
+    finalCountValue = null;
+    finalCountsResolved = false;
+    finalCountToken = null;
+  }
+
+  // While the game has just ended but the final count is still resolving (or
+  // sliding into place), hold the outcome back; then reveal it after the bar has
+  // had time to animate.
+  let gameOverVisible = false;
+  let revealTimer = null;
+  $: if (state.status === 'playing') {
+    if (gameOverVisible) gameOverVisible = false;
+    if (revealTimer) {
+      clearTimeout(revealTimer);
+      revealTimer = null;
+    }
+  } else if (!gameOverVisible && !revealTimer && finalCountsResolved) {
+    revealTimer = setTimeout(() => {
+      gameOverVisible = true;
+      revealTimer = null;
+    }, 1200);
+  }
+
+  // Count each new guess's cumulative clue set asynchronously; the game never
+  // waits. A request for an earlier guess is left to finish: its result is
+  // still saved per guess index (for the endgame summary), but it no longer
+  // drives the button, which only ever reads the latest guess's count.
+  let pendingForIndex = -1;
+  // True from the moment a guess is submitted until its count query settles.
+  // Kept imperative (not derived) so the submit→count hand-off cannot be
+  // reordered by Svelte's reactive-statement scheduling: the Scryfall name
+  // lookup happens *before* the guess is recorded, so without raising this at
+  // submit the spinner would only appear once that round-trip finished.
+  let countPending = false;
+  $: {
+    const idx = state.guesses.length - 1;
+    if (idx >= 0 && idx !== countedIndex && state.status === 'playing') {
+      countedIndex = idx;
+      trackHintCount(idx);
+    }
+  }
+
+  function trackHintCount(index) {
+    // Already counted (e.g. restored) — no query, so nothing to wait for.
+    if (state.guesses[index] == null || state.hintCounts?.[index] != null) {
+      countPending = false;
+      return;
+    }
+    // Count the same cumulative hint set the button's link opens (hints from
+    // this and every earlier guess), so the number shown always describes that
+    // link. A per-guess set would ignore earlier clues and can even grow.
+    const hints = gatherHints(state.guesses.slice(0, index + 1));
+    pendingForIndex = index;
+    countPending = true;
+    countSearchResults(buildScryfallQuery(hints))
+      .then((n) => game.setHintCount(index, n))
+      .catch(() => {
+        // Offline: leave the count unresolved so it keeps the previous value
+        // instead of blocking or showing a wrong number.
+      })
+      .finally(() => {
+        if (pendingForIndex === index) {
+          pendingForIndex = -1;
+          countPending = false;
+        }
+      });
+  }
 
   $: guessedNames = state.guesses.map((g) => g.card.name);
   $: gameOver = state.status !== 'playing';
@@ -49,9 +164,23 @@
     return () => unsubscribe?.();
   });
 
+  onDestroy(() => {
+    if (revealTimer) clearTimeout(revealTimer);
+  });
+
   async function setup() {
+    const token = ++setupToken;
     phase = 'loading';
     error = '';
+    // A stalled dependency (a request or a storage call that never settles)
+    // must not pin the board on "Loading game…" forever; fall back to the
+    // retry state, which a late success still recovers from.
+    const watchdog = setTimeout(() => {
+      if (token === setupToken && phase === 'loading') {
+        error = 'The game took too long to load.';
+        phase = 'error';
+      }
+    }, 20_000);
     try {
       names = await ensureData();
       if (mode === 'daily') {
@@ -66,6 +195,7 @@
         if (!targetCard) throw new Error('no vintage-legal card found in name list');
         targetName = targetCard.name;
       }
+      if (token !== setupToken) return; // superseded by a retry
       game = createGame({ mode, dayKey, targetName, targetCard });
       unsubscribe?.();
       unsubscribe = game.subscribe((s) => (state = s));
@@ -74,31 +204,44 @@
       // aggregates: it re-POSTs only if they never arrived, otherwise it reads
       // them back (backend spec §4.4), so a reload stays within budget.
       if (mode === 'daily') await game.reportIfConcluded();
-      phase = 'ready';
+      if (token === setupToken) phase = 'ready';
     } catch (e) {
-      error = String(e?.message ?? e);
-      phase = 'error';
+      if (token === setupToken) {
+        error = String(e?.message ?? e);
+        phase = 'error';
+      }
+    } finally {
+      clearTimeout(watchdog);
     }
   }
 
   async function onSelect(e) {
     submitError = '';
     const name = e.detail;
+    countPending = true; // spin from the moment of submit, before the lookup
     try {
       const card = await fetchCardByName(name);
       if (!card) {
         submitError = `Couldn't find "${name}" on Scryfall.`;
+        countPending = false;
         return;
       }
       const results = compareCards(card, targetCard);
-      game.addGuess({ card, results });
+      // `addGuess` records the guess (and kicks off its count query)
+      // synchronously; only its best-effort stats reporting is awaited, and
+      // that must not hold the spinner — it hands off to the count the moment
+      // the guess lands.
+      const recorded = game.addGuess({ card, results });
+      countPending = false;
+      await recorded;
     } catch (err) {
       submitError = `Lookup failed: ${err?.message ?? err}`;
+      countPending = false;
     }
   }
 
   function onHintPress() {
-    if (hintUrl) window.open(hintUrl, '_blank');
+    if (hintLink.url) window.open(hintLink.url, '_blank');
     game.markHintUsed();
   }
 </script>
@@ -119,12 +262,12 @@
   {:else}
     <p class="hint">
       {mode === 'daily' ? `Daily puzzle — ${dayKey} (UTC)` : 'Free mode'}
-      {#if !gameOver}
+      {#if !gameOverVisible}
         · {remaining} {remaining === 1 ? 'guess' : 'guesses'} left
       {/if}
     </p>
 
-    {#if gameOver}
+    {#if gameOverVisible}
       <div class="game-over">
         {#if state.status === 'won'}
           <h2>{state.hintsUsed?.length === 0 ? '🔮 Peerless!' : '🎉 You found it!'}</h2>
@@ -149,17 +292,34 @@
           </p>
         </div>
         {#if mode === 'daily'}
-          <ShareSummary guesses={state.guesses} won={state.status === 'won'} {dayKey} hintsUsed={state.hintsUsed ?? []} {targetCard} />
+          <ShareSummary
+            guesses={state.guesses}
+            won={state.status === 'won'}
+            {dayKey}
+            hintsUsed={state.hintsUsed ?? []}
+            hintCounts={state.hintCounts ?? {}}
+            {revealCount}
+            {targetCard}
+          />
           <CommunityStats stats={state.communityStats} />
         {:else}
           <p class="muted">Free mode — no stats recorded.</p>
         {/if}
       </div>
     {:else}
-      <GuessInput {names} exclude={guessedNames} disabled={!state.loaded} on:select={onSelect} />
+      <GuessInput
+        {names}
+        exclude={guessedNames}
+        disabled={!state.loaded || gameOver}
+        on:select={onSelect}
+      />
       <div class="hint-row">
-        <HintButton disabled={state.guesses.length === 0} on:press={onHintPress} />
+        <HintButton disabled={state.guesses.length === 0 || gameOver} on:press={onHintPress} />
       </div>
+      {#if hintLink.warning}
+        <p class="hint-warning" role="status">{hintLink.warning}</p>
+      {/if}
+      <HintBar count={barCount} initialCount={names.length} pending={countPending} />
       {#if submitError}
         <p class="error-msg">{submitError}</p>
       {/if}
@@ -199,6 +359,12 @@
     color: var(--bad-fg);
     text-align: center;
     font-size: 0.9rem;
+  }
+  .hint-warning {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin: 0.15rem 0 0;
   }
   .error-detail {
     color: var(--muted);

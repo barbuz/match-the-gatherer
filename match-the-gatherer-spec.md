@@ -39,6 +39,7 @@ A Wordle-style daily guessing game for Magic: The Gathering cards, built as a Sv
 - **Mana cost**: three possible outcomes per guess — exact mana cost match, mana value match only (cost differs), or no match.
 - **Color**: compares the card's actual color (not color identity).
 - **Type**: supertype/type/subtype are compared as separate line items, consistent with how Scryfall models `type_line`.
+- **Multi-faced cards**: a double-faced guess's per-face values are phrased in order with a `//` separator, for the mana cost, color, type line, P/T, Keywords and Oracle text rows alike. In the (wrapping) Oracle text row the separator sits on its own line between the faces.
 - **Otags**: all otags are used for the comparison (no cap for now).
 
 ### Feedback rules
@@ -120,6 +121,8 @@ Total cost per player per day: **2 backend requests** in the common path (one `G
 - Shows a **minimal** stats summary from previous daily games (exact fields TBD later — start with something lightweight like games played / win rate, extendable without a schema rewrite).
 - A daily game is only recorded as a win or loss once it actually concludes — the player finds the card, or exhausts all 10 guesses. Closing and reopening the tab mid-game does **not** count as a loss: in-progress guesses/state are persisted locally and resume exactly where the player left off.
 - Two entry points: **Play Today's Game** and **Free Mode**.
+- Under the **Hint** button, a log-scale gradient bar (blue → green → yellow → orange → red, from the value 1 to 50 000) labelled **Possible cards:**, with a pointer that slides to the number of cards still matching the accumulated hints while the number visibly counts to it. Because the bands are defined on a log scale, blue (exactly 1) is a thin tip and red (> 1000) owns the right portion. It starts at the local name-list size before the first guess, shows a small spinner beside the number from the moment a guess is submitted until its count resolves (when the pointer starts moving), and only ever shows a resolved count for the current guess — never a fallback that would jump the pointer toward the top. On conclusion it counts down to 1 (a win) or the real count (a loss) before the outcome is revealed.
+- The Hint button also opens a `https://scryfall.com/search/?q=…` link built from the same accumulated hints (so the count and the link always search the same set). Scryfall truncates `q` at ~1024 characters, cutting a long query mid-clause, so the query is kept within 1000 characters — the link **and** the count share one clamp that, only when over budget, drops negated `o:` clauses first and then the longest clauses (never `f:v`/`not:reprint`). When clauses were dropped, a small note under the button says so.
 - Triggers the otag + card-name background download on load if a newer otag version is available than the cached one (§4.3); this download continues uninterrupted when the player clicks into a game.
 - Displays the current app/service-worker version in small print at the bottom (see §12).
 
@@ -139,6 +142,7 @@ At the end of a **daily** game (win or loss), show a summary that:
 - For each guess, computes a match score by **token overlap** (spec §11). For every property present on either the guessed or the target card, it counts how many of the guess's tokens appear anywhere on the target plus how many of the target's tokens appear on the guess, then divides that sum by the total number of tokens on both cards (the Sørensen–Dice coefficient). A property's score is therefore in [0, 1] regardless of which card has more tokens. The guess's score is the average of those per-property scores, scaled to a percentage for display. Duplicate tokens collapse, so repeated words can't inflate a property.
 - A property counts toward the average whenever *either* card has tokens for it, so a property the guess lacks but the target has (e.g. a non-creature guess against a creature) contributes 0 rather than being dropped. Because the score is an aggregate over all properties rather than a per-property reveal, the bar still does not disclose which specific properties exist on the target.
 - Renders each guess's score as a **horizontal bar made of emojis** (e.g. filled vs. empty block/square emoji), proportionally fuller the higher the match score — one row per guess.
+- Draws each row's bar in the **color of that guess's number of still-matching cards** (blue = 1, green ≤ 10, yellow ≤ 100, orange ≤ 1000, red > 1000; gray = unknown) rather than appending a separate square, so the same color scheme as the Hint button's bar is carried by the bar itself. The last row uses the count after all guesses (1 on a win).
 - Is copy-pasteable as a single shareable text block (the emoji bars).
 - Always ends with the URL to the game.
 
@@ -191,6 +195,8 @@ match-the-gatherer/
 │   │   │   ├── dailySeed.js      # §5 — UTC date → deterministic card index
 │   │   │   ├── comparison.js     # §3 — per-property comparison rules (mana, color, type, otags…)
 │   │   │   ├── scoring.js        # §11 — token-overlap match score (per-property Dice, averaged)
+│   │   │   ├── countColors.js    # §8/§11 — shared match-count color bands + log scale
+│   │   │   ├── barTarget.js      # §8 — pure chooser for the Hint bar's displayed count
 │   │   │   └── gameState.js      # store: guesses, remaining attempts, win/loss, persisted per day
 │   │   │
 │   │   ├── storage/
@@ -209,6 +215,7 @@ match-the-gatherer/
 │   │       ├── CardImage.svelte      # compact card image tile used by the timeline
 │   │       ├── StatsSummary.svelte   # §8 — minimal stats block on Home
 │   │       ├── ShareSummary.svelte   # §11 — emoji-bar summary + copy-to-clipboard
+│   │       ├── HintBar.svelte         # §11 — count-gradient bar under the Hint button
 │   │       ├── CommunityStats.svelte # §5.1 — worldwide by-guess distribution from the backend
 │   │       ├── ThemeToggle.svelte    # §12 — light/dark switch
 │   │       └── VersionFooter.svelte  # §11 — shows service-worker version string

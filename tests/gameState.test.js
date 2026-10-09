@@ -123,6 +123,84 @@ describe('createGame.addGuess/markHintUsed', () => {
   });
 });
 
+describe('createGame.setHintCount', () => {
+  beforeEach(() => {
+    dbGet.mockReset();
+    dbSet.mockReset();
+  });
+
+  it('stores a per-guess count and persists it', async () => {
+    const g = dailyGame();
+    await g.addGuess(GUESS);
+    g.setHintCount(0, 1226);
+    let s;
+    g.subscribe((v) => (s = v));
+    expect(s.hintCounts).toEqual({ 0: 1226 });
+    expect(dbSet).toHaveBeenLastCalledWith(
+      `mtg:game:${DAY}`,
+      expect.objectContaining({ hintCounts: { 0: 1226 } }),
+    );
+  });
+
+  it('records a real count of 0 (not treated as unresolved)', async () => {
+    const g = dailyGame();
+    await g.addGuess(GUESS);
+    g.setHintCount(0, 0);
+    let s;
+    g.subscribe((v) => (s = v));
+    expect(s.hintCounts).toEqual({ 0: 0 });
+  });
+
+  it('ignores an index with no guess', async () => {
+    const g = dailyGame();
+    await g.addGuess(GUESS);
+    dbSet.mockClear();
+    g.setHintCount(3, 5);
+    expect(dbSet).not.toHaveBeenCalled();
+  });
+
+  it('can fill in a count after the game concluded', async () => {
+    dbGet.mockResolvedValue({
+      targetName: TARGET.name,
+      guesses: [GUESS],
+      status: 'won',
+    });
+    const g = dailyGame();
+    await g.load();
+    g.setHintCount(0, 42);
+    let s;
+    g.subscribe((v) => (s = v));
+    expect(s.hintCounts).toEqual({ 0: 42 });
+  });
+
+  it('restores persisted counts on load', async () => {
+    dbGet.mockResolvedValue({
+      targetName: TARGET.name,
+      guesses: [GUESS],
+      hintCounts: { 0: 7 },
+      status: 'won',
+    });
+    const g = dailyGame();
+    let s;
+    g.subscribe((v) => (s = v));
+    await g.load();
+    expect(s.hintCounts).toEqual({ 0: 7 });
+  });
+
+  it('defaults hintCounts to {} for legacy saved games without the field', async () => {
+    dbGet.mockResolvedValue({
+      targetName: TARGET.name,
+      guesses: [GUESS],
+      status: 'playing',
+    });
+    const g = dailyGame();
+    let s;
+    g.subscribe((v) => (s = v));
+    await g.load();
+    expect(s.hintCounts).toEqual({});
+  });
+});
+
 describe('createGame — daily result reporting', () => {
   beforeEach(() => {
     dbGet.mockReset();

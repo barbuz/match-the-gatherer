@@ -1,8 +1,23 @@
 /** Match-score calculation and share-text rendering (spec §11). */
 
 import { propertyTokens } from './comparison.js';
+import { countColor } from './countColors.js';
 
 export const SHARE_BLOCKS = 10;
+
+// Colored squares for each count band (blue, green, yellow, orange, red),
+// keyed by the band's hex color, plus a gray square for an unknown count. The
+// **filled** blocks of a share row are drawn in that row's band color, so the
+// bar itself encodes how many cards still matched after that guess.
+const FILLED_SQUARES = {
+  '#2f6bff': '🟦',
+  '#1f9d55': '🟩',
+  '#d4b106': '🟨',
+  '#e07b1a': '🟧',
+  '#d64545': '🟥',
+  '#8b91a3': '⬜',
+};
+const EMPTY_SQUARE = '⬜';
 
 /**
  * Token-overlap (Sørensen–Dice) score for one property: the tokens shared by
@@ -51,17 +66,33 @@ export function scoreGuess(guess, target) {
   return { ratio: count === 0 ? 0 : sum / count };
 }
 
-/** Horizontal emoji bar, proportionally fuller the higher the ratio. */
-export function emojiBar(ratio, blocks = SHARE_BLOCKS) {
+/**
+ * Horizontal emoji bar, proportionally fuller the higher the ratio and drawn in
+ * the band color of `count` (the still-matching count for that row); without a
+ * count the bar is gray.
+ */
+export function emojiBar(ratio, blocks = SHARE_BLOCKS, count = undefined) {
   const filled = Math.max(0, Math.min(blocks, Math.round(ratio * blocks)));
-  return '🟩'.repeat(filled) + '⬜'.repeat(blocks - filled);
+  const fill = count == null ? EMPTY_SQUARE : FILLED_SQUARES[countColor(count)] ?? EMPTY_SQUARE;
+  return fill.repeat(filled) + EMPTY_SQUARE.repeat(blocks - filled);
 }
 
 /**
  * Copy-pasteable share block: one emoji-bar row per guess, ending with the
- * game URL (§11). `targetCard` is needed to score each guess.
+ * game URL (§11). `targetCard` is needed to score each guess. Each row's bar is
+ * drawn in that guess's Scryfall match-count color (from `hintCounts`) — the
+ * same color scheme as the on-screen summary — or a gray bar when the count
+ * never resolved.
  */
-export function buildShareText({ dayKey, guesses, won, url, hintsUsed = [], targetCard }) {
+export function buildShareText({
+  dayKey,
+  guesses,
+  won,
+  url,
+  hintsUsed = [],
+  targetCard,
+  hintCounts = {},
+}) {
   const ratios = guesses.map((g) => scoreGuess(g.card, targetCard).ratio);
   const bestPct = Math.max(0, ...ratios.map((r) => Math.round(r * 100)));
   const header = won
@@ -70,7 +101,7 @@ export function buildShareText({ dayKey, guesses, won, url, hintsUsed = [], targ
   const used = new Set(hintsUsed ?? []);
   const rows = guesses.map((g, i) => {
     const marker = used.has(i) ? '\u{1F52E}' : '';
-    return emojiBar(ratios[i]) + marker;
+    return `${emojiBar(ratios[i], SHARE_BLOCKS, hintCounts?.[i])}${marker}`;
   });
   return [header, ...rows, url].join('\n');
 }

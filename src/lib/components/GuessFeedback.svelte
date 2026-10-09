@@ -224,6 +224,11 @@
     display: block;
     height: 0;
   }
+  /* In the wrapping oracle row the face separator gets its own line, so the two
+     faces read as distinct blocks instead of the `//` landing mid-line. */
+  .values.seg-values.oracle .sep {
+    display: block;
+  }
   /* The chip's enclosing quotes are siblings of the framed token, so the frame
      hugs the text and the quote sits just outside it. Spacing lives on the
      wrapper, so it falls after the closing quote. */

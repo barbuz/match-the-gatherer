@@ -17,6 +17,9 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
     targetName,
     guesses: [],
     hintsUsed: [],
+    // Per-guess Scryfall match counts (index → number), filled in
+    // asynchronously as each guess is made; a missing slot renders as "???".
+    hintCounts: {},
     status: 'playing',
     loaded: !storageKey,
     communityStats: null,
@@ -29,6 +32,7 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
       targetName: state.targetName,
       guesses: state.guesses,
       hintsUsed: state.hintsUsed,
+      hintCounts: state.hintCounts,
       status: state.status,
       // Kept so a reload of a concluded game doesn't re-POST: the day's
       // aggregates are already here (backend spec §1.1 targets 2 requests/day).
@@ -48,6 +52,7 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
           targetName,
           guesses: saved.guesses,
           hintsUsed: Array.isArray(saved.hintsUsed) ? saved.hintsUsed : [],
+          hintCounts: saved.hintCounts ?? {},
           status: saved.status ?? 'playing',
           loaded: true,
           communityStats: saved.communityStats ?? null,
@@ -97,6 +102,23 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
           return next;
         });
       }
+    },
+
+    /**
+     * Record the Scryfall match count for the guess at `index`. Called after
+     * an async count resolves; a missing slot stays absent and renders "???".
+     * The game may already be over by the time the count lands, so this is
+     * allowed to update a concluded game too.
+     */
+    setHintCount(index, count) {
+      if (index < 0) return;
+      update((s) => {
+        if (s.guesses[index] == null) return s;
+        if (s.hintCounts?.[index] === count) return s;
+        const next = { ...s, hintCounts: { ...s.hintCounts, [index]: count } };
+        persist(next);
+        return next;
+      });
     },
 
     /**
