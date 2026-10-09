@@ -102,7 +102,9 @@ Pitfalls that make this silently lie:
     A line whose keyword was removed therefore renders no blank row, and a
     printed line break stays visible. A multi-faced guess joins its two faces'
     keyword spans / rules clauses with a `{ sep: true, text: '//' }` segment, the
-    same face separator the type-line and mana rows use. An oracle segment carries `text` (the
+    same face separator the type-line and mana rows use. In the wrapping oracle
+    row that separator is styled `display: block`, so it sits on its own line
+    between the two faces rather than landing mid-line. An oracle segment carries `text` (the
     compared/hinted value, verbatim `{...}` braces in place) and `quotes` (the
     enclosing-quote marker, drawn as siblings just outside the frame). There is
     **no per-part muting**: a keyword that appears mid-rules-text (e.g.
