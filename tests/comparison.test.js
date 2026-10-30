@@ -705,6 +705,62 @@ describe('compareCards — layout', () => {
     ]);
   });
 
+  it('a face with no colors inherits the card-level set (adventure/split/flip)', () => {
+    // Scryfall leaves `colors` off every face of an adventure card, so both
+    // faces inherit the card-level `['W']` — one set, no `//`.
+    const adventure = makeCard({
+      name: 'Twinmaw Stormbrood // Charring Bite',
+      layout: 'adventure',
+      mana_cost: '{5}{W} // {1}{R}',
+      colors: ['W'],
+      card_faces: [
+        { name: 'Twinmaw Stormbrood', mana_cost: '{5}{W}', type_line: 'Creature — Dragon' },
+        { name: 'Charring Bite', mana_cost: '{1}{R}', type_line: 'Sorcery — Omen' },
+      ],
+      power: undefined,
+      toughness: undefined,
+    });
+    const colors = byKey(compareCards(adventure, makeCard({ colors: ['W'] })), 'colors');
+    expect(colors.segments).toEqual([{ text: 'W', status: 'correct' }]);
+    expect(colors.correct).toEqual(['W']);
+    expect(colors.wrong).toEqual([]);
+
+    // A colorless card (empty card-level colors) still renders a colorless
+    // token, never an empty list.
+    const flip = makeCard({
+      name: 'Colorless Flip // Other',
+      layout: 'flip',
+      colors: [],
+      card_faces: [{ name: 'Colorless Flip', type_line: 'Creature' }, { name: 'Other', type_line: 'Creature' }],
+      power: undefined,
+      toughness: undefined,
+    });
+    const flipColors = byKey(compareCards(flip, makeCard({ colors: ['R'] })), 'colors');
+    expect(flipColors.segments).toEqual([{ text: 'colorless', status: 'wrong' }]);
+  });
+
+  it('only the faces missing colors inherit the card-level set', () => {
+    // A transforming DFC whose back face has no `colors` (e.g. a land): the
+    // front keeps its own set, the back inherits the card-level one.
+    const dfc = makeCard({
+      name: 'Search for Azcanta // Azcanta, the Sunken Ruin',
+      layout: 'transform',
+      colors: ['U'],
+      card_faces: [
+        { name: 'Search for Azcanta', colors: ['U'], type_line: 'Legendary Enchantment' },
+        { name: 'Azcanta, the Sunken Ruin', type_line: 'Legendary Land' },
+      ],
+      power: undefined,
+      toughness: undefined,
+    });
+    const colors = byKey(compareCards(dfc, makeCard({ colors: ['U'] })), 'colors');
+    expect(colors.segments).toEqual([
+      { text: 'U', status: 'correct' },
+      { sep: true, text: '//' },
+      { text: 'U', status: 'correct' },
+    ]);
+  });
+
   it('type row phrases per-face type lines with a // separator', () => {
     const split = makeCard({
       name: 'Fire // Ice',

@@ -533,15 +533,26 @@ function line(key, label, segments, extra = {}) {
 }
 
 function colorLine(key, label, guessCard, targetCard) {
-  const g = colorTokens(guessCard);
   const t = colorTokens(targetCard);
-  if (g.length === 0 && t.length === 0) {
-    return line(key, label, [{ text: '—', status: 'correct' }]);
-  }
   const targetSet = new Set(t);
-  const segments = joinFaces(facesOf(guessCard).map((f) => {
-    const fc = (f.colors ?? []).length > 0 ? f.colors : [COLORLESS];
-    return fc.map((c) => ({ text: c, status: targetSet.has(c) ? 'correct' : 'wrong' }));
+  const status = (c) => (targetSet.has(c) ? 'correct' : 'wrong');
+  const faces = facesOf(guessCard);
+  // Scryfall omits a face's `colors` on the "combined" layouts (split,
+  // adventure, flip) and on some transforming back faces, leaving the color
+  // only at the card level. When NO face carries its own set, show that single
+  // card-level set once (no `//`): Twinmaw Stormbrood renders `W`, not
+  // `colorless // colorless`. Otherwise each face renders its own set, joined
+  // with `//` (Delver of Secrets → `U // U`); a face that alone lacks `colors`
+  // inherits the card-level set rather than a `colorless` placeholder.
+  if (!faces.some((f) => (f.colors ?? []).length > 0)) {
+    const cardColors = (guessCard.colors ?? []).length > 0 ? guessCard.colors : [COLORLESS];
+    return line(key, label, cardColors.map((c) => ({ text: c, status: status(c) })));
+  }
+  const fallback = (guessCard.colors ?? []).length > 0 ? guessCard.colors : [];
+  const segments = joinFaces(faces.map((f) => {
+    const fc = f.colors ?? fallback;
+    if (fc.length === 0) return [{ text: COLORLESS, status: status(COLORLESS) }];
+    return fc.map((c) => ({ text: c, status: status(c) }));
   }));
   return line(key, label, segments);
 }
