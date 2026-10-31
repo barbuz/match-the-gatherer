@@ -189,6 +189,19 @@ Pitfalls that make this silently lie:
   builder only describes what it renders. Plain rows (layout, released, rarity, the
   `—` placeholders) are just a single segment per value, so the UI has one render path.
 
+- The **Colors** row is per-face **only when a face carries its own `colors`**.
+  Scryfall omits the field from every face of the "combined" layouts (split,
+  adventure, flip) and from some transforming back faces, leaving the color only
+  at the card level. When no face has `colors`, the row shows that single
+  card-level set once, with **no `//`** (`Twinmaw Stormbrood` → `W`, not
+  `colorless // colorless`); a card-level-empty set still renders the explicit
+  `colorless` token. Otherwise each face renders its own set joined by `//`
+  (`Delver of Secrets` → `U // U`), and a face that alone lacks `colors` inherits
+  the card-level set instead of a `colorless` placeholder (`Search for Azcanta`
+  → `U // U`). This is display only: `colorTokens()`/`propertyTokens().colors`
+  already unioned the faces with the card-level field, so hints and the
+  token-overlap score were never affected.
+
 - Hints (`src/lib/game/hints.js`): `gatherHints()` distills every guess's feedback into a
   deduplicated minimal hint list; `buildScryfallSearchUrl()` turns it into a
   `https://scryfall.com/search/?q=...` link with clauses `t:`, `c:`, `layout:`,
