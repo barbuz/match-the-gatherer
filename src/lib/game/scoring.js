@@ -82,7 +82,8 @@ export function emojiBar(ratio, blocks = SHARE_BLOCKS, count = undefined) {
  * game URL (§11). `targetCard` is needed to score each guess. Each row's bar is
  * drawn in that guess's Scryfall match-count color (from `hintCounts`) — the
  * same color scheme as the on-screen summary — or a gray bar when the count
- * never resolved.
+ * never resolved. `mistakes` (guesses that contradicted an earlier clue, see
+ * consistency.js) is appended to the header when there is at least one.
  */
 export function buildShareText({
   dayKey,
@@ -92,12 +93,14 @@ export function buildShareText({
   hintsUsed = [],
   targetCard,
   hintCounts = {},
+  mistakes = 0,
 }) {
   const ratios = guesses.map((g) => scoreGuess(g.card, targetCard).ratio);
   const bestPct = Math.max(0, ...ratios.map((r) => Math.round(r * 100)));
+  const mistakeSuffix = mistakes > 0 ? `, ${mistakes} ${mistakes === 1 ? 'mistake' : 'mistakes'}` : '';
   const header = won
-    ? `Match the Gatherer ${dayKey} — Matched in ${guesses.length}`
-    : `Match the Gatherer ${dayKey} — ${bestPct}% matched`;
+    ? `Match the Gatherer ${dayKey} — Matched in ${guesses.length}${mistakeSuffix}`
+    : `Match the Gatherer ${dayKey} — ${bestPct}% matched${mistakeSuffix}`;
   const used = new Set(hintsUsed ?? []);
   const rows = guesses.map((g, i) => {
     const marker = used.has(i) ? '\u{1F52E}' : '';

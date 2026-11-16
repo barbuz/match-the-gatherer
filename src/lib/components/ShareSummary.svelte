@@ -10,6 +10,8 @@
   export let hintsUsed = [];
   export let targetCard = null;
   export let hintCounts = {};
+  /** Guesses that contradicted an earlier clue (see consistency.js). */
+  export let mistakes = 0;
   /** Still-matching count after the final guess (1 on a win), scored from the
    * hint set built from every guess; overrides the last row's stored count so
    * the summary reflects the fully-constrained search. */
@@ -23,7 +25,7 @@
     revealCount != null && guesses.length > 0
       ? { ...hintCounts, [guesses.length - 1]: revealCount }
       : hintCounts;
-  $: shareText = buildShareText({ dayKey: dayKey || label, guesses, won, maxGuesses: MAX_GUESSES, url, hintsUsed: hintsUsed, targetCard, hintCounts: finalCounts });
+  $: shareText = buildShareText({ dayKey: dayKey || label, guesses, won, maxGuesses: MAX_GUESSES, url, hintsUsed: hintsUsed, targetCard, hintCounts: finalCounts, mistakes });
 
   async function copy() {
     try {

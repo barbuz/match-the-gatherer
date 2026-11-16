@@ -15,6 +15,7 @@
   --ok-fg: #7ee2a8;
   --bad-bg: #46262a;
   --bad-fg: #f1949a;
+  --warn-fg: #e3b341;
 }
 
 :root[data-theme='light'] {
@@ -29,6 +30,7 @@
   --ok-fg: #14683a;
   --bad-bg: #fae0e2;
   --bad-fg: #a03240;
+  --warn-fg: #8a5a00;
 }
 
 * {

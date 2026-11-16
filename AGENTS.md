@@ -16,9 +16,15 @@ against production. Point the app at a local mock instead:
 1. `VITE_API_BASE=<mock-origin> npm run build` — bakes the mock base URL into
    `dist/` (default build uses the real Worker). Rebuild without it afterwards.
 2. Run a tiny mock server on that origin that serves **both** `dist/` statically
-   **and** the API: `GET /api/daily/<date>` (a real card JSON, e.g. fetched once
-   from Scryfall `cards/named?exact=...&set=...`) and `GET|POST /api/stats*`
-   (canned aggregates). Log every request line.
+   **and** the API: `GET /api/daily/<date>` (a real card JSON) and
+   `GET|POST /api/stats*` (canned aggregates). Log every request line.
+   - Fetch that card JSON with the **same query the app uses**, `!"<name>"
+     not:reprint` (i.e. the *oldest* printing), **not** `cards/named?exact=`:
+     bare `named?exact` returns Scryfall's *newest* default printing, so the
+     served card's `released_at` won't match the oldest printing every guess
+     resolves to, and the board will show a phantom "target is newer" date clue
+     on every row. (`named?exact=...&set=...` is fine — the `set` pins the
+     printing — but the app itself never uses `named`.)
 3. Open the mock origin in the browser and play. Confirm counts, endgame
    summary, and — on reload of a finished game — a `GET /api/stats/<date>` read
    (not another `POST`).
@@ -309,6 +315,31 @@ Pitfalls that make this silently lie:
   The final count is scored once from `gatherHints(guesses)` (all guesses) and
   overrides the last summary row's stored count via `ShareSummary`'s
   `revealCount`, so summary and bar agree.
+
+- **Mistakes** (`lib/game/consistency.js`): a guess "goes against an earlier clue"
+  when it contradicts a fact the previous guesses already established about the
+  target. Every clue is the `gatherHints()` output, so the check reuses the exact
+  semantics of the Hint search: a hint is **excluded** when it says the target
+  does *not* have a value (a negated type/color/keyword/oracle token, an exact
+  mana cost / mana value / stat it isn't, or a release-date bound the guess falls
+  on the wrong side of) and the guess carries it anyway; a hint is **missing**
+  when it says the target *does* have a value (a matched type, color, keyword,
+  mana cost/value, stat, layout, rarity or exact release date) and the guess
+  lacks it. `analyzeGuesses(guesses)` checks guess *i* against
+  `gatherHints(guesses.slice(0, i))`, so guess 0 can never conflict and a guess is
+  never judged against itself; `countMistakes()` counts *guesses* that
+  contradicted ≥1 clue (a guess breaking several is still one mistake). All
+  conflicts are derived from feedback already on screen, so flagging them never
+  leaks the target. Oracle text contributes **excluded** conflicts only:
+  a positive oracle hint is a whole rules clause, so treating the target's prose
+  as a checklist would flag nearly every non-answer (`MISSING_KINDS`), whereas
+  guessing a clause the target was shown not to contain is a real contradiction.
+  `GuessFeedback.svelte` accents the offending row (no badge or wording); the
+  endgame block prints "Solved in N guesses with M
+  mistakes", and `buildShareText` appends ", M mistake(s)" to its header (omitted
+  when M is 0). The per-guess result is recomputed from the persisted guesses, so
+  it needs no storage schema change and works on a reloaded daily game; free mode
+  is unaffected (no new API calls).
 
 - Daily games persist per UTC day (`mtg:game:${dayKey}`, via `lib/game/gameState.js`);
   free-mode games are memory-only and never touch stats. Stats live in `storage/statsStore.js`

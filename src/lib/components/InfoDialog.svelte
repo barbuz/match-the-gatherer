@@ -86,6 +86,12 @@
           you can share your score as an emoji bar graph.
 
         </li>
+        <li>
+          <strong>Mind your earlier clues.</strong> A guess that goes against something you already learned — it has a
+          property you were told the target <em>doesn't</em> have, or it's missing one you were told it <em>does</em> —
+          has that property row highlighted, and counts as a mistake. The summary tells you how many you made.
+
+        </li>
       </ol>
 
       <h3>Free mode & stats</h3>
