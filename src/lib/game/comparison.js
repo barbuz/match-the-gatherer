@@ -129,7 +129,7 @@ function statKey(raw) {
   return v == null ? `raw:${String(raw)}` : `n:${v}`;
 }
 
-function manaCostTokens(card) {
+export function manaCostTokens(card) {
   const out = [];
   // Only face-level costs count. On split/fuse cards the card-level `mana_cost`
   // is the two halves CONCATENATED (`{1}{R} // {1}{U}}`), so adding it here
@@ -145,12 +145,12 @@ function manaCostTokens(card) {
   return out;
 }
 
-function colorTokens(card) {
+export function colorTokens(card) {
   const colors = collect(card, (f) => f.colors ?? []);
   return colors.length > 0 ? colors : [COLORLESS];
 }
 
-function typeTokens(card) {
+export function typeTokens(card) {
   // Face-level only, like manaCostTokens(): a multi-faced card's card-level
   // `type_line` is the faces' type lines CONCATENATED with `//`, so parsing it
   // as one line would invent `//`/`—` tokens. facesOf falls back to [card] for
@@ -163,7 +163,7 @@ function typeTokens(card) {
   return out;
 }
 
-function scalarTokens(card, key) {
+export function scalarTokens(card, key) {
   const pick = (f) => {
     const v = f[key];
     return v == null ? null : [String(v)];
@@ -478,8 +478,20 @@ export function parseOracleText(text = '', keywords = []) {
   return { rules, keywords: keywordItems, segments, keywordSegments, rulesSegments };
 }
 
+/**
+ * Lowercased, reminder-stripped oracle text for a whole card (union of faces,
+ * faces joined with a newline) — the exact string Scryfall's `o:` indexes and
+ * the Oracle-text row matches a guessed token against.
+ */
+export function searchableOracleText(card) {
+  return facesOf(card)
+    .map((f) => stripReminderText(f.oracle_text ?? ''))
+    .join('\n')
+    .toLocaleLowerCase();
+}
+
 /** Lowercased rules-text tokens for a whole card (union of faces). */
-function oracleTokens(card) {
+export function oracleTokens(card) {
   const vocab = keywordVocabulary(card);
   const out = [];
   for (const f of facesOf(card)) {
@@ -501,7 +513,7 @@ function keywordItems(card) {
 }
 
 /** Lowercased canonical keyword names actually printed on the card (deduplicated). */
-function keywordTokens(card) {
+export function keywordTokens(card) {
   const out = [];
   const seen = new Set();
   for (const k of keywordItems(card)) {
@@ -770,10 +782,7 @@ export function compareCards(guess, target) {
   }
   const gTokens = oracleTokens(guess);
   if (gTokens.length > 0) {
-    const targetSearch = facesOf(target)
-      .map((f) => stripReminderText(f.oracle_text ?? ''))
-      .join('\n')
-      .toLocaleLowerCase();
+    const targetSearch = searchableOracleText(target);
     // The tokens keep their ORIGINAL case: `o:` matches literally, so lowercasing
     // would break the verbatim-substring guarantee. Matching itself stays
     // case-insensitive via the lowercased comparison text.

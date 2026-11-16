@@ -11,6 +11,7 @@
   import { compareCards } from '../game/comparison.js';
   import { createGame, MAX_GUESSES } from '../game/gameState.js';
   import { gatherHints, buildScryfallSearchUrl, buildScryfallQuery } from '../game/hints.js';
+  import { analyzeGuesses, countMistakes } from '../game/consistency.js';
   import { scoreGuess } from '../game/scoring.js';
   import { barCountFor } from '../game/barTarget.js';
   import GuessInput from './GuessInput.svelte';
@@ -158,6 +159,10 @@
   $: gameOver = state.status !== 'playing';
   $: remaining = MAX_GUESSES - state.guesses.length;
   $: bestPct = Math.max(0, ...state.guesses.map((g) => Math.round(scoreGuess(g.card, targetCard).ratio * 100)));
+  // Which earlier clue each guess contradicts, recomputed from the persisted
+  // guesses (no storage schema change). Indexed like `state.guesses`.
+  $: conflictsByGuess = analyzeGuesses(state.guesses, targetCard);
+  $: mistakeCount = countMistakes(state.guesses, targetCard);
 
   onMount(() => {
     setup();
@@ -274,6 +279,14 @@
         {:else}
           <h2>{bestPct}% matched</h2>
         {/if}
+        <p class="outcome-line">
+          {state.status === 'won' ? 'Solved in' : 'Used'}
+          <strong>{state.guesses.length}</strong>
+          {state.guesses.length === 1 ? 'guess' : 'guesses'}
+          {mistakeCount === 0
+            ? 'with no mistakes'
+            : `with ${mistakeCount} ${mistakeCount === 1 ? 'mistake' : 'mistakes'}`}
+        </p>
         <div class="target-reveal">
           <a
             class="reveal-link"
@@ -300,6 +313,7 @@
             hintCounts={state.hintCounts ?? {}}
             {revealCount}
             {targetCard}
+            mistakes={mistakeCount}
           />
           <CommunityStats stats={state.communityStats} />
         {:else}
@@ -328,8 +342,8 @@
     <CardTimeline guesses={state.guesses} targetReleasedAt={targetCard?.released_at ?? null} />
 
     <div class="feedback-list">
-      {#each [...state.guesses].reverse() as entry (entry.card.name)}
-        <GuessFeedback {entry} {targetCard} />
+      {#each [...state.guesses].map((entry, i) => ({ entry, conflicts: conflictsByGuess[i] ?? [] })).reverse() as item (item.entry.card.name)}
+        <GuessFeedback entry={item.entry} {targetCard} conflicts={item.conflicts} />
       {/each}
     </div>
   {/if}
@@ -391,6 +405,11 @@
   .game-over {
     text-align: center;
     margin-top: 1rem;
+  }
+  .outcome-line {
+    margin: 0.2rem 0 0.6rem;
+    color: var(--muted);
+    font-size: 0.9rem;
   }
   .target-reveal {
     display: flex;

@@ -101,6 +101,17 @@ describe('buildShareText', () => {
     expect(loss.split('\n')[0]).toBe('Match the Gatherer 2026-08-26 — 100% matched');
   });
 
+  it('appends the mistake count to the header when there is at least one', () => {
+    const none = buildShareText({ dayKey: 'd', guesses, won: true, url: 'u', targetCard: target }).split('\n')[0];
+    expect(none).toBe('Match the Gatherer d — Matched in 2');
+
+    const one = buildShareText({ dayKey: 'd', guesses, won: true, url: 'u', targetCard: target, mistakes: 1 }).split('\n')[0];
+    expect(one).toBe('Match the Gatherer d — Matched in 2, 1 mistake');
+
+    const many = buildShareText({ dayKey: 'd', guesses, won: false, url: 'u', targetCard: target, mistakes: 3 }).split('\n')[0];
+    expect(many).toBe('Match the Gatherer d — 100% matched, 3 mistakes');
+  });
+
   it('renders one green bar row per guess (no trailing square) with proportional fill', () => {
     const rows = buildShareText({ dayKey: 'd', guesses, won: true, maxGuesses: 10, url: 'u', targetCard: target }).split('\n');
     expect(rows[1]).toBe('⬜'.repeat(10));

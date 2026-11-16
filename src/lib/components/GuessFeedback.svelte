@@ -5,6 +5,10 @@
 
   export let entry; // { card, results }
   export let targetCard = null;
+  /** Clues from earlier guesses this guess contradicts (see consistency.js). */
+  export let conflicts = [];
+
+  $: conflictRows = new Set(conflicts.map((c) => c.row).filter(Boolean));
 
   // `$symbols` is just a reactivity anchor — when the map finishes downloading
   // the store updates and any already-rendered mana rows re-render as images.
@@ -18,7 +22,9 @@
 </script>
 
 <div class="guess-feedback">
-  <h3 class="card-name">{entry.card.name}</h3>
+  <h3 class="card-name">
+    {entry.card.name}
+  </h3>
   <div class="lines">
     <div class="match-badge" title="{pct}% match">
       <svg viewBox="0 0 44 44" aria-hidden="true">
@@ -35,7 +41,7 @@
       <span class="match-pct">{pct}%</span>
     </div>
     {#each entry.results as r (r.key)}
-      <div class="line {r.status}">
+      <div class="line {r.status}" class:conflict={conflictRows.has(r.key)}>
         <span class="prop-label" class:absent={r.absentOnTarget}>{r.label}</span>
         <span class="values seg-values" class:mana={r.key === 'mana'} class:oracle={r.key === 'oracle'} class:keywords={r.key === 'keywords'}>
           {#each r.segments as seg, i (i)}
@@ -113,6 +119,15 @@
     margin: 0 3rem 0.4rem;
     font-size: 0.95rem;
     overflow-wrap: anywhere;
+  }
+  /* A row the guess got wrong *and* that an earlier clue already ruled out. */
+  .line.conflict .prop-label {
+    color: var(--warn-fg);
+  }
+  .line.conflict {
+    border-left: 2px solid var(--warn-fg);
+    padding-left: 0.35rem;
+    margin-left: -0.45rem;
   }
   .lines {
     display: flex;

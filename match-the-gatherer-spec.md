@@ -47,6 +47,13 @@ A Wordle-style daily guessing game for Magic: The Gathering cards, built as a Sv
 - **Fully correct property** (e.g., exact type match, exact power/toughness match): show the correct value, highlighted.
 - **Partially correct property** (e.g., 2 of 3 subtypes match, some otags match): show the matching values first, then the non-matching values, with clear visual distinction between the two groups.
 - **Fully incorrect property**: show the (incorrect) guessed values, visually marked as wrong.
+- **Against an earlier clue**: a guess that contradicts something already learned —
+  it carries a value a previous guess showed the target does *not* have, or it
+  lacks a value a previous guess showed the target *does* have — has its
+  offending property row highlighted (accented) on its feedback card. Such
+  guesses are counted as *mistakes* in the end-of-game summary (§11). The check
+  is derived only from clues already shown, so it never leaks the target; see
+  `lib/game/consistency.js`.
 
 ## 4. Data Sources & Fetching Strategy
 
@@ -144,6 +151,15 @@ At the end of a **daily** game (win or loss), show a summary that:
 - Renders each guess's score as a **horizontal bar made of emojis** (e.g. filled vs. empty block/square emoji), proportionally fuller the higher the match score — one row per guess.
 - Draws each row's bar in the **color of that guess's number of still-matching cards** (blue = 1, green ≤ 10, yellow ≤ 100, orange ≤ 1000, red > 1000; gray = unknown) rather than appending a separate square, so the same color scheme as the Hint button's bar is carried by the bar itself. The last row uses the count after all guesses (1 on a win).
 - Is copy-pasteable as a single shareable text block (the emoji bars).
+- Flags guesses that **go against an earlier clue** (§3): a guess that carries a
+  value a previous guess already ruled out, or that lacks a value a previous guess
+  established, has its offending property row highlighted on its feedback card
+  and counts as a *mistake*. The summary reports the total ("Solved in N guesses
+  with M mistakes") and the copyable block appends ", M mistake(s)" to its
+  header. The check reuses the same clue list the Hint button searches
+  (`gatherHints`), so it adds no new information beyond what is already on
+  screen; it is derived from the persisted guesses, so it needs no schema change
+  and survives a reload.
 - Always ends with the URL to the game.
 
 Note: an earlier idea used a per-property emoji grid (one column per property), but this was dropped — it would reveal which properties exist on the target (e.g. a filled power/toughness column would confirm the target is a creature) before the player has actually guessed that. The bar approach only reveals an aggregate score per guess, not which specific properties matched, so it can be safely shown even for guesses that got some properties wrong.
