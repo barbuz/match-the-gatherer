@@ -336,8 +336,11 @@ Pitfalls that make this silently lie:
   guessing a clause the target was shown not to contain is a real contradiction.
   `GuessFeedback.svelte` accents the offending row (no badge or wording); the
   endgame block prints "Solved in N guesses with M
-  mistakes", and `buildShareText` appends ", M mistake(s)" to its header (omitted
-  when M is 0). The per-guess result is recomputed from the persisted guesses, so
+  mistakes", and `buildShareText` marks each share row ✅ or ❌ (a mistake)
+  before the 🔮 hint marker instead of summarizing mistakes in the header. The
+  header itself carries only the day, and the share block has two formats —
+  `markdown` (default) links the header to the app, `plaintext` appends the bare
+  URL at the end. The per-guess result is recomputed from the persisted guesses, so
   it needs no storage schema change and works on a reloaded daily game; free mode
   is unaffected (no new API calls).
 

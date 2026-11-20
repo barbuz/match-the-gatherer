@@ -150,17 +150,22 @@ At the end of a **daily** game (win or loss), show a summary that:
 - A property counts toward the average whenever *either* card has tokens for it, so a property the guess lacks but the target has (e.g. a non-creature guess against a creature) contributes 0 rather than being dropped. Because the score is an aggregate over all properties rather than a per-property reveal, the bar still does not disclose which specific properties exist on the target.
 - Renders each guess's score as a **horizontal bar made of emojis** (e.g. filled vs. empty block/square emoji), proportionally fuller the higher the match score — one row per guess.
 - Draws each row's bar in the **color of that guess's number of still-matching cards** (blue = 1, green ≤ 10, yellow ≤ 100, orange ≤ 1000, red > 1000; gray = unknown) rather than appending a separate square, so the same color scheme as the Hint button's bar is carried by the bar itself. The last row uses the count after all guesses (1 on a win).
-- Is copy-pasteable as a single shareable text block (the emoji bars).
+- Is copy-pasteable as a single shareable text block (the emoji bars), in either
+  **Markdown** (default) or **plain text**. The block's header names the day only:
+  in Markdown it is a link to the app, while in plain text the bare URL is
+  appended at the end.
 - Flags guesses that **go against an earlier clue** (§3): a guess that carries a
   value a previous guess already ruled out, or that lacks a value a previous guess
   established, has its offending property row highlighted on its feedback card
   and counts as a *mistake*. The summary reports the total ("Solved in N guesses
-  with M mistakes") and the copyable block appends ", M mistake(s)" to its
-  header. The check reuses the same clue list the Hint button searches
+  with M mistakes"), and the copyable block marks each row ✅ (no contradiction)
+  or ❌ (a mistake) at the end of the row, before the 🔮 hint marker. The check
+  reuses the same clue list the Hint button searches
   (`gatherHints`), so it adds no new information beyond what is already on
   screen; it is derived from the persisted guesses, so it needs no schema change
   and survives a reload.
-- Always ends with the URL to the game.
+- Ends with the URL to the game in plain text; in Markdown the URL lives in the
+  header link.
 
 Note: an earlier idea used a per-property emoji grid (one column per property), but this was dropped — it would reveal which properties exist on the target (e.g. a filled power/toughness column would confirm the target is a creature) before the player has actually guessed that. The bar approach only reveals an aggregate score per guess, not which specific properties matched, so it can be safely shown even for guesses that got some properties wrong.
 

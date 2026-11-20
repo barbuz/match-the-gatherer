@@ -307,13 +307,11 @@
         {#if mode === 'daily'}
           <ShareSummary
             guesses={state.guesses}
-            won={state.status === 'won'}
             {dayKey}
             hintsUsed={state.hintsUsed ?? []}
             hintCounts={state.hintCounts ?? {}}
             {revealCount}
             {targetCard}
-            mistakes={mistakeCount}
           />
           <CommunityStats stats={state.communityStats} />
         {:else}
