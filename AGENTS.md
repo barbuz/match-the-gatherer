@@ -361,10 +361,17 @@ Pitfalls that make this silently lie:
   so the Hint link and the Possible-cards bar include it from the first guess,
   and `GameBoard` counts that clue's constrained set once on load as the bar's
   starting value. `RevealClue.svelte` renders it above the guess input with a
-  *Free clue* tag, as the sentence "Today we are guessing a Kithkin". The clue
-  is one printed word, so a multi-word subtype arrives split (`Time Lord` →
-  `Time`) and the sentence can read "a Time" — accepted as the cost of the
-  friendlier copy; don't "fix" it by reintroducing a label-plus-word layout. `dailyApi.js` parses
+  *Free clue* tag, as the sentence "Today we are guessing a Kithkin" / "an
+  Artifact". The article comes from `articleFor()` — a phonetic test, not a
+  vowel test: ~24% of type-line token occurrences need "an", and the `u` split
+  is real (`a Unicorn` but `an Urza`). Every H-initial token is pronounced, so
+  `h` always takes "a"; a silent-h word would need adding. The clue is one
+  printed word, so a multi-word subtype arrives split (`Time Lord` → `Time`)
+  and the sentence can read "a Time" — accepted; don't "fix" it by
+  reintroducing a label-plus-word layout. Known residue, 57 of 35,385 cards
+  (0.16%): a plural token (`Creature — Elves`), a function word (`Lady of
+  Proper Etiquette`), and the Un-set `Stickers` type. Filtering those belongs in
+  the backend's candidate pool, not in the copy. `dailyApi.js` parses
   it defensively (missing/malformed → `null`, never a load failure) and caches it
   under `mtg:daily-card:v2` — versioned so a pre-feature cached answer without a
   clue is not reused for the rest of the day. Free mode never has a reveal.

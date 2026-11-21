@@ -45,11 +45,12 @@ A Wordle-style daily guessing game for Magic: The Gathering cards, built as a Sv
 ### Pre-revealed clue
 - Every daily game starts with **one word of the target's type line already
   known**, chosen by the backend and identical for every player (§5), and
-  rendered as a sentence: *“Today we are guessing a Kithkin”*. The clue is a
-  **single printed word**, so a multi-word subtype arrives split
-  (`Time Lord` → `Time` or `Lord`) and can read *“… a Time”*; Scryfall's `t:`
-  matches either part, so the clue stays sound. The candidate pool is the
-  card's own type
+  rendered as a sentence: *“Today we are guessing a Kithkin”* / *“an Artifact”*,
+  with the article chosen phonetically (`articleFor()`: `a Unicorn` but `an
+  Urza`). The clue is a **single printed word**, so a multi-word subtype
+  arrives split (`Time Lord` → `Time` or `Lord`) and can read *“… a Time”*;
+  Scryfall's `t:` matches either part, so the clue stays sound. The candidate
+  pool is the card's own type
   line — supertypes, types and subtypes, one word each — so a
   `Creature — Goblin Artificer` reveals `Creature`, `Goblin` or `Artificer`
   with equal probability.
