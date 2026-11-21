@@ -52,9 +52,9 @@
       <ol class="steps">
         <li>
           <strong>Start from the free clue.</strong> Every day begins with one word of the target's
-          type line already revealed — a type, supertype or subtype, e.g. <em>“Today we are guessing a
-          Kithkin”</em>. It is a real clue: the Hint search counts it, and a guess that lacks that word
-          goes against what you were told.
+          type line already revealed — a type, supertype or subtype, e.g. <em>“Kithkin”</em> or
+          <em>“Legendary”</em>. It is a real clue: the Hint search counts it, and a guess that lacks
+          that word goes against what you were told.
         </li>
         <li>
           <strong>Make a guess.</strong> Type a card name and pick it from the autocomplete list. Cards

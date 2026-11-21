@@ -360,8 +360,10 @@ Pitfalls that make this silently lie:
   turns it into a positive `type` hint (`t:kithkin`) seeded into `gatherHints`,
   so the Hint link and the Possible-cards bar include it from the first guess,
   and `GameBoard` counts that clue's constrained set once on load as the bar's
-  starting value. `RevealClue.svelte` renders it above the guess input as
-  "Today we are guessing a Kithkin" with a *Free clue* tag. `dailyApi.js` parses
+  starting value. `RevealClue.svelte` renders it above the guess input with a
+  *Free clue* tag. The clue is one printed word (a multi-word subtype arrives
+  split — `Time Lord` → `Time`), so the copy says "a card whose type line
+  contains “Time”" rather than using an article, which would read "a Time". `dailyApi.js` parses
   it defensively (missing/malformed → `null`, never a load failure) and caches it
   under `mtg:daily-card:v2` — versioned so a pre-feature cached answer without a
   clue is not reused for the rest of the day. Free mode never has a reveal.

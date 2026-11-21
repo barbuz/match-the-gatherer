@@ -21,10 +21,10 @@ describe('revealHints', () => {
 });
 
 describe('revealText', () => {
-  it('reads as a sentence naming the word', () => {
-    expect(revealText({ property: 'subtype', value: 'Kithkin' })).toBe(
-      'Today we are guessing a Kithkin',
-    );
+  it('quotes the revealed word for display next to its label', () => {
+    expect(revealText({ property: 'subtype', value: 'Kithkin' })).toBe('“Kithkin”');
+    // A multi-word subtype arrives split, so no article is assumed.
+    expect(revealText({ property: 'subtype', value: 'Time' })).toBe('“Time”');
   });
 
   it('is null without a value', () => {

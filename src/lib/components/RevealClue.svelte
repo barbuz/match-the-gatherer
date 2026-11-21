@@ -1,7 +1,7 @@
 <script>
   /**
    * The day's pre-revealed clue (spec §3, backend spec §3.7), shown above the
-   * guess input for the whole daily game: "Today we are guessing a Goblin".
+   * guess input for the whole daily game, naming one type-line word.
    *
    * It is a real clue, not decoration — the Hint link and the match count
    * include it, and a guess that lacks the word counts as a mistake (see
@@ -20,7 +20,7 @@
   <div class="reveal" role="note">
     <span class="tag" aria-hidden="true">Free clue</span>
     <p class="text">
-      {#if label}<span class="label">{label}:</span>{/if}
+      {#if label}<span class="label">The target's {label.toLowerCase()} includes</span>{/if}
       <strong>{text}</strong>
     </p>
   </div>

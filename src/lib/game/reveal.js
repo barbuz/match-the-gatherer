@@ -40,19 +40,19 @@ export function revealHints(reveal) {
 }
 
 /**
- * The player-facing sentence for the clue, e.g. "Today we are guessing a
- * Kithkin". Returns null when there is nothing to show (free mode, or a
+ * The revealed word, quoted for display next to its property label (see
+ * `revealLabel`), or null when there is nothing to show (free mode, or a
  * response without a reveal).
+ *
+ * Only the word is returned: it is a single printed token, so a multi-word
+ * subtype arrives split ("Time", "Lord") and any sentence built around it would
+ * have to guess at an article ("a Time"). The label carries the grammar.
  * @param {{ property: string, value: string } | null | undefined} reveal
  * @returns {string | null}
  */
 export function revealText(reveal) {
   const value = reveal?.value == null ? '' : String(reveal.value).trim();
-  if (!value) return null;
-  // Every property in the pool is a noun that takes "a" ("a Kithkin", "a
-  // Creature", "a Legendary"). If a vowel-initial or mass-noun property is ever
-  // added to the server pool, revisit this.
-  return `Today we are guessing a ${value}`;
+  return value ? `“${value}”` : null;
 }
 
 /** Short label for the clue's property ("Subtype", "Type", "Supertype"). */
