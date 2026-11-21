@@ -89,36 +89,53 @@ describe('buildShareText', () => {
     { card: { mana_cost: '{R}', colors: ['R'], type_line: 'Instant' } }, // 100%
     { card: { mana_cost: '{U}', colors: ['U'], type_line: 'Instant' } }, // 33%
   ];
+  const CORRECT = '\u2705';
+  const ERROR = '\u274C';
+  const BALL = '\u{1F52E}';
 
-  it('shows "Matched in N" on a win and the best "% matched" on a loss, ending with the URL', () => {
-    const win = buildShareText({ dayKey: '2026-08-26', guesses, won: true, url: 'https://example.com/', targetCard: target });
-    const rows = win.split('\n');
-    expect(rows[0]).toBe('Match the Gatherer 2026-08-26 — Matched in 2');
+  it('defaults to markdown: the header links to the app and no bare URL is appended', () => {
+    const rows = buildShareText({ dayKey: '2026-08-26', guesses, url: 'https://example.com/', targetCard: target }).split('\n');
+    expect(rows[0]).toBe('[Match the Gatherer 2026-08-26](https://example.com/)');
+    expect(rows).toHaveLength(3); // header + 2 bars, no trailing URL
+    expect(rows[rows.length - 1]).not.toBe('https://example.com/');
+  });
+
+  it('plain text keeps the header plain and appends the bare URL', () => {
+    const rows = buildShareText({
+      dayKey: '2026-08-26',
+      guesses,
+      url: 'https://example.com/',
+      targetCard: target,
+      format: 'plaintext',
+    }).split('\n');
+    expect(rows[0]).toBe('Match the Gatherer 2026-08-26');
     expect(rows).toHaveLength(4); // header + 2 bars + url
     expect(rows[rows.length - 1]).toBe('https://example.com/');
-
-    const loss = buildShareText({ dayKey: '2026-08-26', guesses, won: false, url: 'https://example.com/', targetCard: target });
-    expect(loss.split('\n')[0]).toBe('Match the Gatherer 2026-08-26 — 100% matched');
   });
 
-  it('appends the mistake count to the header when there is at least one', () => {
-    const none = buildShareText({ dayKey: 'd', guesses, won: true, url: 'u', targetCard: target }).split('\n')[0];
-    expect(none).toBe('Match the Gatherer d — Matched in 2');
-
-    const one = buildShareText({ dayKey: 'd', guesses, won: true, url: 'u', targetCard: target, mistakes: 1 }).split('\n')[0];
-    expect(one).toBe('Match the Gatherer d — Matched in 2, 1 mistake');
-
-    const many = buildShareText({ dayKey: 'd', guesses, won: false, url: 'u', targetCard: target, mistakes: 3 }).split('\n')[0];
-    expect(many).toBe('Match the Gatherer d — 100% matched, 3 mistakes');
+  it('falls back to a plain header when no URL is known', () => {
+    const rows = buildShareText({ dayKey: 'd', guesses, url: '', targetCard: target }).split('\n');
+    expect(rows[0]).toBe('Match the Gatherer d');
   });
 
-  it('renders one green bar row per guess (no trailing square) with proportional fill', () => {
-    const rows = buildShareText({ dayKey: 'd', guesses, won: true, maxGuesses: 10, url: 'u', targetCard: target }).split('\n');
-    expect(rows[1]).toBe('⬜'.repeat(10));
-    expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(7));
+  it('marks every row correct when no clue was contradicted', () => {
+    const rows = buildShareText({ dayKey: 'd', guesses, url: 'u', targetCard: target }).split('\n');
+    expect(rows[1]).toBe('⬜'.repeat(10) + CORRECT);
+    expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(7) + CORRECT);
   });
 
-  it('appends a scrying-ball marker to rows where a hint was used', () => {
+  it('marks a guess that contradicts an earlier clue as an error', () => {
+    const g0 = {
+      card: { type_line: 'Instant' },
+      results: [{ key: 'type', status: 'correct', correct: ['Instant'], wrong: [] }],
+    };
+    const g1 = { card: { type_line: 'Sorcery' } };
+    const rows = buildShareText({ dayKey: 'd', guesses: [g0, g1], url: 'u', targetCard: target }).split('\n');
+    expect(rows[1].endsWith(CORRECT)).toBe(true);
+    expect(rows[2].endsWith(ERROR)).toBe(true);
+  });
+
+  it('places the correctness marker before the hint scrying ball', () => {
     const text = buildShareText({
       dayKey: 'd',
       guesses: [
@@ -126,41 +143,37 @@ describe('buildShareText', () => {
         { card: { mana_cost: '{U}', colors: ['U'], type_line: 'Instant' } },
         { card: { mana_cost: '{R}', colors: ['R'], type_line: 'Instant' } },
       ],
-      won: true,
-      maxGuesses: 10,
       url: 'u',
       hintsUsed: [0, 2],
       targetCard: target,
     });
     const rows = text.split('\n');
-    expect(rows[1]).toBe('⬜'.repeat(10) + '\u{0001F52E}');
-    expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(7));
-    expect(rows[3]).toBe('⬜'.repeat(10) + '\u{0001F52E}');
+    expect(rows[1]).toBe('⬜'.repeat(10) + CORRECT + BALL);
+    expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(7) + CORRECT);
+    expect(rows[3]).toBe('⬜'.repeat(10) + CORRECT + BALL);
   });
 
   it('colors each bar by its still-matching count', () => {
     const rows = buildShareText({
       dayKey: 'd',
       guesses,
-      won: true,
       url: 'u',
       targetCard: target,
       hintCounts: { 0: 1226, 1: 60 },
     }).split('\n');
-    expect(rows[1]).toBe('\u{0001F7E5}'.repeat(10)); // 1226 → red fill
-    expect(rows[2]).toBe('\u{0001F7E8}'.repeat(3) + '\u2B1C'.repeat(7)); // 60 → yellow fill
+    expect(rows[1]).toBe('\u{0001F7E5}'.repeat(10) + CORRECT); // 1226 → red fill
+    expect(rows[2]).toBe('\u{0001F7E8}'.repeat(3) + '\u2B1C'.repeat(7) + CORRECT); // 60 → yellow fill
   });
 
   it('falls back to green for a count that never resolved, and blue for a real 0', () => {
     const rows = buildShareText({
       dayKey: 'd',
       guesses,
-      won: true,
       url: 'u',
       targetCard: target,
       hintCounts: { 0: 0 }, // 1 is unresolved
     }).split('\n');
-    expect(rows[1]).toBe('\u{0001F7E6}'.repeat(10)); // 0 → blue fill
-    expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(7)); // unresolved → green
+    expect(rows[1]).toBe('\u{0001F7E6}'.repeat(10) + CORRECT); // 0 → blue fill
+    expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(7) + CORRECT); // unresolved → green
   });
 });

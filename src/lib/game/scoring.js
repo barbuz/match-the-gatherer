@@ -2,8 +2,14 @@
 
 import { propertyTokens } from './comparison.js';
 import { countColor } from './countColors.js';
+import { analyzeGuesses } from './consistency.js';
 
 export const SHARE_BLOCKS = 10;
+
+/** Row markers: no clue contradicted / contradicted an earlier clue. */
+const CORRECT_MARK = '\u2705';
+const ERROR_MARK = '\u274C';
+const HINT_MARK = '\u{1F52E}';
 
 // Colored squares for each count band (blue, green, yellow, orange, red),
 // keyed by the band's hex color, plus a gray square for an unknown count. The
@@ -78,33 +84,36 @@ export function emojiBar(ratio, blocks = SHARE_BLOCKS, count = undefined) {
 }
 
 /**
- * Copy-pasteable share block: one emoji-bar row per guess, ending with the
- * game URL (§11). `targetCard` is needed to score each guess. Each row's bar is
+ * Copy-pasteable share block: one emoji-bar row per guess, preceded by a header
+ * naming the day. `targetCard` is needed to score each guess. Each row's bar is
  * drawn in that guess's Scryfall match-count color (from `hintCounts`) — the
  * same color scheme as the on-screen summary — or a gray bar when the count
- * never resolved. `mistakes` (guesses that contradicted an earlier clue, see
- * consistency.js) is appended to the header when there is at least one.
+ * never resolved. Every row ends with a correctness marker: ❌ when the guess
+ * contradicted an earlier clue (a mistake, see consistency.js) and ✅ otherwise,
+ * followed by the 🔮 marker when a hint was used for that row.
+ *
+ * `format` picks the header/link style: `'markdown'` (default) turns the header
+ * into a link to the app, while `'plaintext'` keeps a plain header and appends
+ * the bare URL at the end.
  */
 export function buildShareText({
   dayKey,
   guesses,
-  won,
   url,
   hintsUsed = [],
   targetCard,
   hintCounts = {},
-  mistakes = 0,
+  format = 'markdown',
 }) {
   const ratios = guesses.map((g) => scoreGuess(g.card, targetCard).ratio);
-  const bestPct = Math.max(0, ...ratios.map((r) => Math.round(r * 100)));
-  const mistakeSuffix = mistakes > 0 ? `, ${mistakes} ${mistakes === 1 ? 'mistake' : 'mistakes'}` : '';
-  const header = won
-    ? `Match the Gatherer ${dayKey} — Matched in ${guesses.length}${mistakeSuffix}`
-    : `Match the Gatherer ${dayKey} — ${bestPct}% matched${mistakeSuffix}`;
+  const conflicts = analyzeGuesses(guesses, targetCard);
   const used = new Set(hintsUsed ?? []);
+  const title = `Match the Gatherer ${dayKey}`;
+  const header = format === 'markdown' && url ? `[${title}](${url})` : title;
   const rows = guesses.map((g, i) => {
-    const marker = used.has(i) ? '\u{1F52E}' : '';
-    return `${emojiBar(ratios[i], SHARE_BLOCKS, hintCounts?.[i])}${marker}`;
+    const marker = conflicts[i]?.length ? ERROR_MARK : CORRECT_MARK;
+    const hint = used.has(i) ? HINT_MARK : '';
+    return `${emojiBar(ratios[i], SHARE_BLOCKS, hintCounts?.[i])}${marker}${hint}`;
   });
-  return [header, ...rows, url].join('\n');
+  return (format === 'markdown' ? [header, ...rows] : [header, ...rows, url]).join('\n');
 }
