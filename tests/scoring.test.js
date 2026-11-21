@@ -90,7 +90,7 @@ describe('buildShareText', () => {
     { card: { mana_cost: '{U}', colors: ['U'], type_line: 'Instant' } }, // 33%
   ];
   const CORRECT = '\u2705';
-  const ERROR = '\u274C';
+  const ERROR = '\u26A0\uFE0F';
   const BALL = '\u{1F52E}';
 
   it('defaults to markdown: the header links to the app and no bare URL is appended', () => {
