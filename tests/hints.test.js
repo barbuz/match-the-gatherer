@@ -803,13 +803,36 @@ describe('buildScryfallSearchUrl', () => {
       hints.push({ kind: 'oracle', value: `Negated clause ${i} with a fairly long oracle text`, negated: true });
     }
     hints.push({ kind: 'manaValue', value: '4' });
-    const { url, truncated } = buildScryfallSearchUrl(hints);
+    const { url, truncated, dropped } = buildScryfallSearchUrl(hints);
     const q = decodeURIComponent(url).split('q=')[1];
     expect(truncated).toBe(true);
-    expect(q).not.toContain('-o:');
+    expect(dropped).toBeGreaterThan(0);
+    // Only as many negated `o:` clauses as the budget requires are dropped, so
+    // some remain while every non-oracle clue survives.
+    expect(q).toContain('-o:');
     expect(q).toContain('o:Flying');
     expect(q).toContain('t:creature');
     expect(q).toContain('mv=4');
+  });
+
+  it('drops only enough negated o: clauses to fit the budget', () => {
+    // Regression: a query just over the limit used to discard every negated
+    // oracle clause, even though removing one long clause was enough.
+    const hints = [
+      { kind: 'type', value: 'Creature' },
+      { kind: 'oracle', value: 'x'.repeat(600), negated: true },
+      { kind: 'oracle', value: 'y'.repeat(400), negated: true },
+    ];
+    const { url, truncated, dropped } = buildScryfallSearchUrl(hints);
+    const q = decodeURIComponent(url).split('q=')[1];
+    expect(truncated).toBe(true);
+    expect(dropped).toBe(1);
+    expect(q).toContain('-o:' + 'y'.repeat(400));
+    expect(q).not.toContain('x'.repeat(600));
+    expect(q).toContain('t:creature');
+    expect(q).toContain('f:v');
+    expect(q).toContain('not:reprint');
+    expect(q.length).toBeLessThanOrEqual(MAX_QUERY_LENGTH);
   });
 
   it('does not drop clauses when the query already fits', () => {

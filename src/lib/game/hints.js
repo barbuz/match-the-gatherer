@@ -294,7 +294,8 @@ const REQUIRED_CLAUSES = ['f:v', 'not:reprint'];
  * Turn a hint list into Scryfall clauses, all kept when they fit within
  * {@link MAX_QUERY_LENGTH}. Only an over-budget query is pruned: negated `o:`
  * clauses go first (bulky and the least specific hint), then the longest
- * remaining clauses are dropped — never `f:v`/`not:reprint` — until it fits.
+ * remaining clauses are dropped — never `f:v`/`not:reprint` — one at a time,
+ * only until the query fits.
  *
  * @param {Array<{ kind, value, negated?, dir? }>} hints  gatherHints() output
  * @returns {{ clauses: string[], dropped: number, truncated: boolean }}
@@ -320,21 +321,28 @@ function clampClauses(hints) {
     return { clauses: all.map((x) => x.clause), dropped: 0, truncated: false };
   }
 
-  // Over budget. Negated `o:` is the single biggest length contributor and the
-  // least informative hint, so drop it before anything else.
-  let kept = all.filter((x) => !x.negatedOracle);
-  let dropped = all.length - kept.length;
-  while (joined(kept).length > MAX_QUERY_LENGTH && kept.length > REQUIRED_CLAUSES.length) {
+  const kept = [...all];
+  let dropped = 0;
+  const dropLongest = (predicate) => {
     let longestIndex = -1;
     for (let i = 0; i < kept.length; i += 1) {
-      if (REQUIRED_CLAUSES.includes(kept[i].clause)) continue;
-      if (longestIndex === -1 || kept[i].clause.length > kept[longestIndex].clause.length) {
+      const item = kept[i];
+      if (REQUIRED_CLAUSES.includes(item.clause) || !predicate(item)) continue;
+      if (longestIndex === -1 || item.clause.length > kept[longestIndex].clause.length) {
         longestIndex = i;
       }
     }
-    if (longestIndex === -1) break;
+    if (longestIndex === -1) return false;
     kept.splice(longestIndex, 1);
     dropped += 1;
+    return true;
+  };
+
+  // Negated `o:` is the biggest length contributor and the least informative
+  // hint, so sacrifice those before anything else — but only as many as needed.
+  while (joined(kept).length > MAX_QUERY_LENGTH) {
+    if (dropLongest((item) => item.negatedOracle)) continue;
+    if (!dropLongest(() => true)) break;
   }
   return { clauses: kept.map((x) => x.clause), dropped, truncated: dropped > 0 };
 }

@@ -242,9 +242,10 @@ Pitfalls that make this silently lie:
     (the link **and** the count) within `MAX_QUERY_LENGTH` (1000, a safe margin
     under the observed ~1024 cut): all clauses are kept when they fit, and only
     an over-budget query is pruned — **negated `o:`** clauses first (bulky and
-    the least specific hint), then the **longest** remaining clauses, never
-    `f:v`/`not:reprint`, until it fits. Because both the URL and the count go
-    through the same clamp they still search the identical set.
+    the least specific hint), longest first and only as many as needed, then
+    the **longest** remaining clauses, never `f:v`/`not:reprint`, until it fits.
+    Because both the URL and the count go through the same clamp they still
+    search the identical set.
     `buildScryfallSearchUrl()` returns `{ url, truncated, dropped, warning }`
     and `GameBoard.svelte` renders `warning` ("Some longer clues were omitted…")
     directly under the Hint button (above the colored bar) when clauses were
