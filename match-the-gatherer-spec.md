@@ -42,6 +42,20 @@ A Wordle-style daily guessing game for Magic: The Gathering cards, built as a Sv
 - **Multi-faced cards**: a double-faced guess's per-face values are phrased in order with a `//` separator, for the mana cost, color, type line, P/T, Keywords and Oracle text rows alike. In the (wrapping) Oracle text row the separator sits on its own line between the faces.
 - **Otags**: all otags are used for the comparison (no cap for now).
 
+### Pre-revealed clue
+- Every daily game starts with **one word of the target's type line already
+  known**, chosen by the backend and identical for every player (§5): e.g.
+  "Today we are guessing a Kithkin". The candidate pool is the card's own type
+  line — supertypes, types and subtypes, one word each — so a
+  `Creature — Goblin Artificer` reveals `Creature`, `Goblin` or `Artificer`
+  with equal probability.
+- The clue is shown above the guess input for the whole game, tagged *Free
+  clue*. It is a **real clue, not decoration**: it seeds the hint list, so the
+  Hint link and the "Possible cards" bar include it (`t:kithkin`) from the very
+  first guess, and a guess that lacks the word counts as a mistake under the
+  rule below — including the **first** guess, which is otherwise never judged.
+- **Free mode has no clue**: it makes no backend request, so nothing is revealed.
+
 ### Feedback rules
 - **Anti-leak rendering**: unlike the fixed property list (mana, color, type, etc.), the guessed card drives which rows appear: a property absent on the guessed card renders no row (e.g. a non-creature guess shows no P/T row; a keyword-less guess shows no Keywords row), so an absent property never leaks thatthe target has it.
 - **Fully correct property** (e.g., exact type match, exact power/toughness match): show the correct value, highlighted.
@@ -53,7 +67,9 @@ A Wordle-style daily guessing game for Magic: The Gathering cards, built as a Sv
   offending property row highlighted (accented) on its feedback card. Such
   guesses are counted as *mistakes* in the end-of-game summary (§11). The check
   is derived only from clues already shown, so it never leaks the target; see
-  `lib/game/consistency.js`.
+  `lib/game/consistency.js`. The day's pre-revealed clue counts as a clue shown
+  before guess 0, so it can flag a first guess too (`reveal.js` supplies it as
+  `baseHints`).
 
 ## 4. Data Sources & Fetching Strategy
 
@@ -83,7 +99,7 @@ All data comes directly from Scryfall's public API; there is no custom backend.
 
 The daily game is **server-authoritative** (backend spec §3):
 
-- At game start the client calls `GET <api>/api/daily/<today-utc>` and renders the full Scryfall card object it returns. The date in the URL is the cache key, so a new day is always a fresh request. The response's final URL decides the day key the game is stored under, so a clock-skewed client follows the server's 302 to today and self-heals.
+- At game start the client calls `GET <api>/api/daily/<today-utc>` and renders the full Scryfall card object it returns, plus the day's pre-revealed type-line clue (`reveal`, backend spec §3.7). The date in the URL is the cache key, so a new day is always a fresh request. The response's final URL decides the day key the game is stored under, so a clock-skewed client follows the server's 302 to today and self-heals.
 - The response body is **gzipped and sent without a `Content-Encoding` header** (anti-casual-cheat obfuscation, backend spec §3.4), so the browser will not inflate it: the client reads the raw bytes and inflates them itself with `DecompressionStream('gzip')`. Only `/api/daily` does this; `/api/stats` negotiates normally.
 - **No client-side fallback.** If the request fails, show an "unable to load today's puzzle" state with a Retry button. The client must never fall back to a locally-picked card — that would split players across different answers on the same day. `resolveDailyTargetCard` is retained for **free mode only**.
 - The backend reuses the same deterministic selection rules (FNV-1a over the UTC date key, `A-`-filtered Scryfall name list, attempt-seeded re-rolls, vintage-legal + non-reprint), so the daily answer stays familiar. It may diverge when its quality gate requires; the server's pick wins.

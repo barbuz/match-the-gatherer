@@ -93,7 +93,41 @@ describe('fetchDailyCard', () => {
 
     expect(again.card).toEqual(CARD);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(store['mtg:daily-card']).toEqual({ dayKey: '2026-09-15', card: CARD });
+    expect(store['mtg:daily-card:v2']).toEqual({ dayKey: '2026-09-15', card: CARD, reveal: null });
+  });
+
+  it('returns and caches the day\'s pre-revealed clue (backend spec §3.7)', async () => {
+    const store = stubDb();
+    const reveal = { property: 'subtype', value: 'Kithkin' };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(plain({ card: CARD, reveal })),
+    );
+    const { fetchDailyCard } = await import('../src/lib/api/dailyApi.js');
+
+    const { reveal: got } = await fetchDailyCard('2026-09-15');
+    expect(got).toEqual(reveal);
+    expect(store['mtg:daily-card:v2'].reveal).toEqual(reveal);
+
+    // Served from cache the second time, clue included.
+    const again = await fetchDailyCard('2026-09-15');
+    expect(again.reveal).toEqual(reveal);
+  });
+
+  it('treats a missing or malformed reveal as null instead of failing the load', async () => {
+    for (const body of [
+      { card: CARD },
+      { card: CARD, reveal: null },
+      { card: CARD, reveal: { property: 'subtype' } },
+      { card: CARD, reveal: { property: 'subtype', value: '   ' } },
+      { card: CARD, reveal: 'nonsense' },
+    ]) {
+      stubDb();
+      vi.resetModules();
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(plain(body)));
+      const { fetchDailyCard } = await import('../src/lib/api/dailyApi.js');
+      await expect(fetchDailyCard('2026-09-15')).resolves.toMatchObject({ reveal: null });
+    }
   });
 
   it('re-requests once the day rolls over rather than serving yesterday', async () => {

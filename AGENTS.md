@@ -346,6 +346,25 @@ Pitfalls that make this silently lie:
   URL at the end. The per-guess result is recomputed from the persisted guesses, so
   it needs no storage schema change and works on a reloaded daily game; free mode
   is unaffected (no new API calls).
+  - **`baseHints`**: both `analyzeGuesses`/`countMistakes` and `gatherHints` take
+    an optional third/second argument of facts known *before guess 0*. It exists
+    for the daily pre-revealed clue (`game/reveal.js`), which is a real clue, so
+    a first guess that lacks the revealed word is a mistake even though guess 0
+    is otherwise never judged. `buildShareText` forwards it too, or a first guess
+    would read ⚠️ on the board and ✅ in the share text. Free mode passes nothing.
+
+- **Pre-revealed daily clue** (`lib/game/reveal.js`, backend spec §3.7): every
+  daily answer carries `reveal: { property, value }` — one word of the target's
+  type line (`supertype`/`type`/`subtype`), chosen server-side per UTC day from
+  the card's own type-line words, so it is the same for everyone. `revealHints()`
+  turns it into a positive `type` hint (`t:kithkin`) seeded into `gatherHints`,
+  so the Hint link and the Possible-cards bar include it from the first guess,
+  and `GameBoard` counts that clue's constrained set once on load as the bar's
+  starting value. `RevealClue.svelte` renders it above the guess input as
+  "Today we are guessing a Kithkin" with a *Free clue* tag. `dailyApi.js` parses
+  it defensively (missing/malformed → `null`, never a load failure) and caches it
+  under `mtg:daily-card:v2` — versioned so a pre-feature cached answer without a
+  clue is not reused for the rest of the day. Free mode never has a reveal.
 
 - Daily games persist per UTC day (`mtg:game:${dayKey}`, via `lib/game/gameState.js`);
   free-mode games are memory-only and never touch stats. Stats live in `storage/statsStore.js`

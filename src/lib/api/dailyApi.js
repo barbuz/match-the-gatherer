@@ -12,7 +12,9 @@ import { API_BASE } from './config.js';
 
 const DATE_IN_URL = /\/api\/daily\/(\d{4}-\d{2}-\d{2})$/;
 // One slot, rewritten per day: the answer only matters until the date rolls.
-const CACHE_KEY = 'mtg:daily-card';
+// Versioned because the envelope gained `reveal` (§3.7): an answer cached by an
+// older build has no clue, so it must not be reused for the rest of the day.
+const CACHE_KEY = 'mtg:daily-card:v2';
 // A request that never settles would leave the board stuck on "Loading game…"
 // with no way out, so give up and fall into the retry state instead.
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -69,18 +71,31 @@ function servedDateKey(res, requested) {
 }
 
 /**
+ * The day's pre-revealed clue (backend spec §3.7): one type-line word, or null
+ * when the server sent none (an older backend) or sent something unusable.
+ * Parsed defensively — a malformed clue must never stop the game from loading.
+ */
+function readReveal(body) {
+  const reveal = body?.reveal;
+  if (!reveal || typeof reveal !== 'object') return null;
+  const value = typeof reveal.value === 'string' ? reveal.value.trim() : '';
+  if (!value) return null;
+  return { property: String(reveal.property ?? ''), value };
+}
+
+/**
  * Fetch the authoritative card for a UTC day (default: today), reusing the
  * cached answer for that day so a reload doesn't re-request it (backend spec
  * §3.4). The cache only ever holds a card the server served for that same day,
  * so it can never resurrect a locally-picked answer (§3.5).
  * @param {string} [dateKey] 'YYYY-MM-DD', computed fresh at game start.
- * @returns {Promise<{ card: object, dayKey: string }>}
+ * @returns {Promise<{ card: object, dayKey: string, reveal: object|null }>}
  * @throws {DailyApiError} on network failure or a non-2xx / card-less response.
  */
 export async function fetchDailyCard(dateKey = utcDateKey()) {
   const cached = await dbGet(CACHE_KEY);
   if (cached?.dayKey === dateKey && cached.card?.name) {
-    return { card: cached.card, dayKey: cached.dayKey };
+    return { card: cached.card, dayKey: cached.dayKey, reveal: cached.reveal ?? null };
   }
 
   let res;
@@ -100,6 +115,7 @@ export async function fetchDailyCard(dateKey = utcDateKey()) {
   const card = body?.card;
   if (!card?.name) throw new DailyApiError('game server returned no card for today');
   const dayKey = servedDateKey(res, dateKey);
-  await dbSet(CACHE_KEY, { dayKey, card });
-  return { card, dayKey };
+  const reveal = readReveal(body);
+  await dbSet(CACHE_KEY, { dayKey, card, reveal });
+  return { card, dayKey, reveal };
 }

@@ -177,3 +177,32 @@ describe('buildShareText', () => {
     expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(7) + CORRECT); // unresolved → green
   });
 });
+
+describe('buildShareText with the pre-revealed clue', () => {
+  const CORRECT = '\u2705';
+  const ERROR = '\u26A0\uFE0F';
+  const reveal = [{ kind: 'type', value: 'Kithkin', negated: false }];
+  // A first guess that lacks the revealed subtype is a mistake from the start.
+  const guesses = [{ card: { type_line: 'Creature — Elf' } }];
+
+  it('marks a first guess contradicting the revealed clue as an error', () => {
+    const rows = buildShareText({
+      dayKey: 'd',
+      guesses,
+      url: 'u',
+      targetCard: { type_line: 'Creature — Kithkin' },
+      baseHints: reveal,
+    }).split('\n');
+    expect(rows[1].endsWith(ERROR)).toBe(true);
+  });
+
+  it('keeps the board and the share text in agreement without the clue', () => {
+    const rows = buildShareText({
+      dayKey: 'd',
+      guesses,
+      url: 'u',
+      targetCard: { type_line: 'Creature — Kithkin' },
+    }).split('\n');
+    expect(rows[1].endsWith(CORRECT)).toBe(true);
+  });
+});

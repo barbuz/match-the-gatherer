@@ -106,9 +106,13 @@ export function buildShareText({
   targetCard,
   hintCounts = {},
   format = 'markdown',
+  baseHints = [],
 }) {
   const ratios = guesses.map((g) => scoreGuess(g.card, targetCard).ratio);
-  const conflicts = analyzeGuesses(guesses, targetCard);
+  // `baseHints` (the pre-revealed clue, see reveal.js) keeps the row markers in
+  // step with the board: without it a first guess that contradicts the revealed
+  // word would read ✅ here and ⚠️ on screen.
+  const conflicts = analyzeGuesses(guesses, targetCard, baseHints);
   const used = new Set(hintsUsed ?? []);
   const title = `Match the Gatherer ${dayKey}`;
   const header = format === 'markdown' && url ? `[${title}](${url})` : title;
