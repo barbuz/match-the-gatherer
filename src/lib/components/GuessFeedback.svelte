@@ -23,7 +23,12 @@
 
 <div class="guess-feedback">
   <h3 class="card-name">
-    {entry.card.name}
+    {entry.card.name}{#if conflicts.length}<span
+      class="conflict-badge"
+      role="img"
+      aria-label="Contradicts an earlier clue"
+      title="This guess contradicts an earlier clue"
+    >⚠️</span>{/if}
   </h3>
   <div class="lines">
     <div class="match-badge" title="{pct}% match">
@@ -119,6 +124,12 @@
     margin: 0 3rem 0.4rem;
     font-size: 0.95rem;
     overflow-wrap: anywhere;
+  }
+  .conflict-badge {
+    margin-left: 0.3rem;
+    /* Colour emoji ignore `color`, but the monochrome fallback (some Linux
+       fonts, headless browsers) then still reads as the yellow warning accent. */
+    color: var(--warn-fg);
   }
   /* A row the guess got wrong *and* that an earlier clue already ruled out. */
   .line.conflict .prop-label {

@@ -8,7 +8,7 @@ export const SHARE_BLOCKS = 10;
 
 /** Row markers: no clue contradicted / contradicted an earlier clue. */
 const CORRECT_MARK = '\u2705';
-const ERROR_MARK = '\u274C';
+const ERROR_MARK = '\u26A0\uFE0F';
 const HINT_MARK = '\u{1F52E}';
 
 // Colored squares for each count band (blue, green, yellow, orange, red),
@@ -88,9 +88,11 @@ export function emojiBar(ratio, blocks = SHARE_BLOCKS, count = undefined) {
  * naming the day. `targetCard` is needed to score each guess. Each row's bar is
  * drawn in that guess's Scryfall match-count color (from `hintCounts`) — the
  * same color scheme as the on-screen summary — or a gray bar when the count
- * never resolved. Every row ends with a correctness marker: ❌ when the guess
+ * never resolved. Every row ends with a correctness marker: ⚠️ when the guess
  * contradicted an earlier clue (a mistake, see consistency.js) and ✅ otherwise,
- * followed by the 🔮 marker when a hint was used for that row.
+ * followed by the 🔮 marker when a hint was used for that row. The warning sign
+ * matches the yellow accent that flags the offending row on the guess's
+ * feedback card, so the share marker points back at what the board highlighted.
  *
  * `format` picks the header/link style: `'markdown'` (default) turns the header
  * into a link to the app, while `'plaintext'` keeps a plain header and appends

@@ -335,9 +335,11 @@ Pitfalls that make this silently lie:
   a positive oracle hint is a whole rules clause, so treating the target's prose
   as a checklist would flag nearly every non-answer (`MISSING_KINDS`), whereas
   guessing a clause the target was shown not to contain is a real contradiction.
-  `GuessFeedback.svelte` accents the offending row (no badge or wording); the
+  `GuessFeedback.svelte` accents the offending row and puts a ⚠️ badge by the
+  card name (no wording); the
   endgame block prints "Solved in N guesses with M
-  mistakes", and `buildShareText` marks each share row ✅ or ❌ (a mistake)
+  mistakes", and `buildShareText` marks each share row ✅ or ⚠️ (a mistake,
+  matching the yellow conflict accent on the feedback card)
   before the 🔮 hint marker instead of summarizing mistakes in the header. The
   header itself carries only the day, and the share block has two formats —
   `markdown` (default) links the header to the app, `plaintext` appends the bare

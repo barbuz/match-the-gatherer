@@ -156,10 +156,13 @@ At the end of a **daily** game (win or loss), show a summary that:
   appended at the end.
 - Flags guesses that **go against an earlier clue** (§3): a guess that carries a
   value a previous guess already ruled out, or that lacks a value a previous guess
-  established, has its offending property row highlighted on its feedback card
-  and counts as a *mistake*. The summary reports the total ("Solved in N guesses
+  established, has its offending property row highlighted on its feedback card,
+  with a ⚠️ badge next to the card name, and counts as a *mistake*. The summary
+  reports the total ("Solved in N guesses
   with M mistakes"), and the copyable block marks each row ✅ (no contradiction)
-  or ❌ (a mistake) at the end of the row, before the 🔮 hint marker. The check
+  or ⚠️ (a mistake) at the end of the row, before the 🔮 hint marker. The yellow
+  warning sign matches the yellow accent that highlights the offending row on the
+  guess's feedback card. The check
   reuses the same clue list the Hint button searches
   (`gatherHints`), so it adds no new information beyond what is already on
   screen; it is derived from the persisted guesses, so it needs no schema change
