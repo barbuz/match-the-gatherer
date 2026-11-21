@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { revealHints, revealText, revealLabel } from '../src/lib/game/reveal.js';
+import { revealHints, revealText } from '../src/lib/game/reveal.js';
 
 describe('revealHints', () => {
   it('turns every type-line property into a positive `type` hint', () => {
@@ -21,23 +21,21 @@ describe('revealHints', () => {
 });
 
 describe('revealText', () => {
-  it('quotes the revealed word for display next to its label', () => {
-    expect(revealText({ property: 'subtype', value: 'Kithkin' })).toBe('“Kithkin”');
-    // A multi-word subtype arrives split, so no article is assumed.
-    expect(revealText({ property: 'subtype', value: 'Time' })).toBe('“Time”');
+  it('reads as a sentence naming the revealed word', () => {
+    expect(revealText({ property: 'subtype', value: 'Kithkin' })).toBe(
+      'Today we are guessing a Kithkin',
+    );
+    expect(revealText({ property: 'supertype', value: 'Legendary' })).toBe(
+      'Today we are guessing a Legendary',
+    );
+  });
+
+  it('still reads as a sentence for a split multi-word subtype', () => {
+    expect(revealText({ property: 'subtype', value: 'Time' })).toBe('Today we are guessing a Time');
   });
 
   it('is null without a value', () => {
     expect(revealText(null)).toBeNull();
     expect(revealText({ property: 'subtype', value: ' ' })).toBeNull();
-  });
-});
-
-describe('revealLabel', () => {
-  it('names the property', () => {
-    expect(revealLabel({ property: 'subtype' })).toBe('Subtype');
-    expect(revealLabel({ property: 'type' })).toBe('Type');
-    expect(revealLabel({ property: 'supertype' })).toBe('Supertype');
-    expect(revealLabel(null)).toBeNull();
   });
 });

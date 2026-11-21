@@ -7,22 +7,18 @@
    * include it, and a guess that lacks the word counts as a mistake (see
    * `game/reveal.js`, `game/consistency.js`).
    */
-  import { revealText, revealLabel } from '../game/reveal.js';
+  import { revealText } from '../game/reveal.js';
 
   /** `{ property, value }` from the daily answer, or null (free mode). */
   export let reveal = null;
 
   $: text = revealText(reveal);
-  $: label = revealLabel(reveal);
 </script>
 
 {#if text}
   <div class="reveal" role="note">
     <span class="tag" aria-hidden="true">Free clue</span>
-    <p class="text">
-      {#if label}<span class="label">The target's {label.toLowerCase()} includes</span>{/if}
-      <strong>{text}</strong>
-    </p>
+    <p class="text">{text}</p>
   </div>
 {/if}
 
@@ -52,8 +48,5 @@
   .text {
     margin: 0;
     font-size: 0.9rem;
-  }
-  .label {
-    color: var(--muted);
   }
 </style>

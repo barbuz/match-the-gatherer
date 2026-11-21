@@ -40,26 +40,17 @@ export function revealHints(reveal) {
 }
 
 /**
- * The revealed word, quoted for display next to its property label (see
- * `revealLabel`), or null when there is nothing to show (free mode, or a
- * response without a reveal).
+ * The player-facing sentence for the clue, e.g. "Today we are guessing a
+ * Kithkin". Null when there is nothing to show (free mode, or a response
+ * without a reveal).
  *
- * Only the word is returned: it is a single printed token, so a multi-word
- * subtype arrives split ("Time", "Lord") and any sentence built around it would
- * have to guess at an article ("a Time"). The label carries the grammar.
+ * A multi-word subtype arrives split ("Time", "Lord"), so this can read "a
+ * Time" — accepted, since the sentence is friendlier than a label-plus-word
+ * layout for the overwhelmingly common single-word case.
  * @param {{ property: string, value: string } | null | undefined} reveal
  * @returns {string | null}
  */
 export function revealText(reveal) {
   const value = reveal?.value == null ? '' : String(reveal.value).trim();
-  return value ? `“${value}”` : null;
-}
-
-/** Short label for the clue's property ("Subtype", "Type", "Supertype"). */
-export function revealLabel(reveal) {
-  const p = reveal?.property;
-  if (p === 'subtype') return 'Subtype';
-  if (p === 'supertype') return 'Supertype';
-  if (p === 'type') return 'Type';
-  return null;
+  return value ? `Today we are guessing a ${value}` : null;
 }
