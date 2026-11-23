@@ -166,12 +166,17 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
       });
     },
 
-    /** Record that a hint was used after the guess at `guessIndex` (persisted for reloads. */
+    /** Record that a hint was used before the next guess (persisted for reloads).
+     *  The index is the guess about to be played, not the last one played, so a
+     *  hint taken before the first guess is attributed to guess 0 rather than
+     *  dropped. The share summary draws the marker on that row, which always
+     *  exists because a hint cannot be taken after the final guess (the game
+     *  has concluded, so the status guard above returns early). */
     markHintUsed() {
       update((s) => {
         if (s.status !== 'playing') return s;
-        const guessIndex = s.guesses.length - 1;
-        if (guessIndex < 0 || s.hintsUsed.includes(guessIndex)) return s;
+        const guessIndex = s.guesses.length;
+        if (s.hintsUsed.includes(guessIndex)) return s;
         const next = { ...s, hintsUsed: [...s.hintsUsed, guessIndex] };
         persist(next);
         return next;

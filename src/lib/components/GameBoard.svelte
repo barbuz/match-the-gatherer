@@ -358,7 +358,7 @@
         on:select={onSelect}
       />
       <div class="hint-row">
-        <HintButton disabled={state.guesses.length === 0 || gameOver} on:press={onHintPress} />
+        <HintButton disabled={gameOver || !hintLink.url} on:press={onHintPress} />
       </div>
       {#if hintLink.warning}
         <p class="hint-warning" role="status">{hintLink.warning}</p>

@@ -83,28 +83,32 @@ describe('createGame.addGuess/markHintUsed', () => {
       expect.objectContaining({ guesses: [GUESS], hintsUsed: [], status: 'playing' }),
     );
     g.markHintUsed();
+    // One guess played, so the hint belongs to the next guess (index 1).
     expect(dbSet).toHaveBeenLastCalledWith(
       `mtg:game:${DAY}`,
-      expect.objectContaining({ guesses: [GUESS], hintsUsed: [0], status: 'playing' }),
+      expect.objectContaining({ guesses: [GUESS], hintsUsed: [1], status: 'playing' }),
     );
   });
 
 
-  it('marks the latest guess index and dedupes repeated presses', async () => {
+  it('attributes a hint taken before the first guess to guess 0', async () => {
+    const g = dailyGame();
+    g.markHintUsed();
+    expect(dbSet).toHaveBeenLastCalledWith(
+      `mtg:game:${DAY}`,
+      expect.objectContaining({ guesses: [], hintsUsed: [0], status: 'playing' }),
+    );
+  });
+
+
+  it('marks the upcoming guess index and dedupes repeated presses', async () => {
     const g = dailyGame();
     await g.addGuess(GUESS);
     g.markHintUsed();
     g.markHintUsed();
     let s;
     g.subscribe((v) => (s = v));
-    expect(s.hintsUsed).toEqual([0]);
-  });
-
-
-  it('ignores hint presses when no guess exists yet', async () => {
-    const g = dailyGame();
-    g.markHintUsed();
-    expect(dbSet).not.toHaveBeenCalled();
+    expect(s.hintsUsed).toEqual([1]);
   });
 
 

@@ -1,6 +1,8 @@
 <script>
   /** Button that opens a Scryfall search for all cards still matching the
-   *  player's gathered hints. Enabled only once the player has guessed. */
+   *  player's gathered hints. On a daily game the free clue supplies a query
+   *  from the start, so it is enabled before the first guess; it stays
+   *  disabled while there is nothing to search (free mode, game over). */
   import { createEventDispatcher } from 'svelte';
 
   export let disabled = false;
@@ -12,7 +14,7 @@
   class="hint-btn"
   {disabled}
   on:click={() => dispatch('press')}
-  title={disabled ? 'Make a guess first' : 'Open matching cards on Scryfall'}
+  title={disabled ? 'No hints to search yet' : 'Open matching cards on Scryfall'}
 >
   <span class="logo" aria-hidden="true">
     <!-- Vendored from https://scryfall.com/ so the Scryfall logo stays

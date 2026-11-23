@@ -230,14 +230,26 @@ Pitfalls that make this silently lie:
   negated) are used throughout, and a `//` face separator is never emitted as a
   filter value. Same-direction date bounds fold down to the
   tightest,and an exact date subsumes all date hints. The HintButton opens that URL, and
-  each used hint press marks its share row with 🔦 (`buildShareText` `hintsUsed`).
+  each used hint press marks its share row with 🔮 (`buildShareText` `hintsUsed`).
+  The button is **enabled before the first guess**: the daily free clue alone
+  yields a valid query (`t:creature f:v not:reprint`), so there is something to
+  open from the start. It is disabled only when there is nothing to search —
+  the game is over, or free mode (no clue, so `hintHints` stays null and the
+  link is empty).
+  `markHintUsed()` records the **guess about to be played** (`guesses.length`),
+  not the last one played, so a hint taken before the first guess is attributed
+  to guess 0 instead of being dropped (the summary used to lose that icon
+  entirely). The marker therefore always lands on a row that exists: a hint
+  cannot be taken after the final guess, because the game has concluded and
+  `markHintUsed()` returns early on a non-playing status. `hintsUsed` remains a
+  set of indices, deduped per upcoming guess.
   `buildScryfallQuery()` returns the raw (unencoded) clause string, and
   `buildScryfallSearchUrl()` is just it URL-encoded, so the hint's count and the
   link it opens always search the same set.
   - **Scryfall truncates `q` at ~1024 characters**, cutting it mid-clause so a
     long query 400s ("unclosed parentheses") or 404s as if nothing matched — not
     a syntax error, so it is easy to mistake for a genuine empty result. A
-    late-game daily (5 guesses) can gather ~50 clauses totalling >1100 chars.
+    late-game daily (6 guesses) can gather ~50 clauses totalling >1100 chars.
     A single shared `clampClauses()` in `hints.js` keeps every query we build
     (the link **and** the count) within `MAX_QUERY_LENGTH` (1000, a safe margin
     under the observed ~1024 cut): all clauses are kept when they fit, and only
