@@ -12,8 +12,9 @@ import { API_BASE } from './config.js';
 
 const DATE_IN_URL = /\/api\/daily\/(\d{4}-\d{2}-\d{2})$/;
 // One slot, rewritten per day: the answer only matters until the date rolls.
-// Versioned because the envelope gained `reveal` (§3.7): an answer cached by an
-// older build has no clue, so it must not be reused for the rest of the day.
+// Versioned because the envelope gained `reveal` (backend spec §3.7): an answer
+// cached by an older build has no clue, so it must not be reused for the rest
+// of the day.
 const CACHE_KEY = 'mtg:daily-card:v2';
 // A request that never settles would leave the board stuck on "Loading game…"
 // with no way out, so give up and fall into the retry state instead.
