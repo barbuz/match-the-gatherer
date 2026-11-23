@@ -75,17 +75,33 @@ export function articleFor(word) {
 }
 
 /**
- * The player-facing sentence for the clue, e.g. "Today we are guessing a
- * Kithkin" / "an Artifact". Null when there is nothing to show (free mode, or a
- * response without a reveal).
+ * The clue sentence broken into the parts the UI styles differently, so the
+ * revealed word can be emphasised without duplicating the copy in the
+ * component. Null when there is nothing to show (free mode, or a response
+ * without a reveal).
  *
  * A multi-word subtype arrives split ("Time", "Lord"), so this can read "a
  * Time" — accepted, since the sentence is friendlier than a label-plus-word
  * layout for the overwhelmingly common single-word case.
  * @param {{ property: string, value: string } | null | undefined} reveal
+ * @returns {{ lead: string, article: string, value: string } | null}
+ */
+export function revealParts(reveal) {
+  const value = reveal?.value == null ? '' : String(reveal.value).trim();
+  if (!value) return null;
+  return { lead: 'Today we are guessing', article: articleFor(value), value };
+}
+
+/**
+ * The player-facing sentence for the clue, e.g. "Today we are guessing a
+ * Kithkin" / "an Artifact". Null when there is nothing to show.
+ *
+ * Plain-text form of the sentence, for tests and any non-markup consumer. The
+ * UI renders {@link revealParts} instead so the word itself can be emphasised.
+ * @param {{ property: string, value: string } | null | undefined} reveal
  * @returns {string | null}
  */
 export function revealText(reveal) {
-  const value = reveal?.value == null ? '' : String(reveal.value).trim();
-  return value ? `Today we are guessing ${articleFor(value)} ${value}` : null;
+  const parts = revealParts(reveal);
+  return parts ? `${parts.lead} ${parts.article} ${parts.value}` : null;
 }

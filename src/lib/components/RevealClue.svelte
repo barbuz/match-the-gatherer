@@ -7,46 +7,35 @@
    * include it, and a guess that lacks the word counts as a mistake (see
    * `game/reveal.js`, `game/consistency.js`).
    */
-  import { revealText } from '../game/reveal.js';
+  import { revealParts } from '../game/reveal.js';
 
   /** `{ property, value }` from the daily answer, or null (free mode). */
   export let reveal = null;
 
-  $: text = revealText(reveal);
+  $: parts = revealParts(reveal);
 </script>
 
-{#if text}
+{#if parts}
   <div class="reveal" role="note">
-    <span class="tag" aria-hidden="true">Free clue</span>
-    <p class="text">{text}</p>
+    <p class="text">
+      {parts.lead} {parts.article} <strong class="word">{parts.value}</strong>
+    </p>
   </div>
 {/if}
 
 <style>
   .reveal {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
     margin: 0.25rem 0 0.75rem;
-    padding: 0.5rem 0.7rem;
-    border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
-    border-radius: 8px;
-    background: var(--surface);
-  }
-  .tag {
-    flex: 0 0 auto;
-    padding: 0.1rem 0.45rem;
-    border-radius: 999px;
-    background: var(--accent-soft);
-    color: var(--accent);
-    font-size: 0.65rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    text-align: center;
   }
   .text {
     margin: 0;
-    font-size: 0.9rem;
+    font-size: 1.1rem;
+    line-height: 1.35;
+  }
+  .word {
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 1.15em;
   }
 </style>

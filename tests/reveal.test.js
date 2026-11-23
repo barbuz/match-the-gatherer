@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { articleFor, revealHints, revealText } from '../src/lib/game/reveal.js';
+import { articleFor, revealHints, revealParts, revealText } from '../src/lib/game/reveal.js';
 
 describe('revealHints', () => {
   it('turns every type-line property into a positive `type` hint', () => {
@@ -83,5 +83,34 @@ describe('revealText', () => {
   it('is null without a value', () => {
     expect(revealText(null)).toBeNull();
     expect(revealText({ property: 'subtype', value: ' ' })).toBeNull();
+  });
+});
+
+describe('revealParts', () => {
+  it('splits the sentence so the word can be styled on its own', () => {
+    expect(revealParts({ property: 'subtype', value: 'Kithkin' })).toEqual({
+      lead: 'Today we are guessing',
+      article: 'a',
+      value: 'Kithkin',
+    });
+    expect(revealParts({ property: 'type', value: 'Artifact' })).toEqual({
+      lead: 'Today we are guessing',
+      article: 'an',
+      value: 'Artifact',
+    });
+  });
+
+  it('trims the value and is null without one', () => {
+    expect(revealParts({ property: 'type', value: ' Instant ' })?.value).toBe('Instant');
+    expect(revealParts(null)).toBeNull();
+    expect(revealParts({ property: 'type', value: '   ' })).toBeNull();
+  });
+
+  it('recomposes to exactly revealText', () => {
+    for (const value of ['Kithkin', 'Artifact', 'Elf', 'Legendary', 'Time', 'Unicorn']) {
+      const reveal = { property: 'type', value };
+      const p = revealParts(reveal);
+      expect(`${p.lead} ${p.article} ${p.value}`).toBe(revealText(reveal));
+    }
   });
 });

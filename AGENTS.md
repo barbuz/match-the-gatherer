@@ -360,9 +360,15 @@ Pitfalls that make this silently lie:
   turns it into a positive `type` hint (`t:kithkin`) seeded into `gatherHints`,
   so the Hint link and the Possible-cards bar include it from the first guess,
   and `GameBoard` counts that clue's constrained set once on load as the bar's
-  starting value. `RevealClue.svelte` renders it above the guess input with a
-  *Free clue* tag, as the sentence "Today we are guessing a Kithkin" / "an
-  Artifact". The article comes from `articleFor()` — a phonetic test, not a
+  starting value. `RevealClue.svelte` renders it above the guess input as plain
+  centered text — no tag, box or frame, so it reads as a line of copy rather
+  than a widget — as the sentence "Today we are guessing a Kithkin" / "an
+  Artifact", with the revealed word in bold accent so the clue reads as the
+  actionable part. The sentence is composed from `revealParts()` (lead /
+  article / value) rather than one string, so the component styles only the
+  word; `revealText()` stays the plain-text form for tests and non-markup
+  consumers, and a test pins the two to recompose identically. The article
+  comes from `articleFor()` — a phonetic test, not a
   vowel test: ~24% of type-line token occurrences need "an", and the `u` split
   is real (`a Unicorn` but `an Urza`). Every H-initial token is pronounced, so
   `h` always takes "a"; a silent-h word would need adding. The clue is one
