@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { scoreGuess, emojiBar, buildShareText, SHARE_BLOCKS } from '../src/lib/game/scoring.js';
 
 /** Minimal cards so a guess's ratio is a clean fraction of a few properties. */
@@ -210,5 +211,23 @@ describe('buildShareText with the pre-revealed clue', () => {
       targetCard: { type_line: 'Creature — Kithkin' },
     }).split('\n');
     expect(rows[1].endsWith(CORRECT)).toBe(true);
+  });
+
+  // The pure function was right from the start; the bug was GameBoard not
+  // forwarding the prop, which left the summary silently on the `[]` default
+  // and marking a contradicting guess ✅ while the board showed ⚠️.
+  it('is wired from GameBoard to ShareSummary', () => {
+    const board = readFileSync(new URL('../src/lib/components/GameBoard.svelte', import.meta.url), 'utf8');
+    const summary = board.slice(board.indexOf('<ShareSummary'));
+    expect(summary.slice(0, summary.indexOf('/>'))).toContain('{baseHints}');
+
+    const component = readFileSync(
+      new URL('../src/lib/components/ShareSummary.svelte', import.meta.url),
+      'utf8',
+    );
+    expect(component).toContain('export let baseHints');
+    // …and forwarded into the share text, not just declared.
+    const call = component.slice(component.indexOf('buildShareText({'));
+    expect(call.slice(0, call.indexOf('})'))).toContain('baseHints');
   });
 });

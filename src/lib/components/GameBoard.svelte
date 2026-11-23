@@ -343,6 +343,7 @@
             hintCounts={state.hintCounts ?? {}}
             {revealCount}
             {targetCard}
+            {baseHints}
           />
           <CommunityStats stats={state.communityStats} />
         {:else}
