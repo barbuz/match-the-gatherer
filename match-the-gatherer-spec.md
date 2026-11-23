@@ -11,7 +11,8 @@ A Wordle-style daily guessing game for Magic: The Gathering cards, built as a Sv
 
 ## 2. Core Gameplay
 
-- Player has up to **10 guesses** (tunable constant, to be tweaked after testing) to identify the target card.
+- Player has up to **6 guesses** (Wordle's rhythm; `MAX_GUESSES` in `gameState.js`,
+the single tunable constant) to identify the target card.
 - Each guess is compared against the target across the properties below, and feedback is shown after every guess.
 - Guessed cards are displayed as a running list/timeline (see §6).
 
@@ -162,7 +163,7 @@ Total cost per player per day: **2 backend requests** in the common path (one `G
 
 ## 10. Game-Over Behavior (loss)
 
-- If all 10 guesses are used without identifying the card, the game ends immediately: the target card is revealed, the board is locked (no further guesses), and the end-of-game summary (§11) is shown.
+- If all `MAX_GUESSES` (6) guesses are used without identifying the card, the game ends immediately: the target card is revealed, the board is locked (no further guesses), and the end-of-game summary (§11) is shown.
 
 ## 11. End-of-Game Summary & Sharing
 

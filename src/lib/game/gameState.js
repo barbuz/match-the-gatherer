@@ -3,7 +3,8 @@ import { dbGet, dbSet } from '../storage/db.js';
 import { recordDailyResult } from '../storage/statsStore.js';
 import { reportDailyResult, fetchDailyStats } from '../api/statsApi.js';
 
-export const MAX_GUESSES = 10;
+/** Guesses per game. Six matches Wordle's rhythm; a bigger board got tedious. */
+export const MAX_GUESSES = 6;
 
 /**
  * Game-state store: guesses, remaining attempts, win/loss (spec §2, §10).

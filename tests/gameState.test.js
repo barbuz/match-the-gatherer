@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { dbGet, dbSet } from '../src/lib/storage/db.js';
-import { createGame } from '../src/lib/game/gameState.js';
+import { createGame, MAX_GUESSES } from '../src/lib/game/gameState.js';
 import { reportDailyResult, fetchDailyStats } from '../src/lib/api/statsApi.js';
 
 vi.mock('../src/lib/storage/db.js', () => ({
@@ -228,15 +228,16 @@ describe('createGame — daily result reporting', () => {
     expect(s.communityStats).toEqual({ date: DAY, won: 1, byGuesses: {} });
   });
 
-  it('reports a loss after the tenth guess', async () => {
+  it('reports a loss only after the last allowed guess', async () => {
     reportDailyResult.mockResolvedValue({ date: DAY, won: 0 });
     const g = dailyGame();
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < MAX_GUESSES; i++) {
       await g.addGuess({ card: { name: `Card ${i}`, oracle_id: `o${i}` }, results: [] });
+      // Still playing (and so unreported) until the limit is reached.
+      expect(reportDailyResult).toHaveBeenCalledTimes(i + 1 === MAX_GUESSES ? 1 : 0);
     }
-    expect(reportDailyResult).toHaveBeenCalledTimes(1);
     expect(reportDailyResult).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: 'lost', guesses: 10 }),
+      expect.objectContaining({ outcome: 'lost', guesses: MAX_GUESSES }),
     );
   });
 

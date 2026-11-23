@@ -376,6 +376,14 @@ Pitfalls that make this silently lie:
   under `mtg:daily-card:v2` — versioned so a pre-feature cached answer without a
   clue is not reused for the rest of the day. Free mode never has a reveal.
 
+- **Guesses per game: 6** (`MAX_GUESSES` in `lib/game/gameState.js`, the one
+  place to tune it). The endgame share bar's width is **derived** from it
+  (`scoring.js SHARE_BLOCKS = MAX_GUESSES`) so a retune can't leave the two
+  disagreeing — the share block always has one square per guess. The backend
+  buckets wins 1..10 (`won_N_*` columns in D1); 7–10 simply stay zero under a
+  6-guess limit, so no backend change or migration is needed. Tests derive from
+  `MAX_GUESSES`/`SHARE_BLOCKS` rather than hardcoding the number.
+
 - Daily games persist per UTC day (`mtg:game:${dayKey}`, via `lib/game/gameState.js`);
   free-mode games are memory-only and never touch stats. Stats live in `storage/statsStore.js`
   (`mtg:stats`), idempotent per day, with full history retained (no cap: `played`/`won`

@@ -6,10 +6,12 @@
    * nothing until the sink has answered.
    */
   import { MAX_GUESSES } from '../game/gameState.js';
+  import { histogramRows } from '../game/histogramRows.js';
 
   export let stats = null; // { won, lost, abandoned, byGuesses }
 
   $: byGuesses = stats?.byGuesses ?? {};
+  $: rows = histogramRows(byGuesses, MAX_GUESSES);
   $: maxBucket = Math.max(
     1,
     ...Object.entries(byGuesses).map(([, v]) => (v?.plain ?? 0) + (v?.hint ?? 0)),
@@ -25,7 +27,7 @@
         <tr><th class="head">Solved in</th><th class="head">Players</th></tr>
       </thead>
       <tbody>
-        {#each Array.from({ length: MAX_GUESSES }, (_, i) => i + 1) as n}
+        {#each Array.from({ length: rows }, (_, i) => i + 1) as n}
           {@const plain = byGuesses[String(n)]?.plain ?? 0}
           {@const hint = byGuesses[String(n)]?.hint ?? 0}
           {@const total = plain + hint}
