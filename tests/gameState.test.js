@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { dbGet, dbSet } from '../src/lib/storage/db.js';
-import { createGame } from '../src/lib/game/gameState.js';
+import { createGame, MAX_GUESSES } from '../src/lib/game/gameState.js';
 import { reportDailyResult, fetchDailyStats } from '../src/lib/api/statsApi.js';
 
 vi.mock('../src/lib/storage/db.js', () => ({
@@ -83,28 +83,32 @@ describe('createGame.addGuess/markHintUsed', () => {
       expect.objectContaining({ guesses: [GUESS], hintsUsed: [], status: 'playing' }),
     );
     g.markHintUsed();
+    // One guess played, so the hint belongs to the next guess (index 1).
     expect(dbSet).toHaveBeenLastCalledWith(
       `mtg:game:${DAY}`,
-      expect.objectContaining({ guesses: [GUESS], hintsUsed: [0], status: 'playing' }),
+      expect.objectContaining({ guesses: [GUESS], hintsUsed: [1], status: 'playing' }),
     );
   });
 
 
-  it('marks the latest guess index and dedupes repeated presses', async () => {
+  it('attributes a hint taken before the first guess to guess 0', async () => {
+    const g = dailyGame();
+    g.markHintUsed();
+    expect(dbSet).toHaveBeenLastCalledWith(
+      `mtg:game:${DAY}`,
+      expect.objectContaining({ guesses: [], hintsUsed: [0], status: 'playing' }),
+    );
+  });
+
+
+  it('marks the upcoming guess index and dedupes repeated presses', async () => {
     const g = dailyGame();
     await g.addGuess(GUESS);
     g.markHintUsed();
     g.markHintUsed();
     let s;
     g.subscribe((v) => (s = v));
-    expect(s.hintsUsed).toEqual([0]);
-  });
-
-
-  it('ignores hint presses when no guess exists yet', async () => {
-    const g = dailyGame();
-    g.markHintUsed();
-    expect(dbSet).not.toHaveBeenCalled();
+    expect(s.hintsUsed).toEqual([1]);
   });
 
 
@@ -228,15 +232,16 @@ describe('createGame — daily result reporting', () => {
     expect(s.communityStats).toEqual({ date: DAY, won: 1, byGuesses: {} });
   });
 
-  it('reports a loss after the tenth guess', async () => {
+  it('reports a loss only after the last allowed guess', async () => {
     reportDailyResult.mockResolvedValue({ date: DAY, won: 0 });
     const g = dailyGame();
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < MAX_GUESSES; i++) {
       await g.addGuess({ card: { name: `Card ${i}`, oracle_id: `o${i}` }, results: [] });
+      // Still playing (and so unreported) until the limit is reached.
+      expect(reportDailyResult).toHaveBeenCalledTimes(i + 1 === MAX_GUESSES ? 1 : 0);
     }
-    expect(reportDailyResult).toHaveBeenCalledTimes(1);
     expect(reportDailyResult).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: 'lost', guesses: 10 }),
+      expect.objectContaining({ outcome: 'lost', guesses: MAX_GUESSES }),
     );
   });
 

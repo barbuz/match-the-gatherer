@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { scoreGuess, emojiBar, buildShareText, SHARE_BLOCKS } from '../src/lib/game/scoring.js';
 
 /** Minimal cards so a guess's ratio is a clean fraction of a few properties. */
@@ -67,7 +68,7 @@ describe('emojiBar', () => {
   it('renders full, empty and fractional bars gray without a count', () => {
     expect(emojiBar(1)).toBe('⬜'.repeat(SHARE_BLOCKS));
     expect(emojiBar(0)).toBe('\u2B1C'.repeat(SHARE_BLOCKS));
-    expect(emojiBar(0.5)).toBe('⬜'.repeat(5) + '⬜'.repeat(5));
+    expect(emojiBar(0.5)).toBe('⬜'.repeat(SHARE_BLOCKS / 2) + '⬜'.repeat(SHARE_BLOCKS / 2));
   });
 
   it('clamps out-of-range ratios', () => {
@@ -80,7 +81,9 @@ describe('emojiBar', () => {
     expect(emojiBar(1, SHARE_BLOCKS, 60)).toBe('\u{0001F7E8}'.repeat(SHARE_BLOCKS)); // yellow
     expect(emojiBar(1, SHARE_BLOCKS, 30000)).toBe('\u{0001F7E5}'.repeat(SHARE_BLOCKS)); // red
     // A zero-count row is blue too, with the unfilled tail staying gray.
-    expect(emojiBar(0.5, SHARE_BLOCKS, 0)).toBe('\u{0001F7E6}'.repeat(5) + '\u2B1C'.repeat(5));
+    expect(emojiBar(0.5, SHARE_BLOCKS, 0)).toBe(
+      '\u{0001F7E6}'.repeat(SHARE_BLOCKS / 2) + '\u2B1C'.repeat(SHARE_BLOCKS / 2),
+    );
   });
 });
 
@@ -120,8 +123,8 @@ describe('buildShareText', () => {
 
   it('marks every row correct when no clue was contradicted', () => {
     const rows = buildShareText({ dayKey: 'd', guesses, url: 'u', targetCard: target }).split('\n');
-    expect(rows[1]).toBe('⬜'.repeat(10) + CORRECT);
-    expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(7) + CORRECT);
+    expect(rows[1]).toBe('⬜'.repeat(SHARE_BLOCKS) + CORRECT);
+    expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(SHARE_BLOCKS - 3) + CORRECT);
   });
 
   it('marks a guess that contradicts an earlier clue as an error', () => {
@@ -148,9 +151,9 @@ describe('buildShareText', () => {
       targetCard: target,
     });
     const rows = text.split('\n');
-    expect(rows[1]).toBe('⬜'.repeat(10) + CORRECT + BALL);
-    expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(7) + CORRECT);
-    expect(rows[3]).toBe('⬜'.repeat(10) + CORRECT + BALL);
+    expect(rows[1]).toBe('⬜'.repeat(SHARE_BLOCKS) + CORRECT + BALL);
+    expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(SHARE_BLOCKS - 3) + CORRECT);
+    expect(rows[3]).toBe('⬜'.repeat(SHARE_BLOCKS) + CORRECT + BALL);
   });
 
   it('colors each bar by its still-matching count', () => {
@@ -161,8 +164,12 @@ describe('buildShareText', () => {
       targetCard: target,
       hintCounts: { 0: 1226, 1: 60 },
     }).split('\n');
-    expect(rows[1]).toBe('\u{0001F7E5}'.repeat(10) + CORRECT); // 1226 → red fill
-    expect(rows[2]).toBe('\u{0001F7E8}'.repeat(3) + '\u2B1C'.repeat(7) + CORRECT); // 60 → yellow fill
+    expect(rows[1]).toBe('\u{0001F7E5}'.repeat(SHARE_BLOCKS) + CORRECT); // 1226 → red fill
+    // Second guess scores 30%, so the fill count follows emojiBar's rounding.
+    const filled = Math.round(0.3 * SHARE_BLOCKS);
+    expect(rows[2]).toBe(
+      '\u{0001F7E8}'.repeat(filled) + '\u2B1C'.repeat(SHARE_BLOCKS - filled) + CORRECT, // 60 → yellow
+    );
   });
 
   it('falls back to green for a count that never resolved, and blue for a real 0', () => {
@@ -173,7 +180,54 @@ describe('buildShareText', () => {
       targetCard: target,
       hintCounts: { 0: 0 }, // 1 is unresolved
     }).split('\n');
-    expect(rows[1]).toBe('\u{0001F7E6}'.repeat(10) + CORRECT); // 0 → blue fill
-    expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(7) + CORRECT); // unresolved → green
+    expect(rows[1]).toBe('\u{0001F7E6}'.repeat(SHARE_BLOCKS) + CORRECT); // 0 → blue fill
+    expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(SHARE_BLOCKS - 3) + CORRECT); // unresolved → green
+  });
+});
+
+describe('buildShareText with the pre-revealed clue', () => {
+  const CORRECT = '\u2705';
+  const ERROR = '\u26A0\uFE0F';
+  const reveal = [{ kind: 'type', value: 'Kithkin', negated: false }];
+  // A first guess that lacks the revealed subtype is a mistake from the start.
+  const guesses = [{ card: { type_line: 'Creature — Elf' } }];
+
+  it('marks a first guess contradicting the revealed clue as an error', () => {
+    const rows = buildShareText({
+      dayKey: 'd',
+      guesses,
+      url: 'u',
+      targetCard: { type_line: 'Creature — Kithkin' },
+      baseHints: reveal,
+    }).split('\n');
+    expect(rows[1].endsWith(ERROR)).toBe(true);
+  });
+
+  it('keeps the board and the share text in agreement without the clue', () => {
+    const rows = buildShareText({
+      dayKey: 'd',
+      guesses,
+      url: 'u',
+      targetCard: { type_line: 'Creature — Kithkin' },
+    }).split('\n');
+    expect(rows[1].endsWith(CORRECT)).toBe(true);
+  });
+
+  // The pure function was right from the start; the bug was GameBoard not
+  // forwarding the prop, which left the summary silently on the `[]` default
+  // and marking a contradicting guess ✅ while the board showed ⚠️.
+  it('is wired from GameBoard to ShareSummary', () => {
+    const board = readFileSync(new URL('../src/lib/components/GameBoard.svelte', import.meta.url), 'utf8');
+    const summary = board.slice(board.indexOf('<ShareSummary'));
+    expect(summary.slice(0, summary.indexOf('/>'))).toContain('{baseHints}');
+
+    const component = readFileSync(
+      new URL('../src/lib/components/ShareSummary.svelte', import.meta.url),
+      'utf8',
+    );
+    expect(component).toContain('export let baseHints');
+    // …and forwarded into the share text, not just declared.
+    const call = component.slice(component.indexOf('buildShareText({'));
+    expect(call.slice(0, call.indexOf('})'))).toContain('baseHints');
   });
 });

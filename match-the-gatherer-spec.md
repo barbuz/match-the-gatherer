@@ -11,7 +11,8 @@ A Wordle-style daily guessing game for Magic: The Gathering cards, built as a Sv
 
 ## 2. Core Gameplay
 
-- Player has up to **10 guesses** (tunable constant, to be tweaked after testing) to identify the target card.
+- Player has up to **6 guesses** (Wordle's rhythm; `MAX_GUESSES` in `gameState.js`,
+the single tunable constant) to identify the target card.
 - Each guess is compared against the target across the properties below, and feedback is shown after every guess.
 - Guessed cards are displayed as a running list/timeline (see §6).
 
@@ -42,6 +43,25 @@ A Wordle-style daily guessing game for Magic: The Gathering cards, built as a Sv
 - **Multi-faced cards**: a double-faced guess's per-face values are phrased in order with a `//` separator, for the mana cost, color, type line, P/T, Keywords and Oracle text rows alike. In the (wrapping) Oracle text row the separator sits on its own line between the faces.
 - **Otags**: all otags are used for the comparison (no cap for now).
 
+### Pre-revealed clue
+- Every daily game starts with **one word of the target's type line already
+  known**, chosen by the backend and identical for every player (§5), and
+  rendered as a sentence: *“Today we are guessing a Kithkin”* / *“an Artifact”*,
+  with the article chosen phonetically (`articleFor()`: `a Unicorn` but `an
+  Urza`). The clue is a **single printed word**, so a multi-word subtype
+  arrives split (`Time Lord` → `Time` or `Lord`) and can read *“… a Time”*;
+  Scryfall's `t:` matches either part, so the clue stays sound. The candidate
+  pool is the card's own type
+  line — supertypes, types and subtypes, one word each — so a
+  `Creature — Goblin Artificer` reveals `Creature`, `Goblin` or `Artificer`
+  with equal probability.
+- The clue is shown above the guess input for the whole game, tagged *Free
+  clue*. It is a **real clue, not decoration**: it seeds the hint list, so the
+  Hint link and the "Possible cards" bar include it (`t:kithkin`) from the very
+  first guess, and a guess that lacks the word counts as a mistake under the
+  rule below — including the **first** guess, which is otherwise never judged.
+- **Free mode has no clue**: it makes no backend request, so nothing is revealed.
+
 ### Feedback rules
 - **Anti-leak rendering**: unlike the fixed property list (mana, color, type, etc.), the guessed card drives which rows appear: a property absent on the guessed card renders no row (e.g. a non-creature guess shows no P/T row; a keyword-less guess shows no Keywords row), so an absent property never leaks thatthe target has it.
 - **Fully correct property** (e.g., exact type match, exact power/toughness match): show the correct value, highlighted.
@@ -53,7 +73,9 @@ A Wordle-style daily guessing game for Magic: The Gathering cards, built as a Sv
   offending property row highlighted (accented) on its feedback card. Such
   guesses are counted as *mistakes* in the end-of-game summary (§11). The check
   is derived only from clues already shown, so it never leaks the target; see
-  `lib/game/consistency.js`.
+  `lib/game/consistency.js`. The day's pre-revealed clue counts as a clue shown
+  before guess 0, so it can flag a first guess too (`reveal.js` supplies it as
+  `baseHints`).
 
 ## 4. Data Sources & Fetching Strategy
 
@@ -83,7 +105,7 @@ All data comes directly from Scryfall's public API; there is no custom backend.
 
 The daily game is **server-authoritative** (backend spec §3):
 
-- At game start the client calls `GET <api>/api/daily/<today-utc>` and renders the full Scryfall card object it returns. The date in the URL is the cache key, so a new day is always a fresh request. The response's final URL decides the day key the game is stored under, so a clock-skewed client follows the server's 302 to today and self-heals.
+- At game start the client calls `GET <api>/api/daily/<today-utc>` and renders the full Scryfall card object it returns, plus the day's pre-revealed type-line clue (`reveal`, backend spec §3.7). The date in the URL is the cache key, so a new day is always a fresh request. The response's final URL decides the day key the game is stored under, so a clock-skewed client follows the server's 302 to today and self-heals.
 - The response body is **gzipped and sent without a `Content-Encoding` header** (anti-casual-cheat obfuscation, backend spec §3.4), so the browser will not inflate it: the client reads the raw bytes and inflates them itself with `DecompressionStream('gzip')`. Only `/api/daily` does this; `/api/stats` negotiates normally.
 - **No client-side fallback.** If the request fails, show an "unable to load today's puzzle" state with a Retry button. The client must never fall back to a locally-picked card — that would split players across different answers on the same day. `resolveDailyTargetCard` is retained for **free mode only**.
 - The backend reuses the same deterministic selection rules (FNV-1a over the UTC date key, `A-`-filtered Scryfall name list, attempt-seeded re-rolls, vintage-legal + non-reprint), so the daily answer stays familiar. It may diverge when its quality gate requires; the server's pick wins.
@@ -126,10 +148,10 @@ Total cost per player per day: **2 backend requests** in the common path (one `G
 ## 8. Main Page
 
 - Shows a **minimal** stats summary from previous daily games (exact fields TBD later — start with something lightweight like games played / win rate, extendable without a schema rewrite).
-- A daily game is only recorded as a win or loss once it actually concludes — the player finds the card, or exhausts all 10 guesses. Closing and reopening the tab mid-game does **not** count as a loss: in-progress guesses/state are persisted locally and resume exactly where the player left off.
+- A daily game is only recorded as a win or loss once it actually concludes — the player finds the card, or exhausts all `MAX_GUESSES` (6) guesses. Closing and reopening the tab mid-game does **not** count as a loss: in-progress guesses/state are persisted locally and resume exactly where the player left off.
 - Two entry points: **Play Today's Game** and **Free Mode**.
-- Under the **Hint** button, a log-scale gradient bar (blue → green → yellow → orange → red, from the value 1 to 50 000) labelled **Possible cards:**, with a pointer that slides to the number of cards still matching the accumulated hints while the number visibly counts to it. Because the bands are defined on a log scale, blue (exactly 1) is a thin tip and red (> 1000) owns the right portion. It starts at the local name-list size before the first guess, shows a small spinner beside the number from the moment a guess is submitted until its count resolves (when the pointer starts moving), and only ever shows a resolved count for the current guess — never a fallback that would jump the pointer toward the top. On conclusion it counts down to 1 (a win) or the real count (a loss) before the outcome is revealed.
-- The Hint button also opens a `https://scryfall.com/search/?q=…` link built from the same accumulated hints (so the count and the link always search the same set). Scryfall truncates `q` at ~1024 characters, cutting a long query mid-clause, so the query is kept within 1000 characters — the link **and** the count share one clamp that, only when over budget, drops only as many negated `o:` clauses as needed (longest first) and then the longest remaining clauses (never `f:v`/`not:reprint`). When clauses were dropped, a small note under the button says so.
+- Under the **Hint** button, a log-scale gradient bar (blue → green → yellow → orange → red, from the value 1 to 50 000) labelled **Possible cards:**, with a pointer that slides to the number of cards still matching the accumulated hints while the number visibly counts to it. Because the bands are defined on a log scale, blue (exactly 1) is a thin tip and red (> 1000) owns the right portion. It starts at the local name-list size before the first guess (or, on a daily game, at the free clue's already-constrained count, since that clue is itself a hint), shows a small spinner beside the number from the moment a guess is submitted until its count resolves (when the pointer starts moving), and only ever shows a resolved count for the current guess — never a fallback that would jump the pointer toward the top. On conclusion it counts down to 1 (a win) or the real count (a loss) before the outcome is revealed.
+- The Hint button also opens a `https://scryfall.com/search/?q=…` link built from the same accumulated hints (so the count and the link always search the same set). It is enabled before the first guess, since the free clue already yields a query; it is disabled only when there is nothing to search (free mode, or once the game is over). A used hint marks the row of the guess it was taken **before** — the row still to be played — so a hint taken before the first guess marks the first row rather than being lost; that row always exists, because a hint cannot be taken after the final guess. Scryfall truncates `q` at ~1024 characters, cutting a long query mid-clause, so the query is kept within 1000 characters — the link **and** the count share one clamp that, only when over budget, drops only as many negated `o:` clauses as needed (longest first) and then the longest remaining clauses (never `f:v`/`not:reprint`). When clauses were dropped, a small note under the button says so.
 - Triggers the otag + card-name background download on load if a newer otag version is available than the cached one (§4.3); this download continues uninterrupted when the player clicks into a game.
 - Displays the current app/service-worker version in small print at the bottom (see §12).
 
@@ -141,7 +163,7 @@ Total cost per player per day: **2 backend requests** in the common path (one `G
 
 ## 10. Game-Over Behavior (loss)
 
-- If all 10 guesses are used without identifying the card, the game ends immediately: the target card is revealed, the board is locked (no further guesses), and the end-of-game summary (§11) is shown.
+- If all `MAX_GUESSES` (6) guesses are used without identifying the card, the game ends immediately: the target card is revealed, the board is locked (no further guesses), and the end-of-game summary (§11) is shown.
 
 ## 11. End-of-Game Summary & Sharing
 

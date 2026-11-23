@@ -202,11 +202,17 @@ export function findGuessConflicts(card, hints) {
  * — even if a clue ever drifted from the card object (e.g. a Scryfall data
  * revision between the answer being served and the guess being resolved).
  *
+ * `baseHints` are facts known before the first guess — today's pre-revealed
+ * clue (`reveal.js`). They seed *every* guess, including guess 0, which can
+ * otherwise never conflict: once the player has been told the card is a Kithkin,
+ * a first guess that is not one contradicts a known clue and is a mistake.
+ *
  * @param {Array<{ card: object, results: Array }>} guesses
  * @param {object} [targetCard]  the target card, to exempt a correct guess
+ * @param {Array<{ kind, value, negated?, dir? }>} [baseHints]  pre-known clues
  * @returns {Array<Array>} one conflict list per guess, in guess order
  */
-export function analyzeGuesses(guesses, targetCard = null) {
+export function analyzeGuesses(guesses, targetCard = null, baseHints = []) {
   const list = guesses ?? [];
   const targetId = targetCard?.oracle_id ?? null;
   const out = [];
@@ -216,7 +222,7 @@ export function analyzeGuesses(guesses, targetCard = null) {
       out.push([]);
       continue;
     }
-    const priorHints = i === 0 ? [] : gatherHints(list.slice(0, i));
+    const priorHints = gatherHints(i === 0 ? [] : list.slice(0, i), baseHints);
     out.push(findGuessConflicts(card, priorHints));
   }
   return out;
@@ -228,6 +234,6 @@ export function analyzeGuesses(guesses, targetCard = null) {
  * still a single wasted guess). A correct guess never counts (see
  * {@link analyzeGuesses}).
  */
-export function countMistakes(guesses, targetCard = null) {
-  return analyzeGuesses(guesses, targetCard).filter((c) => c.length > 0).length;
+export function countMistakes(guesses, targetCard = null, baseHints = []) {
+  return analyzeGuesses(guesses, targetCard, baseHints).filter((c) => c.length > 0).length;
 }

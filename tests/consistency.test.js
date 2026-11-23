@@ -174,3 +174,57 @@ describe('analyzeGuesses / countMistakes', () => {
     expect(analyzeGuesses([A, skewed], { oracle_id: 't' })[1]).toEqual([]);
   });
 });
+
+describe('analyzeGuesses with the pre-revealed clue (baseHints)', () => {
+  const target = card({ name: 'Target', oracle_id: 't', type_line: 'Creature — Kithkin Soldier' });
+  const entry = (c) => ({ card: c, results: compareCards(c, target) });
+  // The day's clue: the target's type line includes the Kithkin subtype.
+  const reveal = [{ kind: 'type', value: 'Kithkin', negated: false }];
+
+  const kithkin = entry(card({ name: 'Kin', oracle_id: 'k', type_line: 'Creature — Kithkin' }));
+  const elf = entry(card({ name: 'Elf', oracle_id: 'e', type_line: 'Creature — Elf' }));
+  const instant = entry(card({ name: 'Inst', oracle_id: 'i', type_line: 'Instant' }));
+
+  it('flags a FIRST guess that lacks the revealed word (guess 0 is no longer exempt)', () => {
+    // Without the clue nothing is known yet, so guess 0 can never conflict.
+    expect(analyzeGuesses([elf])[0]).toEqual([]);
+    // With it, the same first guess contradicts a fact the player was told.
+    expect(analyzeGuesses([elf], null, reveal)[0]).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: 'missing', row: 'type' })]),
+    );
+  });
+
+  it('does not flag a first guess that carries the revealed word', () => {
+    expect(analyzeGuesses([kithkin], null, reveal)[0]).toEqual([]);
+  });
+
+  it('flags a first guess that has no subtype at all, since it lacks the word', () => {
+    // An Instant carries no subtypes, so it cannot contain the revealed
+    // Kithkin — the same "missing" rule that applies to any known target value.
+    expect(analyzeGuesses([instant], null, reveal)[0]).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: 'missing', row: 'type' })]),
+    );
+  });
+
+  it('counts the contradicted clue as a mistake', () => {
+    expect(countMistakes([elf], null, reveal)).toBe(1);
+    expect(countMistakes([kithkin], null, reveal)).toBe(0);
+  });
+
+  it('still exempts the winning guess, which satisfies the revealed clue', () => {
+    expect(analyzeGuesses([elf, entry(target)], target, reveal)[1]).toEqual([]);
+    expect(countMistakes([elf, entry(target)], target, reveal)).toBe(1);
+  });
+
+  it('keeps the earlier-clue rules working alongside the reveal', () => {
+    // `elf` breaks the clue; a later Goblin breaks the clue too (still one
+    // mistake each), so the two mistakes compose.
+    const goblin = entry(card({ name: 'Gob', oracle_id: 'g', type_line: 'Creature — Goblin' }));
+    expect(countMistakes([elf, goblin], null, reveal)).toBe(2);
+  });
+
+  it('leaves free mode untouched when no base hints are passed', () => {
+    expect(countMistakes([elf])).toBe(0);
+    expect(analyzeGuesses([elf])[0]).toEqual([]);
+  });
+});
