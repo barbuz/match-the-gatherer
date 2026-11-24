@@ -1,187 +1,308 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { scoreGuess, emojiBar, buildShareText, SHARE_BLOCKS } from '../src/lib/game/scoring.js';
+import {
+  MATCH_LEVELS,
+  SHARE_BLOCKS,
+  buildShareText,
+  emojiBar,
+  levelForScore,
+  levelLabel,
+  scoreGuess,
+} from '../src/lib/game/scoring.js';
 
-/** Minimal cards so a guess's ratio is a clean fraction of a few properties. */
-const target = { mana_cost: '{R}', colors: ['R'], type_line: 'Instant' };
-const same = { mana_cost: '{R}', colors: ['R'], type_line: 'Instant' };
+/** A real-shaped card so the metric's property weights are exercised. */
+const target = {
+  name: 'Goblin Guide',
+  oracle_id: 'goblin-guide',
+  mana_cost: '{R}',
+  cmc: 1,
+  colors: ['R'],
+  type_line: 'Creature — Goblin Scout',
+  power: '2',
+  toughness: '2',
+  oracle_text:
+    'Haste\nWhenever this creature attacks, defending player reveals the top card of their library.',
+  keywords: ['Haste'],
+  rarity: 'rare',
+  released_at: '2009-10-02',
+  layout: 'normal',
+};
+
+/** Same properties, different card: every property matches, but it is not the answer. */
+const lookalike = { ...target, name: 'Goblin Scout', oracle_id: 'goblin-scout' };
+
+const near = {
+  ...target,
+  name: 'Goblin Piledriver',
+  oracle_id: 'goblin-piledriver',
+  mana_cost: '{1}{R}',
+  cmc: 2,
+  power: '1',
+  toughness: '2',
+  oracle_text:
+    'Protection from blue\nWhenever this creature attacks, it gets +2/+0 for each other attacking Goblin.',
+  keywords: ['Protection'],
+  released_at: '2002-10-07',
+};
+
+const related = {
+  ...target,
+  name: 'Goblin Arsonist',
+  oracle_id: 'goblin-arsonist',
+  type_line: 'Creature — Goblin Shaman',
+  power: '1',
+  toughness: '1',
+  oracle_text: 'When this creature dies, it deals 1 damage to any target.',
+  keywords: [],
+  released_at: '2011-07-15',
+};
+
+const sameTypeOnly = {
+  ...target,
+  name: 'Elf',
+  oracle_id: 'elf',
+  type_line: 'Creature — Elf',
+  mana_cost: '{2}{R}',
+  cmc: 3,
+  power: '1',
+  toughness: '1',
+  oracle_text: 'Trample',
+  keywords: ['Trample'],
+  rarity: 'common',
+  released_at: '2019-01-01',
+};
+
+const colorsOnly = {
+  ...target,
+  name: 'Red sorcery',
+  oracle_id: 'red-sorcery',
+  type_line: 'Sorcery',
+  mana_cost: '{3}{R}',
+  cmc: 4,
+  oracle_text: 'Deal 3 damage to any target.',
+  keywords: [],
+  rarity: 'common',
+  released_at: '2020-01-01',
+};
+
+const unrelated = {
+  name: 'Wrath of God',
+  oracle_id: 'wrath-of-god',
+  mana_cost: '{2}{W}{W}',
+  cmc: 4,
+  colors: ['W'],
+  type_line: 'Sorcery',
+  oracle_text: "Destroy all creatures. They can't be regenerated.",
+  rarity: 'rare',
+  released_at: '1996-06-01',
+  layout: 'normal',
+};
+
+describe('levelForScore', () => {
+  it('maps the calibrated thresholds to six levels', () => {
+    expect(levelForScore(1)).toBe(5);
+    expect(levelForScore(0.8)).toBe(5);
+    expect(levelForScore(0.799)).toBe(4);
+    expect(levelForScore(0.6)).toBe(4);
+    expect(levelForScore(0.599)).toBe(3);
+    expect(levelForScore(0.45)).toBe(3);
+    expect(levelForScore(0.449)).toBe(2);
+    expect(levelForScore(0.3)).toBe(2);
+    expect(levelForScore(0.299)).toBe(1);
+    expect(levelForScore(0)).toBe(1);
+    expect(levelForScore(Number.NaN)).toBe(1);
+  });
+
+  it('has a human-readable label for every level', () => {
+    for (let level = 1; level <= MATCH_LEVELS; level += 1) {
+      expect(levelLabel(level)).toBeTruthy();
+    }
+    expect(levelLabel(0)).toBe('No match');
+  });
+});
 
 describe('scoreGuess', () => {
-  it('scores an identical guess as a perfect match', () => {
-    expect(scoreGuess(same, target).ratio).toBeCloseTo(1);
+  it('treats the actual target as level 6', () => {
+    expect(scoreGuess(target, target)).toEqual({ ratio: 1, level: 6 });
   });
 
-  it('averages per-property token overlap: no shared mana/colors, matching type', () => {
-    const guess = { mana_cost: '{U}', colors: ['U'], type_line: 'Instant' };
-    // mana 0/1, colors 0/1, type 1/1 → mean 1/3.
-    expect(scoreGuess(guess, target).ratio).toBeCloseTo(1 / 3);
+  it('matches by oracle id, so another printing of the answer is still level 6', () => {
+    expect(scoreGuess({ ...target, name: 'Goblin Guide (reprint)' }, target).level).toBe(6);
   });
 
-  it('gives partial credit per property by shared-token fraction', () => {
-    const guess = { mana_cost: '{R}{U}', colors: ['R', 'U'], type_line: 'Instant Sorcery' };
-    // mana: no shared whole cost → 0; colors: 1 shared over 3 → 2/3;
-    // type: 1 shared over 3 → 2/3. Mean = 4/9.
-    expect(scoreGuess(guess, target).ratio).toBeCloseTo(4 / 9);
+  it('caps a different card at level 5 even when every property matches', () => {
+    const score = scoreGuess(lookalike, target);
+    expect(score.ratio).toBeCloseTo(1);
+    expect(score.level).toBe(5);
   });
 
-  it('counts a property that only the target has against the guess', () => {
-    const creature = { ...target, type_line: 'Creature — Goblin', power: '2', toughness: '2' };
-    const instant = { mana_cost: '{R}', colors: ['R'], type_line: 'Instant' };
-    // mana + colors match (2), type and P/T score 0 → mean 2/4.
-    expect(scoreGuess(instant, creature).ratio).toBeCloseTo(0.5);
+  it('spreads close, related and distant cards across the lower levels', () => {
+    expect(scoreGuess(near, target).level).toBe(4);
+    expect(scoreGuess(related, target).level).toBe(4);
+    expect(scoreGuess(sameTypeOnly, target).level).toBe(3);
+    expect(scoreGuess(colorsOnly, target).level).toBe(2);
+    expect(scoreGuess(unrelated, target).level).toBe(1);
   });
 
-  it('collapses repeated line tokens so duplicates cannot inflate a property', () => {
-    const a = { ...target, oracle_text: 'Flying' };
-    const b = { ...target, oracle_text: 'Flying\nFlying' };
-    expect(scoreGuess(a, b).ratio).toBeCloseTo(1);
+  it('gives partial credit for a colour superset and more for exact colours', () => {
+    const superset = scoreGuess({ ...target, name: 'a', oracle_id: 'a', colors: ['R', 'U'] }, target);
+    const wrong = scoreGuess({ ...target, name: 'b', oracle_id: 'b', colors: ['U'] }, target);
+    expect(superset.ratio).toBeGreaterThan(wrong.ratio);
+    expect(superset.ratio).toBeLessThan(scoreGuess(lookalike, target).ratio);
   });
 
-  it('scores oracle text at token granularity: distinct lines share no token', () => {
-    const a = { ...target, oracle_text: 'Flying' };
-    const b = { ...target, oracle_text: 'Vigilance' };
-    // mana + colors + type match (3); oracle is the only mismatched property
-    // (whole-line tokens 'Flying' vs 'Vigilance') → mean 3/4.
-    expect(scoreGuess(a, b).ratio).toBeCloseTo(3 / 4);
+  it('rewards closer mana values, costs and stats', () => {
+    const close = { ...target, name: 'a', oracle_id: 'a', power: '3', toughness: '3', cmc: 2 };
+    const far = { ...target, name: 'b', oracle_id: 'b', power: '8', toughness: '8', cmc: 7 };
+    expect(scoreGuess(close, target).ratio).toBeGreaterThan(scoreGuess(far, target).ratio);
   });
 
-  it('gives oracle partial credit for a shared token', () => {
-    const a = { ...target, oracle_text: 'Flying\nVigilance' };
-    const b = { ...target, oracle_text: 'Flying\nTrample' };
-    // oracle: 1 shared token over 4 → 0.5; mana/colors/type match → (1+1+1+0.5)/4.
-    expect(scoreGuess(a, b).ratio).toBeCloseTo((1 + 1 + 1 + 0.5) / 4);
+  it('rewards shared oracle text and keywords', () => {
+    const similarText = {
+      ...target,
+      name: 'a',
+      oracle_id: 'a',
+      oracle_text:
+        'Haste\nWhenever this creature attacks, defending player reveals the top card of their library.',
+    };
+    const otherText = {
+      ...target,
+      name: 'b',
+      oracle_id: 'b',
+      oracle_text: 'Flying',
+      keywords: ['Flying'],
+    };
+    expect(scoreGuess(similarText, target).ratio).toBeGreaterThan(
+      scoreGuess(otherText, target).ratio,
+    );
   });
 
-  it('scores oracle text per clause, so a shared clause earns credit', () => {
-    const a = { ...target, oracle_text: 'Flying. Vigilance.' };
-    const b = { ...target, oracle_text: 'Flying. Trample.' };
-    // Two clause tokens each; the shared `Flying.` is 1 over 4 → 0.5.
-    expect(scoreGuess(a, b).ratio).toBeCloseTo((1 + 1 + 1 + 0.5) / 4);
-  });
-
-  it('handles an empty property set without dividing by zero', () => {
-    expect(scoreGuess({}, {}).ratio).toBeGreaterThanOrEqual(0);
+  it('does not treat absent properties as a perfect match', () => {
+    expect(scoreGuess({}, {}).ratio).toBe(0);
+    expect(scoreGuess({}, {}).level).toBe(1);
   });
 });
 
 describe('emojiBar', () => {
-  it('renders full, empty and fractional bars gray without a count', () => {
-    expect(emojiBar(1)).toBe('⬜'.repeat(SHARE_BLOCKS));
-    expect(emojiBar(0)).toBe('\u2B1C'.repeat(SHARE_BLOCKS));
-    expect(emojiBar(0.5)).toBe('⬜'.repeat(SHARE_BLOCKS / 2) + '⬜'.repeat(SHARE_BLOCKS / 2));
+  const UNKNOWN = '\u2B1B'; // ⬛
+  const EMPTY = '\u2B1C'; // ⬜
+
+  it('fills one block per level', () => {
+    expect(emojiBar(1)).toBe(UNKNOWN + EMPTY.repeat(SHARE_BLOCKS - 1));
+    expect(emojiBar(4)).toBe(UNKNOWN.repeat(4) + EMPTY.repeat(SHARE_BLOCKS - 4));
+    expect(emojiBar(6)).toBe(UNKNOWN.repeat(SHARE_BLOCKS));
   });
 
-  it('clamps out-of-range ratios', () => {
-    expect(emojiBar(2)).toBe('⬜'.repeat(SHARE_BLOCKS));
-    expect(emojiBar(-1)).toBe('\u2B1C'.repeat(SHARE_BLOCKS));
+  it('clamps out-of-range levels', () => {
+    expect(emojiBar(99)).toBe(UNKNOWN.repeat(SHARE_BLOCKS));
+    expect(emojiBar(-1)).toBe(EMPTY.repeat(SHARE_BLOCKS));
+    expect(emojiBar(undefined)).toBe(EMPTY.repeat(SHARE_BLOCKS));
   });
 
   it('draws the filled blocks in the still-matching count color', () => {
-    expect(emojiBar(1, SHARE_BLOCKS, 1)).toBe('\u{0001F7E6}'.repeat(SHARE_BLOCKS)); // blue
-    expect(emojiBar(1, SHARE_BLOCKS, 60)).toBe('\u{0001F7E8}'.repeat(SHARE_BLOCKS)); // yellow
-    expect(emojiBar(1, SHARE_BLOCKS, 30000)).toBe('\u{0001F7E5}'.repeat(SHARE_BLOCKS)); // red
-    // A zero-count row is blue too, with the unfilled tail staying gray.
-    expect(emojiBar(0.5, SHARE_BLOCKS, 0)).toBe(
-      '\u{0001F7E6}'.repeat(SHARE_BLOCKS / 2) + '\u2B1C'.repeat(SHARE_BLOCKS / 2),
+    expect(emojiBar(6, SHARE_BLOCKS, 1)).toBe('\u{0001F7E6}'.repeat(SHARE_BLOCKS)); // blue
+    expect(emojiBar(6, SHARE_BLOCKS, 60)).toBe('\u{0001F7E8}'.repeat(SHARE_BLOCKS)); // yellow
+    expect(emojiBar(6, SHARE_BLOCKS, 30000)).toBe('\u{0001F7E5}'.repeat(SHARE_BLOCKS)); // red
+    // A real zero-count is blue too, with the unfilled tail staying white.
+    expect(emojiBar(3, SHARE_BLOCKS, 0)).toBe(
+      '\u{0001F7E6}'.repeat(3) + EMPTY.repeat(SHARE_BLOCKS - 3),
     );
   });
 });
 
 describe('buildShareText', () => {
-  const guesses = [
-    { card: { mana_cost: '{R}', colors: ['R'], type_line: 'Instant' } }, // 100%
-    { card: { mana_cost: '{U}', colors: ['U'], type_line: 'Instant' } }, // 33%
-  ];
   const CORRECT = '\u2705';
   const ERROR = '\u26A0\uFE0F';
   const BALL = '\u{1F52E}';
+  const UNKNOWN = '\u2B1B';
+  const EMPTY = '\u2B1C';
+  const rowsFor = (cards, extra = {}) =>
+    buildShareText({
+      dayKey: 'd',
+      url: 'u',
+      targetCard: target,
+      guesses: cards.map((card) => ({ card })),
+      ...extra,
+    }).split('\n');
 
   it('defaults to markdown: the header links to the app and no bare URL is appended', () => {
-    const rows = buildShareText({ dayKey: '2026-08-26', guesses, url: 'https://example.com/', targetCard: target }).split('\n');
+    const rows = buildShareText({
+      dayKey: '2026-08-26',
+      guesses: [{ card: lookalike }],
+      url: 'https://example.com/',
+      targetCard: target,
+    }).split('\n');
     expect(rows[0]).toBe('[Match the Gatherer 2026-08-26](https://example.com/)');
-    expect(rows).toHaveLength(3); // header + 2 bars, no trailing URL
+    expect(rows).toHaveLength(2); // header + 1 bar, no trailing URL
     expect(rows[rows.length - 1]).not.toBe('https://example.com/');
   });
 
   it('plain text keeps the header plain and appends the bare URL', () => {
     const rows = buildShareText({
       dayKey: '2026-08-26',
-      guesses,
+      guesses: [{ card: lookalike }],
       url: 'https://example.com/',
       targetCard: target,
       format: 'plaintext',
     }).split('\n');
     expect(rows[0]).toBe('Match the Gatherer 2026-08-26');
-    expect(rows).toHaveLength(4); // header + 2 bars + url
+    expect(rows).toHaveLength(3); // header + 1 bar + url
     expect(rows[rows.length - 1]).toBe('https://example.com/');
   });
 
   it('falls back to a plain header when no URL is known', () => {
-    const rows = buildShareText({ dayKey: 'd', guesses, url: '', targetCard: target }).split('\n');
+    const rows = buildShareText({ dayKey: 'd', guesses: [{ card: lookalike }], url: '', targetCard: target }).split('\n');
     expect(rows[0]).toBe('Match the Gatherer d');
   });
 
+  it('draws the bar from the match level, one block per level', () => {
+    const rows = rowsFor([target, lookalike, colorsOnly]);
+    expect(rows[1]).toBe(UNKNOWN.repeat(6) + CORRECT);
+    expect(rows[2]).toBe(UNKNOWN.repeat(5) + EMPTY + CORRECT);
+    expect(rows[3]).toBe(UNKNOWN.repeat(2) + EMPTY.repeat(4) + CORRECT);
+  });
+
   it('marks every row correct when no clue was contradicted', () => {
-    const rows = buildShareText({ dayKey: 'd', guesses, url: 'u', targetCard: target }).split('\n');
-    expect(rows[1]).toBe('⬜'.repeat(SHARE_BLOCKS) + CORRECT);
-    expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(SHARE_BLOCKS - 3) + CORRECT);
+    const rows = rowsFor([target, lookalike]);
+    expect(rows[1].endsWith(CORRECT)).toBe(true);
+    expect(rows[2].endsWith(CORRECT)).toBe(true);
   });
 
   it('marks a guess that contradicts an earlier clue as an error', () => {
     const g0 = {
-      card: { type_line: 'Instant' },
+      card: { name: 'a', oracle_id: 'a', type_line: 'Instant' },
       results: [{ key: 'type', status: 'correct', correct: ['Instant'], wrong: [] }],
     };
-    const g1 = { card: { type_line: 'Sorcery' } };
-    const rows = buildShareText({ dayKey: 'd', guesses: [g0, g1], url: 'u', targetCard: target }).split('\n');
+    const g1 = { card: { name: 'b', oracle_id: 'b', type_line: 'Sorcery' } };
+    const rows = buildShareText({
+      dayKey: 'd',
+      guesses: [g0, g1],
+      url: 'u',
+      targetCard: { name: 't', oracle_id: 't', type_line: 'Instant' },
+    }).split('\n');
     expect(rows[1].endsWith(CORRECT)).toBe(true);
     expect(rows[2].endsWith(ERROR)).toBe(true);
   });
 
   it('places the correctness marker before the hint scrying ball', () => {
-    const text = buildShareText({
-      dayKey: 'd',
-      guesses: [
-        { card: { mana_cost: '{R}', colors: ['R'], type_line: 'Instant' } },
-        { card: { mana_cost: '{U}', colors: ['U'], type_line: 'Instant' } },
-        { card: { mana_cost: '{R}', colors: ['R'], type_line: 'Instant' } },
-      ],
-      url: 'u',
-      hintsUsed: [0, 2],
-      targetCard: target,
-    });
-    const rows = text.split('\n');
-    expect(rows[1]).toBe('⬜'.repeat(SHARE_BLOCKS) + CORRECT + BALL);
-    expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(SHARE_BLOCKS - 3) + CORRECT);
-    expect(rows[3]).toBe('⬜'.repeat(SHARE_BLOCKS) + CORRECT + BALL);
+    const rows = rowsFor([target, lookalike, target], { hintsUsed: [0, 2] });
+    expect(rows[1]).toBe(UNKNOWN.repeat(6) + CORRECT + BALL);
+    expect(rows[2]).toBe(UNKNOWN.repeat(5) + EMPTY + CORRECT);
+    expect(rows[3]).toBe(UNKNOWN.repeat(6) + CORRECT + BALL);
   });
 
   it('colors each bar by its still-matching count', () => {
-    const rows = buildShareText({
-      dayKey: 'd',
-      guesses,
-      url: 'u',
-      targetCard: target,
-      hintCounts: { 0: 1226, 1: 60 },
-    }).split('\n');
-    expect(rows[1]).toBe('\u{0001F7E5}'.repeat(SHARE_BLOCKS) + CORRECT); // 1226 → red fill
-    // Second guess scores 30%, so the fill count follows emojiBar's rounding.
-    const filled = Math.round(0.3 * SHARE_BLOCKS);
+    const rows = rowsFor([target, lookalike], { hintCounts: { 0: 1226, 1: 60 } });
+    expect(rows[1]).toBe('\u{0001F7E5}'.repeat(SHARE_BLOCKS) + CORRECT); // 1226 → red
     expect(rows[2]).toBe(
-      '\u{0001F7E8}'.repeat(filled) + '\u2B1C'.repeat(SHARE_BLOCKS - filled) + CORRECT, // 60 → yellow
+      '\u{0001F7E8}'.repeat(5) + EMPTY + CORRECT, // 60 → yellow, 5/6 match
     );
   });
 
-  it('falls back to green for a count that never resolved, and blue for a real 0', () => {
-    const rows = buildShareText({
-      dayKey: 'd',
-      guesses,
-      url: 'u',
-      targetCard: target,
-      hintCounts: { 0: 0 }, // 1 is unresolved
-    }).split('\n');
-    expect(rows[1]).toBe('\u{0001F7E6}'.repeat(SHARE_BLOCKS) + CORRECT); // 0 → blue fill
-    expect(rows[2]).toBe('⬜'.repeat(3) + '⬜'.repeat(SHARE_BLOCKS - 3) + CORRECT); // unresolved → green
+  it('uses a dark fill when the count never resolved, and blue for a real 0', () => {
+    const rows = rowsFor([target, lookalike], { hintCounts: { 0: 0 } });
+    expect(rows[1]).toBe('\u{0001F7E6}'.repeat(SHARE_BLOCKS) + CORRECT); // 0 → blue
+    expect(rows[2]).toBe(UNKNOWN.repeat(5) + EMPTY + CORRECT); // unresolved → dark
   });
 });
 
@@ -190,14 +311,14 @@ describe('buildShareText with the pre-revealed clue', () => {
   const ERROR = '\u26A0\uFE0F';
   const reveal = [{ kind: 'type', value: 'Kithkin', negated: false }];
   // A first guess that lacks the revealed subtype is a mistake from the start.
-  const guesses = [{ card: { type_line: 'Creature — Elf' } }];
+  const guesses = [{ card: { name: 'a', oracle_id: 'a', type_line: 'Creature — Elf' } }];
 
   it('marks a first guess contradicting the revealed clue as an error', () => {
     const rows = buildShareText({
       dayKey: 'd',
       guesses,
       url: 'u',
-      targetCard: { type_line: 'Creature — Kithkin' },
+      targetCard: { name: 't', oracle_id: 't', type_line: 'Creature — Kithkin' },
       baseHints: reveal,
     }).split('\n');
     expect(rows[1].endsWith(ERROR)).toBe(true);
@@ -208,7 +329,7 @@ describe('buildShareText with the pre-revealed clue', () => {
       dayKey: 'd',
       guesses,
       url: 'u',
-      targetCard: { type_line: 'Creature — Kithkin' },
+      targetCard: { name: 't', oracle_id: 't', type_line: 'Creature — Kithkin' },
     }).split('\n');
     expect(rows[1].endsWith(CORRECT)).toBe(true);
   });

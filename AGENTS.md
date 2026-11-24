@@ -161,8 +161,7 @@ Pitfalls that make this silently lie:
     for the hint values. `oracle` and `keywords` join `type`/`colors` as
     contains-match exceptions: negated hints survive a fully-matched row. The
     rows render only when the guess has the property (text / a printed keyword),
-    so a text-less or keyword-less target is never leaked; the token-overlap
-    score also runs on these line tokens. Substring semantics are deliberate:
+    so a text-less or keyword-less target is never leaked. Substring semantics are deliberate:
     over-broad positives are harmless and
   negatives exclude only literal occurrences.
 - `catalog/card-names` needs `A-` prefix filtering (Alchemy-only cards. The
@@ -185,13 +184,32 @@ Pitfalls that make this silently lie:
   never leaked);layout row appears only for non-normal guesses;rarity is a core
   Scryfall field present on every card, so the rarity row always renders for every guess;
   the oracle-text row appears only when the guessed card has text. The share score is
-  token-overlap rather than a matched/applicable count: `scoring.js scoreGuess(guess,
-  target)` tokenizes each card's properties via `comparison.js propertyTokens()` and
-  averages the per-property Dice coefficient. A property counts whenever EITHER card
-  has tokens for it, so a property only the target has (creature vs. instant) scores 0
-  instead of being dropped; the aggregate still never reveals which properties exist on
-  the target. `GuessFeedback`/`GameBoard`/`ShareSummary` all pass `targetCard` so the
-  score can be computed at render time (results rows no longer carry enough info).
+  a **weighted per-property similarity**, not a matched/applicable count:
+  `scoring.js scoreGuess(guess, target)` compares each property on its own scale
+  (type words, colors and keywords by set overlap; mana value, P/T/loyalty/defense
+  and release date by numeric distance; mana costs by symbol-multiset Dice; oracle
+  text by word overlap after reminder text and stopwords are removed) and takes a
+  weighted mean. Type, colors and oracle text dominate; rarity, date and layout are
+  minor nudges. Properties absent from both cards are skipped; a property only the
+  target has (a creature's P/T vs. a spell) contributes 0. The aggregate still never
+  reveals which individual properties exist on the target.
+  `GuessFeedback`/`GameBoard`/`ShareSummary` all pass `targetCard` so the score can be
+  computed at render time (results rows no longer carry enough info).
+  - The continuous ratio is presented as **6 discrete match levels** (`MATCH_LEVELS`),
+    not a percentage: 1 < 0.30, 2 < 0.45, 3 < 0.60, 4 < 0.80, 5 ≥ 0.80, 6 only for
+    the actual answer (same `oracle_id`, else same name). Level 6 is gated rather
+    than inferred from the ratio so a property-identical functional reprint reads
+    5/6, never 6/6. `GuessFeedback` renders a six-block `MatchMeter.svelte` (title
+    carries the level label); the lost-game heading prints `Best match N/6`.
+  - The thresholds/weights were calibrated against the full Scryfall oracle-card
+    list: random pairs land around 0.16 (level 1), "same colors + card type" around
+    0.54 (level 3), close creatures around 0.63 (level 4), near-reprints around
+    0.9 (level 5); only the answer reaches 6. Retune the thresholds in
+    `levelForScore`/`WEIGHTS`, not the UI.
+  - The share bar has one block per level, drawn in that guess's count color
+    (`SHARE_BLOCKS = MATCH_LEVELS`, deliberately independent of `MAX_GUESSES`). An
+    unresolved count uses ⬛ for filled blocks so the level stays visible against the
+    ⬜ empty tail.
 
 - Comparison rows are normalized in `comparison.js` `line()`: `segments` is the single
   source of truth for display, and `correct`/`wrong` (the token lists `hints.js` and
@@ -208,9 +226,8 @@ Pitfalls that make this silently lie:
   `colorless` token. Otherwise each face renders its own set joined by `//`
   (`Delver of Secrets` → `U // U`), and a face that alone lacks `colors` inherits
   the card-level set instead of a `colorless` placeholder (`Search for Azcanta`
-  → `U // U`). This is display only: `colorTokens()`/`propertyTokens().colors`
-  already unioned the faces with the card-level field, so hints and the
-  token-overlap score were never affected.
+  → `U // U`). This is display only: `colorTokens()` already unions the faces with the
+  card-level field, so hints and the match score were never affected.
 
 - Hints (`src/lib/game/hints.js`): `gatherHints()` distills every guess's feedback into a
   deduplicated minimal hint list; `buildScryfallSearchUrl()` turns it into a
@@ -399,9 +416,9 @@ Pitfalls that make this silently lie:
   clue is not reused for the rest of the day. Free mode never has a reveal.
 
 - **Guesses per game: 6** (`MAX_GUESSES` in `lib/game/gameState.js`, the one
-  place to tune it). The endgame share bar's width is **derived** from it
-  (`scoring.js SHARE_BLOCKS = MAX_GUESSES`) so a retune can't leave the two
-  disagreeing — the share block always has one square per guess. The backend
+  place to tune it). The endgame share bar's width is **not** tied to it: a row
+  has one square per match level (`scoring.js SHARE_BLOCKS = MATCH_LEVELS = 6`),
+  so the bar encodes closeness rather than the guess budget. The backend
   buckets wins 1..10 (`won_N_*` columns in D1); 7–10 simply stay zero under a
   6-guess limit, so no backend change or migration is needed. Tests derive from
   `MAX_GUESSES`/`SHARE_BLOCKS` rather than hardcoding the number.

@@ -13,7 +13,7 @@
   import { gatherHints, buildScryfallSearchUrl, buildScryfallQuery } from '../game/hints.js';
   import { analyzeGuesses, countMistakes } from '../game/consistency.js';
   import { revealHints } from '../game/reveal.js';
-  import { scoreGuess } from '../game/scoring.js';
+  import { MATCH_LEVELS, scoreGuess } from '../game/scoring.js';
   import { barCountFor } from '../game/barTarget.js';
   import GuessInput from './GuessInput.svelte';
   import GuessFeedback from './GuessFeedback.svelte';
@@ -188,7 +188,7 @@
   $: guessedNames = state.guesses.map((g) => g.card.name);
   $: gameOver = state.status !== 'playing';
   $: remaining = MAX_GUESSES - state.guesses.length;
-  $: bestPct = Math.max(0, ...state.guesses.map((g) => Math.round(scoreGuess(g.card, targetCard).ratio * 100)));
+  $: bestLevel = Math.max(0, ...state.guesses.map((g) => scoreGuess(g.card, targetCard).level));
   // Which earlier clue each guess contradicts, recomputed from the persisted
   // guesses (no storage schema change). Indexed like `state.guesses`.
   $: conflictsByGuess = analyzeGuesses(state.guesses, targetCard, baseHints);
@@ -308,7 +308,7 @@
         {#if state.status === 'won'}
           <h2>{state.hintsUsed?.length === 0 ? '🔮 Peerless!' : '🎉 You found it!'}</h2>
         {:else}
-          <h2>{bestPct}% matched</h2>
+          <h2>Best match {bestLevel}/{MATCH_LEVELS}</h2>
         {/if}
         <p class="outcome-line">
           {state.status === 'won' ? 'Solved in' : 'Used'}
