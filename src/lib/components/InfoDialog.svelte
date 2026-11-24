@@ -51,7 +51,7 @@
 
       <ol class="steps">
         <li>
-          <strong>Start from the free clue.</strong> Every day begins with one word of the target's
+          <strong>Start from the daily clue.</strong> Every day begins with one word of the target's
           type line already revealed — a type, supertype or subtype, e.g. <em>“Today we are guessing a
           Kithkin”</em>. It is a real clue: the Hint search counts it, and a guess that lacks that word
           goes against what you were told.
@@ -103,13 +103,12 @@
         </li>
       </ol>
 
-      <h3>Free mode & stats</h3>
+      <h3>Stats & privacy</h3>
       <p>
-        <strong>Free mode</strong> gives you unlimited practice games with random targets — no stats are
-        recorded there, and it never contacts the game server. Daily games are tracked locally in your
-        browser (games played, won, win rate), and you can close the tab any time and come back to the
-        game later in the day. When a daily game ends, an anonymous result (win/loss, guess count, hints
-        used) is sent to the server so you can see how the world did — no account and no personal data.
+        Daily games are tracked locally in your browser (games played, won, win rate), and you can
+        close the tab any time and come back to the game later in the day. When a daily game ends, an
+        anonymous result (win/loss, guess count, hints used) is sent to the server so you can see how
+        the world did — no account and no personal data.
       </p>
 
       <div class="disclaimer" aria-label="Disclaimer and attribution">

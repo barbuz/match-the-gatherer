@@ -1,8 +1,8 @@
 <script>
   /** Button that opens a Scryfall search for all cards still matching the
-   *  player's gathered hints. On a daily game the free clue supplies a query
-   *  from the start, so it is enabled before the first guess; it stays
-   *  disabled while there is nothing to search (free mode, game over). */
+   *  player's gathered hints. The daily clue supplies a query from the start,
+   *  so it is enabled before the first guess; it stays disabled once the game
+   *  is over and there is nothing left to search. */
   import { createEventDispatcher } from 'svelte';
 
   export let disabled = false;

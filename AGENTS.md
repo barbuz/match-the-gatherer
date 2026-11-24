@@ -38,7 +38,7 @@ Pitfalls that make this silently lie:
   The service worker caches `index.html` and old JS; pointing a different origin
   at the same API is not enough.
 - **Force a full document reload** (add a `?cache-bust` query) when switching
-  modes. SPA hash navigation (`#/free` → `#/daily`) is a same-document change:
+  builds. SPA hash navigation (`#/` → `#/daily`) is a same-document change:
   the browser keeps the already-loaded bundle and the SW may serve stale JS, so
   the page can run the *previous* build (e.g. the production API) while you think
   you're testing the mock. Confirm by reading the mock's request log, not the UI.
@@ -46,14 +46,17 @@ Pitfalls that make this silently lie:
 
 ## Key facts
 
+- **The app is the daily game.** Opening it drops the player straight into
+  today's puzzle; there is no home screen or free/practice mode. `/` and
+  `/daily` both render `DailyGame.svelte`, and `GameBoard`/`gameState` are
+  daily-only.
 - **There is a backend now.** The daily answer and anonymous stats come from
   the [`match-the-gatherer-backend`](https://github.com/barbuz/match-the-gatherer-backend)
   Cloudflare Worker
   (`src/lib/api/config.js`, base URL override `VITE_API_BASE`). The daily game
   is **hard-coupled** to it (`src/lib/api/dailyApi.js`): `GameBoard.svelte`
   fetches `GET /api/daily/<today-utc>` and shows a retry state on failure —
-  it must **never** fall back to the local `resolveDailyTargetCard`, which is
-  retained for **free mode only**. Free mode must make zero `/api/*` calls.
+  it must **never** fall back to a locally-picked card.
 - **Result reporting** (`src/lib/api/statsApi.js`, wired in
   `gameState.js addGuess`): when a daily game concludes, `POST /api/stats`
   with `{date, outcome, guesses, hintsUsed, clientVersion, deviceId}` and the
@@ -68,9 +71,10 @@ Pitfalls that make this silently lie:
   the spec's budget of 2 requests per player (a reload adds one CDN-absorbed
   read). The read omits `target` for a live day, which the summary doesn't need
   (it already knows the card).
-- The backend's selection mirrors `lib/game/dailySeed.js` (FNV-1a over the UTC
-  date key, `A-` filter, attempt-seeded rerolls); the server's pick wins on
-  divergence, so the two need not stay byte-identical.
+- The backend owns selection (FNV-1a over the UTC date key, `A-`-filtered name
+  list, attempt-seeded rerolls, vintage-legal + non-reprint). `dailySeed.js`
+  keeps `utcDateKey` plus the pure hash/index reference covered by tests; the
+  client never picks the card.
 - A response's **final URL** decides the day key (a non-today date 302s to
   today), so a clock-skewed client self-heals instead of mis-persisting.
 - Loading is **bounded**: `dailyApi.js` and `cardNames.js` abort their request
@@ -265,11 +269,10 @@ Pitfalls that make this silently lie:
   filter value. Same-direction date bounds fold down to the
   tightest,and an exact date subsumes all date hints. The HintButton opens that URL, and
   each used hint press marks its share row with 🔮 (`buildShareText` `hintsUsed`).
-  The button is **enabled before the first guess**: the daily free clue alone
+  The button is **enabled before the first guess**: the daily clue alone
   yields a valid query (`t:creature f:v not:reprint`), so there is something to
-  open from the start. It is disabled only when there is nothing to search —
-  the game is over, or free mode (no clue, so `hintHints` stays null and the
-  link is empty).
+  open from the start. It is disabled only once the game is over, when there
+  is nothing left to search.
   `markHintUsed()` records the **guess about to be played** (`guesses.length`),
   not the last one played, so a hint taken before the first guess is attributed
   to guess 0 instead of being dropped (the summary used to lose that icon
@@ -390,14 +393,13 @@ Pitfalls that make this silently lie:
   header itself carries only the day, and the share block has two formats —
   `markdown` (default) links the header to the app, `plaintext` appends the bare
   URL at the end. The per-guess result is recomputed from the persisted guesses, so
-  it needs no storage schema change and works on a reloaded daily game; free mode
-  is unaffected (no new API calls).
+  it needs no storage schema change and works on a reloaded daily game.
   - **`baseHints`**: both `analyzeGuesses`/`countMistakes` and `gatherHints` take
     an optional third/second argument of facts known *before guess 0*. It exists
     for the daily pre-revealed clue (`game/reveal.js`), which is a real clue, so
     a first guess that lacks the revealed word is a mistake even though guess 0
     is otherwise never judged. `buildShareText` forwards it too, or a first guess
-    would read ⚠️ on the board and ✅ in the share text. Free mode passes nothing.
+    would read ⚠️ on the board and ✅ in the share text.
 
 - **Pre-revealed daily clue** (`lib/game/reveal.js`, backend spec §3.7): every
   daily answer carries `reveal: { property, value }` — one word of the target's
@@ -426,7 +428,7 @@ Pitfalls that make this silently lie:
   the backend's candidate pool, not in the copy. `dailyApi.js` parses
   it defensively (missing/malformed → `null`, never a load failure) and caches it
   under `mtg:daily-card:v2` — versioned so a pre-feature cached answer without a
-  clue is not reused for the rest of the day. Free mode never has a reveal.
+  clue is not reused for the rest of the day.
 
 - **Guesses per game: 6** (`MAX_GUESSES` in `lib/game/gameState.js`, the one
   place to tune it). The endgame share bar's width is **not** tied to it: a row
@@ -436,15 +438,15 @@ Pitfalls that make this silently lie:
   6-guess limit, so no backend change or migration is needed. Tests derive from
   `MAX_GUESSES`/`SHARE_BLOCKS` rather than hardcoding the number.
 
-- Daily games persist per UTC day (`mtg:game:${dayKey}`, via `lib/game/gameState.js`);
-  free-mode games are memory-only and never touch stats. Stats live in `storage/statsStore.js`
+- Games persist per UTC day (`mtg:game:${dayKey}`, via `lib/game/gameState.js`).
+  Stats live in `storage/statsStore.js`
   (`mtg:stats`), idempotent per day, with full history retained (no cap: `played`/`won`
   are lifetime totals and a trimmed roster would silently reset the all-time best
   streak). `days` is the recorded-day list and `results` is a parallel
   `{dayKey: won}` map so the streak can replay the calendar. `game/streak.js`
   `calculateStreak()` is pure and derives the current/best win streak from
   `results`: a loss resets it, a skipped day breaks it, and the current run stays
-  alive while today is still unplayed. The Home page renders it via
+  alive while today is still unplayed. The endgame summary renders it via
   `StreakMeter.svelte`.
 
 - Scryfall rejects browser-less fetches without a User-Agent (Node returns 400);

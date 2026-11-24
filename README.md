@@ -17,8 +17,8 @@ stats come from the [backend](https://github.com/barbuz/match-the-gatherer-backe
 - At the end of a daily game the result is reported anonymously and the day's
   worldwide distribution (solved-in-N, split by hint usage) is shown alongside
   your own share text.
-- Free Mode offers unlimited practice games with random targets, no stats
-  tracking, and no backend involvement.
+- Opening the app drops you straight into today's game — no menu to click
+  through.
 
 ## Development
 
@@ -38,5 +38,5 @@ uses the deployed Worker.
 
 Pushes to `main` (or a manual dispatch) build and deploy to GitHub Pages via
 `.github/workflows/deploy.yml`. The service-worker version string lives in
-`src/lib/version.js` and is shown in small print on the main page — bump it
+`src/lib/version.js` and is shown in small print in the footer — bump it
 with every change.

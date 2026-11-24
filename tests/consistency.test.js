@@ -223,7 +223,7 @@ describe('analyzeGuesses with the pre-revealed clue (baseHints)', () => {
     expect(countMistakes([elf, goblin], null, reveal)).toBe(2);
   });
 
-  it('leaves free mode untouched when no base hints are passed', () => {
+  it('treats missing base hints as no prior clues', () => {
     expect(countMistakes([elf])).toBe(0);
     expect(analyzeGuesses([elf])[0]).toEqual([]);
   });

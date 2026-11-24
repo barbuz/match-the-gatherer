@@ -1,8 +1,8 @@
 <script>
   /**
-   * Daily win-streak meter for the main page (spec §8). Reads the persisted
-   * stats, shows the current streak as a row of flame pips plus the best run,
-   * and marks the last 7 days. Read-only; renders nothing until loaded.
+   * Daily win-streak meter for the end-of-game summary (spec §8). Reads the
+   * persisted stats, shows the current streak as a row of flame pips plus the
+   * best run, and marks the last 7 days. Read-only; renders nothing until loaded.
    */
   import { onMount } from 'svelte';
   import { getStats } from '../storage/statsStore.js';

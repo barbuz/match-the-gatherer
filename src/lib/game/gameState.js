@@ -8,12 +8,11 @@ export const MAX_GUESSES = 6;
 
 /**
  * Game-state store: guesses, remaining attempts, win/loss (spec §2, §10).
- * Daily games are persisted per UTC day so a mid-game tab close resumes
- * exactly where the player left off (§8). Free-mode games are kept in
- * memory only and never touch stats (§9).
+ * Games are persisted per UTC day so a mid-game tab close resumes exactly
+ * where the player left off (§8).
  */
-export function createGame({ mode, dayKey, targetName, targetCard }) {
-  const storageKey = mode === 'daily' ? `mtg:game:${dayKey}` : null;
+export function createGame({ dayKey, targetName, targetCard }) {
+  const storageKey = `mtg:game:${dayKey}`;
   const initial = {
     targetName,
     guesses: [],
@@ -22,13 +21,12 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
     // asynchronously as each guess is made; a missing slot renders as "???".
     hintCounts: {},
     status: 'playing',
-    loaded: !storageKey,
+    loaded: false,
     communityStats: null,
   };
   const { subscribe, set, update } = writable(initial);
 
   async function persist(state) {
-    if (!storageKey) return;
     await dbSet(storageKey, {
       targetName: state.targetName,
       guesses: state.guesses,
@@ -44,9 +42,8 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
   return {
     subscribe,
 
-    /** Load any persisted in-progress daily game. Resolves once loading finished. */
+    /** Load any persisted in-progress game. Resolves once loading finished. */
     async load() {
-      if (!storageKey) return;
       const saved = await dbGet(storageKey);
       if (saved && saved.targetName === targetName && Array.isArray(saved.guesses)) {
         set({
@@ -88,7 +85,7 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
         persist(next);
         return next;
       });
-      if (concluded && mode === 'daily') {
+      if (concluded) {
         await recordDailyResult(concluded.dayKey, concluded.won);
         const communityStats = await reportDailyResult({
           date: concluded.dayKey,
@@ -134,7 +131,6 @@ export function createGame({ mode, dayKey, targetName, targetCard }) {
      * 60-second shared cache keeps reloads off D1.
      */
     async reportIfConcluded() {
-      if (mode !== 'daily') return;
       let concluded = null;
       let refresh = false;
       update((s) => {

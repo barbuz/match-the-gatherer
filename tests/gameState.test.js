@@ -18,7 +18,7 @@ const DAY = '2026-09-03';
 const GUESS = { card: { name: 'Elvish Mystic' }, results: [] };
 
 function dailyGame(targetName = TARGET.name) {
-  return createGame({ mode: 'daily', dayKey: DAY, targetName, targetCard: TARGET });
+  return createGame({ dayKey: DAY, targetName, targetCard: TARGET });
 }
 
 describe('createGame.load', () => {
@@ -28,7 +28,7 @@ describe('createGame.load', () => {
   });
 
   it('starts fresh when no persisted game exists', async () => {
-    const g = createGame({ mode: 'free', dayKey: null, targetName: 'X', targetCard: TARGET });
+    const g = dailyGame();
     let s;
     g.subscribe((v) => (s = v));
     await g.load();
@@ -243,13 +243,6 @@ describe('createGame — daily result reporting', () => {
     expect(reportDailyResult).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: 'lost', guesses: MAX_GUESSES }),
     );
-  });
-
-  it('does not report a free-mode game', async () => {
-    const g = createGame({ mode: 'free', dayKey: null, targetName: TARGET.name, targetCard: TARGET });
-    await g.addGuess(GUESS);
-    await g.addGuess({ card: { name: TARGET.name, oracle_id: TARGET.oracle_id }, results: [] });
-    expect(reportDailyResult).not.toHaveBeenCalled();
   });
 
   it('reports a restored concluded game, but not a restored in-progress one', async () => {
