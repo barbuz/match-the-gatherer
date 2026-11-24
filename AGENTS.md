@@ -15,8 +15,9 @@ against production. Point the app at a local mock instead:
 
 1. `VITE_API_BASE=<mock-origin> npm run build` — bakes the mock base URL into
    `dist/` (default build uses the real Worker). Rebuild without it afterwards.
-2. Run `node mock-server.mjs` (add `--port <n>` if 12000 is taken) on that
-   origin. It serves **both** `dist/` statically **and** the API:
+2. Run `npm run mock` (or `node scripts/mock-server.mjs`; add `--port <n>` if
+   12000 is taken) on that origin. It serves **both** `dist/` statically **and**
+   the API:
    `GET /api/daily/<date>` (a real card JSON) and `GET|POST /api/stats*`
    (canned aggregates), and logs every request line. `http://127.0.0.1:<port>/mock`
    is a control page: pick one of six cards chosen to exercise different clues,

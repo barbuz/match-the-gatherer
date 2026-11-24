@@ -14,8 +14,8 @@
  * key, over the card's type-line tokens), so the clue you see is the clue the
  * real server would serve for that card and day.
  *
- * Usage:
- *   node mock-server.mjs [--port 12000] [--dist dist]
+ * Usage (run from the repo root so `dist/` and `.mock-cards/` resolve):
+ *   npm run mock            # or: node scripts/mock-server.mjs [--port 12000] [--dist dist]
  * Then open http://127.0.0.1:<port>/mock to pick a card, or /#/daily to play.
  */
 import http from 'node:http';
@@ -32,10 +32,12 @@ const argOf = (flag, fallback) => {
 const PORT = Number(argOf('--port', process.env.PORT ?? 12000));
 const DIST = path.resolve(argOf('--dist', 'dist'));
 const CARD_CACHE = path.resolve('.mock-cards');
-/** Buckets the real backend aggregates (backend `stats.ts`), not the game's
- *  guess limit: seeding 7..10 exercises the frontend's handling of wins above
- *  today's limit. */
-const MAX_GUESSES = 10;
+/** The real game's guess limit (`MAX_GUESSES` in `gameState.js`). Seeding only
+ *  these buckets keeps the mock crowd looking like a real day's. */
+const GAME_MAX_GUESSES = 6;
+/** Buckets the real backend aggregates (backend `stats.ts`). It outlives the
+ *  game's limit so wins from a day played under an older limit stay visible. */
+const STATS_BUCKETS = 10;
 
 /** Cards offered on the control page, chosen to exercise different clues. */
 const SCENARIOS = [
@@ -151,7 +153,7 @@ const seenDevices = new Set();
 
 function emptyStats(date) {
   const byGuesses = {};
-  for (let n = 1; n <= MAX_GUESSES; n++) byGuesses[String(n)] = { plain: 0, hint: 0 };
+  for (let n = 1; n <= STATS_BUCKETS; n++) byGuesses[String(n)] = { plain: 0, hint: 0 };
   return { date, won: 0, lost: 0, abandoned: 0, byGuesses };
 }
 
@@ -162,10 +164,10 @@ function statsFor(date) {
     s.won = 412;
     s.lost = 96;
     s.abandoned = 23;
-    // Indexed by guess count, so entry 10 is the last backend bucket (unused
-    // by a 6-guess game, which is the point: it must still render).
-    const spread = [0, 0, 9, 34, 61, 88, 79, 66, 48, 27, 14];
-    for (let n = 1; n <= MAX_GUESSES; n++) {
+    // Indexed by guess count; only the real game's limit gets seeded wins, so
+    // the buckets above it stay empty (as they would on a real day).
+    const spread = [0, 12, 48, 96, 118, 89, 49];
+    for (let n = 1; n <= GAME_MAX_GUESSES; n++) {
       const total = spread[n] ?? 0;
       const hint = Math.round(total * 0.3);
       s.byGuesses[String(n)] = { plain: total - hint, hint };
