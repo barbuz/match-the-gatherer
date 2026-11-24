@@ -77,8 +77,7 @@ export function articleFor(word) {
 /**
  * The clue sentence broken into the parts the UI styles differently, so the
  * revealed word can be emphasised without duplicating the copy in the
- * component. Null when there is nothing to show (free mode, or a response
- * without a reveal).
+ * component. Null when there is nothing to show (a response without a reveal).
  *
  * A multi-word subtype arrives split ("Time", "Lord"), so this can read "a
  * Time" — accepted, since the sentence is friendlier than a label-plus-word

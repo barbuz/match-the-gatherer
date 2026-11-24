@@ -9,14 +9,6 @@ const TOTAL_CARDS_RE = /"total_cards"\s*:\s*(\d+)/;
 /** Give up buffering a search body once this much arrives without a count. */
 const MAX_HEAD_BYTES = 64 * 1024;
 
-/** Vintage allows these two legality values (1-of restricted cards are playable). */
-export const VINTAGE_LEGAL = new Set(['legal', 'restricted']);
-
-/** True when the card's resolved printing is vintage-legal and nota reprint. */
-export function isVintageLegal(card) {
-  return VINTAGE_LEGAL.has(card?.legalities?.vintage) && !card?.reprint;
-}
-
 /**
  * Fetch a card by exact name, first printing only (spec §4.1).
  * The exact-name operator also matches individual face names (e.g. the back

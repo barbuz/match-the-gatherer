@@ -1,13 +1,13 @@
 <script>
   /**
-   * Shared game screen used by the Daily and Free Mode routes (spec §2).
-   * Handles target selection, guessing, feedback, timeline, and summary.
+   * Daily game screen (spec §2). Handles target selection, guessing, feedback,
+   * timeline, and summary.
    */
   import { onMount, onDestroy } from 'svelte';
   import { ensureData, dataStatus } from '../stores/backgroundFetch.js';
   import { fetchCardByName, countSearchResults } from '../api/scryfall.js';
   import { fetchDailyCard } from '../api/dailyApi.js';
-  import { resolveVintageLegalCard, utcDateKey } from '../game/dailySeed.js';
+  import { utcDateKey } from '../game/dailySeed.js';
   import { compareCards } from '../game/comparison.js';
   import { createGame, MAX_GUESSES } from '../game/gameState.js';
   import { gatherHints, buildScryfallSearchUrl, buildScryfallQuery } from '../game/hints.js';
@@ -24,13 +24,13 @@
   import HintButton from './HintButton.svelte';
   import HintBar from './HintBar.svelte';
   import RevealClue from './RevealClue.svelte';
-
-  export let mode; // 'daily' | 'free'
+  import StatsSummary from './StatsSummary.svelte';
+  import StreakMeter from './StreakMeter.svelte';
 
   let phase = 'loading'; // 'loading' | 'ready' | 'error'
   let error = '';
-  // Free mode never leaves the client; the daily day key comes from the
-  // server response (see below), computed fresh on every game start.
+  // The day key comes from the server response (see below), computed fresh on
+  // every game start.
   let dayKey = utcDateKey();
   let targetName = '';
   let targetCard = null;
@@ -40,10 +40,10 @@
   let submitError = '';
   let unsubscribe = null;
   let hintLink = { url: '', warning: null };
-  // The day's pre-revealed clue (daily only; free mode never has one). It is a
-  // clue from the very start, so it seeds the hint list and the mistake check.
+  // The day's pre-revealed clue. It is a clue from the very start, so it seeds
+  // the hint list and the mistake check.
   let reveal = null;
-  // The free clue constrains the search before any guess, so its count is
+  // The daily clue constrains the search before any guess, so its count is
   // resolved once on load and becomes the bar's starting value. A failed count
   // keeps the name-list size, which is a safe upper bound.
   let preGuessCount = null;
@@ -71,7 +71,7 @@
     status: state.status,
     revealCount,
     // Before the first guess the bar starts at the name-list size, unless the
-    // free clue already narrowed the field (counted below).
+    // daily clue already narrowed the field (counted below).
     initialCount: preGuessCount ?? names.length,
   });
 
@@ -218,28 +218,22 @@
     }, 20_000);
     try {
       names = await ensureData();
-      if (mode === 'daily') {
-        // Server-authoritative target: the daily game has no client-side
-        // fallback, so a failure shows a retry state instead of a local pick.
-        const daily = await fetchDailyCard();
-        targetCard = daily.card;
-        dayKey = daily.dayKey;
-        reveal = daily.reveal ?? null;
-        targetName = targetCard.name;
-      } else {
-        targetCard = await resolveVintageLegalCard(names, () => Math.floor(Math.random() * names.length), fetchCardByName);
-        if (!targetCard) throw new Error('no vintage-legal card found in name list');
-        targetName = targetCard.name;
-      }
+      // Server-authoritative target: there is no client-side fallback, so a
+      // failure shows a retry state instead of a local pick.
+      const daily = await fetchDailyCard();
+      targetCard = daily.card;
+      dayKey = daily.dayKey;
+      reveal = daily.reveal ?? null;
+      targetName = targetCard.name;
       if (token !== setupToken) return; // superseded by a retry
-      game = createGame({ mode, dayKey, targetName, targetCard });
+      game = createGame({ dayKey, targetName, targetCard });
       unsubscribe?.();
       unsubscribe = game.subscribe((s) => (state = s));
       await game.load();
       // A concluded game restored from storage refreshes its community
       // aggregates: it re-POSTs only if they never arrived, otherwise it reads
       // them back (backend spec §4.4), so a reload stays within budget.
-      if (mode === 'daily') await game.reportIfConcluded();
+      await game.reportIfConcluded();
       if (token === setupToken) phase = 'ready';
     } catch (e) {
       if (token === setupToken) {
@@ -287,17 +281,13 @@
     <p class="status">{$dataStatus.detail || 'Loading game…'}</p>
   {:else if phase === 'error'}
     <div class="status">
-      <p class="error-msg">
-        {mode === 'daily'
-          ? "Unable to load today's puzzle."
-          : 'Unable to start a free game.'}
-      </p>
+      <p class="error-msg">Unable to load today's puzzle.</p>
       <p class="error-detail">{error}</p>
       <button on:click={setup}>Retry</button>
     </div>
   {:else}
     <p class="hint">
-      {mode === 'daily' ? `Daily puzzle — ${dayKey} (UTC)` : 'Free mode'}
+      Daily puzzle — {dayKey} (UTC)
       {#if !gameOverVisible}
         · {remaining} {remaining === 1 ? 'guess' : 'guesses'} left
       {/if}
@@ -335,20 +325,20 @@
             {/if}
           </p>
         </div>
-        {#if mode === 'daily'}
-          <ShareSummary
-            guesses={state.guesses}
-            {dayKey}
-            hintsUsed={state.hintsUsed ?? []}
-            hintCounts={state.hintCounts ?? {}}
-            {revealCount}
-            {targetCard}
-            {baseHints}
-          />
-          <CommunityStats stats={state.communityStats} />
-        {:else}
-          <p class="muted">Free mode — no stats recorded.</p>
-        {/if}
+        <ShareSummary
+          guesses={state.guesses}
+          {dayKey}
+          hintsUsed={state.hintsUsed ?? []}
+          hintCounts={state.hintCounts ?? {}}
+          {revealCount}
+          {targetCard}
+          {baseHints}
+        />
+        <CommunityStats stats={state.communityStats} />
+        <div class="daily-meta">
+          <StatsSummary />
+          <StreakMeter />
+        </div>
       </div>
     {:else}
       <RevealClue {reveal} />
@@ -458,8 +448,7 @@
   .outside-link {
     color: var(--accent);
   }
-  .muted {
-    color: var(--muted);
-    font-size: 0.8rem;
+  .daily-meta {
+    margin-top: 1rem;
   }
 </style>

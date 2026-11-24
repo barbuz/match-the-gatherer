@@ -9,7 +9,7 @@
    */
   import { revealParts } from '../game/reveal.js';
 
-  /** `{ property, value }` from the daily answer, or null (free mode). */
+  /** `{ property, value }` from the daily answer, or null when none is present. */
   export let reveal = null;
 
   $: parts = revealParts(reveal);

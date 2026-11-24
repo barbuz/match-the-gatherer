@@ -1,16 +1,17 @@
 <script>
   import Router from 'svelte-spa-router';
-  import Home from './routes/Home.svelte';
   import DailyGame from './routes/DailyGame.svelte';
-  import FreeMode from './routes/FreeMode.svelte';
   import ThemeToggle from './lib/components/ThemeToggle.svelte';
   import VersionFooter from './lib/components/VersionFooter.svelte';
   import InfoDialog from './lib/components/InfoDialog.svelte';
 
+  // The daily game is the app: open the page and play. `/daily` stays as an
+  // alias for old links, and unknown hashes fall back to the game rather than
+  // rendering a blank page.
   const routes = {
-    '/': Home,
+    '/': DailyGame,
     '/daily': DailyGame,
-    '/free': FreeMode,
+    '*': DailyGame,
   };
 </script>
 

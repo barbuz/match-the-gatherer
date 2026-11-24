@@ -44,14 +44,14 @@
 
       <h2 id="info-title">How to play</h2>
       <p id="info-desc" class="lede">
-        Guess the same daily Magic: The Gathering card as the whole world, in up to 10 tries. The
+        Guess the same daily Magic: The Gathering card as the whole world, in up to 6 tries. The
         daily card is served by the game's server, so everyone gets the same puzzle, and a new one
         arrives each day at midnight UTC.
       </p>
 
       <ol class="steps">
         <li>
-          <strong>Start from the free clue.</strong> Every day begins with one word of the target's
+          <strong>Start from the daily clue.</strong> Every day begins with one word of the target's
           type line already revealed — a type, supertype or subtype, e.g. <em>“Today we are guessing a
           Kithkin”</em>. It is a real clue: the Hint search counts it, and a guess that lacks that word
           goes against what you were told.
@@ -88,7 +88,7 @@
 
         </li>
         <li>
-          <strong>Win,or reveal.</strong> Find the card in 10 tries to win; otherwise the target is revealed. At the end,
+          <strong>Win,or reveal.</strong> Find the card in 6 tries to win; otherwise the target is revealed. At the end,
           you can share your score as an emoji bar graph.
 
         </li>
@@ -100,13 +100,12 @@
         </li>
       </ol>
 
-      <h3>Free mode & stats</h3>
+      <h3>Stats & privacy</h3>
       <p>
-        <strong>Free mode</strong> gives you unlimited practice games with random targets — no stats are
-        recorded there, and it never contacts the game server. Daily games are tracked locally in your
-        browser (games played, won, win rate), and you can close the tab any time and come back to the
-        game later in the day. When a daily game ends, an anonymous result (win/loss, guess count, hints
-        used) is sent to the server so you can see how the world did — no account and no personal data.
+        Daily games are tracked locally in your browser (games played, won, win rate), and you can
+        close the tab any time and come back to the game later in the day. When a daily game ends, an
+        anonymous result (win/loss, guess count, hints used) is sent to the server so you can see how
+        the world did — no account and no personal data.
       </p>
 
       <div class="disclaimer" aria-label="Disclaimer and attribution">
