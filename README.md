@@ -9,7 +9,7 @@ stats come from the [backend](https://github.com/barbuz/match-the-gatherer-backe
 
 ## Gameplay
 
-- Guess the daily target card in up to 10 tries. The same card is served to
+- Guess the daily target card in up to 6 tries. The same card is served to
   every player worldwide by the backend, so no client can pick a different one.
 - Each guess returns per-property feedback: mana cost/value, colors, types,
   supertypes, subtypes, power/toughness/loyalty/defense, dual-faced status,
