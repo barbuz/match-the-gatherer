@@ -191,14 +191,14 @@ describe('scoreGuess', () => {
     );
   });
 
-  it('scores oracle text over the displayed clause tokens', () => {
+  it('scores oracle text over the displayed clause tokens with Sørensen–Dice', () => {
     const wrath = {
       name: 'a',
       oracle_id: 'a',
       oracle_text: "Destroy all creatures. They can't be regenerated.",
     };
     const day = { name: 'b', oracle_id: 'b', oracle_text: 'Destroy all creatures.' };
-    expect(scoreGuess(wrath, day).ratio).toBeCloseTo(0.5);
+    expect(scoreGuess(wrath, day).ratio).toBeCloseTo(2 / 3);
 
     const bolt = {
       name: 'c',

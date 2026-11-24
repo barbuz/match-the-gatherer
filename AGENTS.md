@@ -188,8 +188,8 @@ Pitfalls that make this silently lie:
   `scoring.js scoreGuess(guess, target)` compares each property on its own scale
   (the whole type line, colors and keywords by set overlap; mana value,
   P/T/loyalty/defense and release date by numeric distance; mana costs by
-  symbol-multiset Dice; oracle text by Jaccard over the displayed rules clauses
-  — the same clause tokens the Oracle row renders, with reminder text removed and
+  symbol-multiset Dice; oracle text by Sørensen–Dice over the displayed rules
+  clauses — the same clause tokens the Oracle row renders, with reminder text removed and
   keywords split into their own row) and takes a weighted mean. Type, colors and oracle text
   dominate; mana cost is a light tiebreaker because its symbols overlap with
   colors and mana value; rarity, date and layout barely move the needle. The

@@ -101,6 +101,14 @@ function jaccard(a, b) {
   return shared / (a.size + b.size - shared);
 }
 
+/** Sørensen–Dice over two sets: 2|A∩B| / (|A|+|B|). */
+function diceSet(a, b) {
+  if (a.size === 0 && b.size === 0) return null;
+  let shared = 0;
+  for (const value of a) if (b.has(value)) shared += 1;
+  return (2 * shared) / (a.size + b.size);
+}
+
 function diceMultiset(a, b) {
   if (a.length === 0 && b.length === 0) return null;
   const counts = (values) => {
@@ -210,7 +218,7 @@ function statsScore(guess, target) {
 }
 
 function oracleScore(guess, target) {
-  return jaccard(setOf(oracleTokens(guess)), setOf(oracleTokens(target)));
+  return diceSet(setOf(oracleTokens(guess)), setOf(oracleTokens(target)));
 }
 
 const RARITY_RANK = { common: 0, uncommon: 1, rare: 2, mythic: 3, special: 2, bonus: 2 };
@@ -267,8 +275,8 @@ export function levelForScore(ratio) {
  * similarities. Unlike the old per-property token Dice, every property is
  * measured on its own scale — the whole type line, colors and keywords by set
  * overlap, numeric values (mana value, P/T, loyalty, date) by distance, mana
- * costs by symbol overlap (a light tiebreaker), and oracle text by Jaccard over
- * the displayed rules clauses (the same clause tokens the Oracle row renders).
+ * costs by symbol overlap (a light tiebreaker), and oracle text by Sørensen–Dice
+ * over the displayed rules clauses (the same clause tokens the Oracle row renders).
  * A property is compared when either card has it: a guess missing a property the
  * target has contributes 0 while its weight stays in the denominator. If both
  * cards lack the property, the property is skipped entirely.
