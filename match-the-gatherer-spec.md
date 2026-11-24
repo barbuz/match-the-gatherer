@@ -232,7 +232,7 @@ match-the-gatherer/
 │   │   │   └── oracleTags.js     # §4.3 — bulk-data metadata check, gzip JSON fetch/parse
 │   │   │
 │   │   ├── game/
-│   │   │   ├── dailySeed.js      # §5 — UTC date → deterministic card index
+│   │   │   ├── dailySeed.js      # §5 — UTC date key + backend-selection reference
 │   │   │   ├── comparison.js     # §3 — per-property comparison rules (mana, color, type, otags…)
 │   │   │   ├── scoring.js        # §11 — token-overlap match score (per-property Dice, averaged)
 │   │   │   ├── countColors.js    # §8/§11 — shared match-count color bands + log scale
