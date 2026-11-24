@@ -191,10 +191,10 @@ Pitfalls that make this silently lie:
   Sørensen–Dice over the symbol multiset; oracle text by Sørensen–Dice over the
   displayed rules clauses — the same clause tokens the Oracle row renders, with
   reminder text removed and keywords split into their own row) and takes a
-  weighted mean. Type, colors and oracle text dominate; mana cost is a light
-  tiebreaker because its symbols overlap with colors and mana value; rarity,
-  date and layout barely move the needle. The type score is one Sørensen–Dice
-  over all supertype/type/subtype words, so sharing only `Creature` against
+  weighted mean. Type carries the most weight; stats and release date follow;
+  colors, mana value, keywords and oracle text come next; mana cost, rarity and
+  layout are light signals. The type score is one Sørensen–Dice over all
+  supertype/type/subtype words, so sharing only `Creature` against
   `Creature — Beast` is 2/5 (0.4), not a 0.6 baseline.
   A property is counted when either card has it. A guess missing a property the
   target has contributes 0 while its weight stays in the denominator, so a
@@ -214,9 +214,9 @@ Pitfalls that make this silently lie:
     the one-line explanation. The lost-game heading prints the best tier, e.g.
     `Best match: Hot`.
   - The thresholds/weights were calibrated against the full Scryfall oracle-card
-    list: random pairs land around 0.16 (level 1), "same colors only" around 0.36
+    list: random pairs land around 0.20 (level 1), "same colors only" around 0.34
     (level 2), "same colors + card type" around 0.50 (level 3), close creatures
-    around 0.59 (level 3), near-reprints around 0.77–0.99 (levels 4–5); only the
+    around 0.61 (level 4), near-reprints around 0.77–0.99 (levels 4–5); only the
     answer reaches 6. Retune the thresholds in `levelForScore`/`WEIGHTS`, not the
     UI.
   - The share bar has one block per level, drawn in that guess's count color

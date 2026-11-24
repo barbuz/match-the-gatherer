@@ -69,20 +69,19 @@ export function levelDescription(level) {
   return LEVEL_DESCRIPTIONS[level] ?? LEVEL_DESCRIPTIONS[0];
 }
 
-// How much each property contributes to the aggregate. Type, colors and the
-// oracle text carry a card's identity; cost/stats narrow it; rarity, date and
-// layout are weak signals and deliberately barely move the needle. Mana cost
-// is a light tiebreaker because it overlaps with colors and mana value.
+// How much each property contributes to the aggregate. Type carries the most
+// identity; stats and release date narrow it next; colors, mana value, keywords
+// and oracle text follow; mana cost, rarity and layout are light signals.
 const WEIGHTS = {
   type: 3,
-  colors: 2.5,
+  colors: 1.5,
   manaValue: 1.5,
   manaCost: 1,
-  stats: 1.5,
+  stats: 2,
   keywords: 1.5,
-  oracle: 2.5,
+  oracle: 1.5,
   rarity: 0.5,
-  released: 1,
+  released: 2,
   layout: 0.5,
 };
 
