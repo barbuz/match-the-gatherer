@@ -195,6 +195,22 @@ describe('scoreGuess', () => {
     expect(scoreGuess({}, {}).ratio).toBe(0);
     expect(scoreGuess({}, {}).level).toBe(1);
   });
+
+  it('keeps a property weight in the denominator when both cards lack it', () => {
+    const keywordlessTarget = { ...target, keywords: [] };
+    const missing = { ...keywordlessTarget, name: 'a', oracle_id: 'a' };
+    const nonMatching = {
+      ...keywordlessTarget,
+      name: 'b',
+      oracle_id: 'b',
+      keywords: ['Flying'],
+    };
+    // Missing and non-matching both contribute 0 for keywords; neither may
+    // shrink the denominator by omitting the keyword weight.
+    expect(scoreGuess(missing, keywordlessTarget).ratio).toBeCloseTo(
+      scoreGuess(nonMatching, keywordlessTarget).ratio,
+    );
+  });
 });
 
 describe('emojiBar', () => {

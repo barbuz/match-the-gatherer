@@ -269,9 +269,9 @@ export function levelForScore(ratio) {
  * measured on its own scale — the whole type line, colors and keywords by set
  * overlap, numeric values (mana value, P/T, loyalty, date) by distance, mana
  * costs by symbol overlap (a light tiebreaker), and oracle text by word overlap.
- * Properties the card simply doesn't have are skipped rather than dragging the
- * average down, while a property only the target has (a creature's P/T vs a
- * spell) contributes 0.
+ * Every property's weight stays in the denominator. A property absent from the
+ * guess — or from both cards — contributes 0, so a guess is not divided by a
+ * smaller total just because it lacks a property the target has.
  *
  * Returns `{ ratio, level }`; the UI shows the level, but the continuous ratio
  * is useful for tests and future tuning.
@@ -294,8 +294,7 @@ export function scoreGuess(guess, target) {
   let sum = 0;
   let total = 0;
   for (const [key, value] of Object.entries(parts)) {
-    if (value == null) continue;
-    sum += value * WEIGHTS[key];
+    sum += (value ?? 0) * WEIGHTS[key];
     total += WEIGHTS[key];
   }
   const ratio = total === 0 ? 0 : sum / total;
