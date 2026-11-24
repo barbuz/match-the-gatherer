@@ -188,8 +188,9 @@ Pitfalls that make this silently lie:
   `scoring.js scoreGuess(guess, target)` compares each property on its own scale
   (the whole type line, colors and keywords by set overlap; mana value,
   P/T/loyalty/defense and release date by numeric distance; mana costs by
-  symbol-multiset Dice; oracle text by word overlap after reminder text and
-  stopwords are removed) and takes a weighted mean. Type, colors and oracle text
+  symbol-multiset Dice; oracle text by Jaccard over the displayed rules clauses
+  — the same clause tokens the Oracle row renders, with reminder text removed and
+  keywords split into their own row) and takes a weighted mean. Type, colors and oracle text
   dominate; mana cost is a light tiebreaker because its symbols overlap with
   colors and mana value; rarity, date and layout barely move the needle. The
   type score is one Jaccard over all supertype/type/subtype words, so sharing
@@ -212,9 +213,9 @@ Pitfalls that make this silently lie:
     the one-line explanation. The lost-game heading prints the best tier, e.g.
     `Best match: Hot`.
   - The thresholds/weights were calibrated against the full Scryfall oracle-card
-    list: random pairs land around 0.17 (level 1), "same colors only" around 0.37
-    (level 2), "same colors + card type" around 0.48 (level 3), close creatures
-    around 0.57 (level 3), near-reprints around 0.84–0.99 (level 5); only the
+    list: random pairs land around 0.16 (level 1), "same colors only" around 0.36
+    (level 2), "same colors + card type" around 0.47 (level 3), close creatures
+    around 0.56 (level 3), near-reprints around 0.77–0.99 (levels 4–5); only the
     answer reaches 6. Retune the thresholds in `levelForScore`/`WEIGHTS`, not the
     UI.
   - The share bar has one block per level, drawn in that guess's count color

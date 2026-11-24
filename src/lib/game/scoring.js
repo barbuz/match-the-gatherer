@@ -5,9 +5,9 @@ import {
   colorTokens,
   keywordTokens,
   manaCostTokens,
+  oracleTokens,
   parseTypeLine,
   scalarTokens,
-  searchableOracleText,
   statValue,
 } from './comparison.js';
 import { countColor } from './countColors.js';
@@ -209,25 +209,8 @@ function statsScore(guess, target) {
   return axes.reduce((sum, score) => sum + score, 0) / axes.length;
 }
 
-const ORACLE_STOPWORDS = new Set(
-  `a an the of to and or but this that these those it its they them their with for on in
-   at by as if then than when whenever until while you your may can be is are was were has
-   have had do does did not no all any each other another same more most less least up down
-   out into onto over under again also only just very own such both either neither`
-    .split(/\s+/)
-    .filter(Boolean),
-);
-
-function oracleWordSet(card) {
-  const words = new Set();
-  for (const word of searchableOracleText(card).match(/[\p{L}\p{N}']+/gu) ?? []) {
-    if (word.length > 1 && !ORACLE_STOPWORDS.has(word)) words.add(word);
-  }
-  return words;
-}
-
 function oracleScore(guess, target) {
-  return jaccard(oracleWordSet(guess), oracleWordSet(target));
+  return jaccard(setOf(oracleTokens(guess)), setOf(oracleTokens(target)));
 }
 
 const RARITY_RANK = { common: 0, uncommon: 1, rare: 2, mythic: 3, special: 2, bonus: 2 };
@@ -284,7 +267,8 @@ export function levelForScore(ratio) {
  * similarities. Unlike the old per-property token Dice, every property is
  * measured on its own scale — the whole type line, colors and keywords by set
  * overlap, numeric values (mana value, P/T, loyalty, date) by distance, mana
- * costs by symbol overlap (a light tiebreaker), and oracle text by word overlap.
+ * costs by symbol overlap (a light tiebreaker), and oracle text by Jaccard over
+ * the displayed rules clauses (the same clause tokens the Oracle row renders).
  * A property is compared when either card has it: a guess missing a property the
  * target has contributes 0 while its weight stays in the denominator. If both
  * cards lack the property, the property is skipped entirely.

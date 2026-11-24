@@ -191,6 +191,28 @@ describe('scoreGuess', () => {
     );
   });
 
+  it('scores oracle text over the displayed clause tokens', () => {
+    const wrath = {
+      name: 'a',
+      oracle_id: 'a',
+      oracle_text: "Destroy all creatures. They can't be regenerated.",
+    };
+    const day = { name: 'b', oracle_id: 'b', oracle_text: 'Destroy all creatures.' };
+    expect(scoreGuess(wrath, day).ratio).toBeCloseTo(0.5);
+
+    const bolt = {
+      name: 'c',
+      oracle_id: 'c',
+      oracle_text: 'Lightning Bolt deals 3 damage to any target.',
+    };
+    const shock = {
+      name: 'd',
+      oracle_id: 'd',
+      oracle_text: 'Shock deals 2 damage to any target.',
+    };
+    expect(scoreGuess(bolt, shock).ratio).toBe(0);
+  });
+
   it('does not treat absent properties as a perfect match', () => {
     expect(scoreGuess({}, {}).ratio).toBe(0);
     expect(scoreGuess({}, {}).level).toBe(1);
