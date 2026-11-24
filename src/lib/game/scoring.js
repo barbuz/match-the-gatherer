@@ -52,10 +52,10 @@ const LEVEL_LABELS = [
 const LEVEL_DESCRIPTIONS = [
   'No comparison available',
   'Almost nothing in common',
-  'A faint connection',
-  "Shares the target's color or type family",
-  'Close on several properties',
-  'Nearly the same card',
+  'A little in common',
+  'Some similarity',
+  'Strong similarity',
+  'Very strong similarity',
   'You found the target',
 ];
 

@@ -124,9 +124,14 @@ describe('levelForScore', () => {
       'Matched',
     ]);
     expect(levelLabel(0)).toBe('No match');
-    expect(levelDescription(1)).toMatch(/nothing/i);
-    expect(levelDescription(3)).toMatch(/color or type/i);
-    expect(levelDescription(MATCH_LEVELS)).toMatch(/found/i);
+    expect(Array.from({ length: MATCH_LEVELS }, (_, i) => levelDescription(i + 1))).toEqual([
+      'Almost nothing in common',
+      'A little in common',
+      'Some similarity',
+      'Strong similarity',
+      'Very strong similarity',
+      'You found the target',
+    ]);
   });
 });
 
