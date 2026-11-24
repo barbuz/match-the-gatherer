@@ -186,12 +186,16 @@ Pitfalls that make this silently lie:
   the oracle-text row appears only when the guessed card has text. The share score is
   a **weighted per-property similarity**, not a matched/applicable count:
   `scoring.js scoreGuess(guess, target)` compares each property on its own scale
-  (type words, colors and keywords by set overlap; mana value, P/T/loyalty/defense
-  and release date by numeric distance; mana costs by symbol-multiset Dice; oracle
-  text by word overlap after reminder text and stopwords are removed) and takes a
-  weighted mean. Type, colors and oracle text dominate; rarity, date and layout are
-  minor nudges. Properties absent from both cards are skipped; a property only the
-  target has (a creature's P/T vs. a spell) contributes 0. The aggregate still never
+  (the whole type line, colors and keywords by set overlap; mana value,
+  P/T/loyalty/defense and release date by numeric distance; mana costs by
+  symbol-multiset Dice; oracle text by word overlap after reminder text and
+  stopwords are removed) and takes a weighted mean. Type, colors and oracle text
+  dominate; mana cost is a light tiebreaker because its symbols overlap with
+  colors and mana value; rarity, date and layout barely move the needle. The
+  type score is one Jaccard over all supertype/type/subtype words, so sharing
+  only `Creature` against `Creature — Beast` is 1/4, not a 0.6 baseline.
+  Properties absent from both cards are skipped; a property only the target has
+  (a creature's P/T vs. a spell) contributes 0. The aggregate still never
   reveals which individual properties exist on the target.
   `GuessFeedback`/`GameBoard`/`ShareSummary` all pass `targetCard` so the score can be
   computed at render time (results rows no longer carry enough info).
@@ -205,9 +209,9 @@ Pitfalls that make this silently lie:
     the one-line explanation. The lost-game heading prints the best tier, e.g.
     `Best match: Hot`.
   - The thresholds/weights were calibrated against the full Scryfall oracle-card
-    list: random pairs land around 0.16 (level 1), "same colors + card type" around
-    0.54 (level 3), close creatures around 0.63 (level 4), near-reprints around
-    0.9 (level 5); only the answer reaches 6. Retune the thresholds in
+    list: random pairs land around 0.17 (level 1), "same colors + card type" around
+    0.48 (level 3), close creatures around 0.57–0.60 (level 3/4), near-reprints
+    around 0.89 (level 5); only the answer reaches 6. Retune the thresholds in
     `levelForScore`/`WEIGHTS`, not the UI.
   - The share bar has one block per level, drawn in that guess's count color
     (`SHARE_BLOCKS = MATCH_LEVELS`, deliberately independent of `MAX_GUESSES`). An

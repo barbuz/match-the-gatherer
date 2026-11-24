@@ -71,12 +71,13 @@ export function levelDescription(level) {
 
 // How much each property contributes to the aggregate. Type, colors and the
 // oracle text carry a card's identity; cost/stats narrow it; rarity, date and
-// layout are weak signals and deliberately barely move the needle.
+// layout are weak signals and deliberately barely move the needle. Mana cost
+// is a light tiebreaker because it overlaps with colors and mana value.
 const WEIGHTS = {
   type: 3,
   colors: 2.5,
   manaValue: 1.5,
-  manaCost: 2,
+  manaCost: 1,
   stats: 1.5,
   keywords: 1.5,
   oracle: 2.5,
@@ -114,27 +115,19 @@ function diceMultiset(a, b) {
   return (2 * shared) / (a.length + b.length);
 }
 
-function typeSets(card) {
-  const main = new Set();
-  const subtypes = new Set();
+function typeLineWords(card) {
+  const words = new Set();
   for (const face of facesOf(card)) {
     const parsed = parseTypeLine(face.type_line ?? '');
-    for (const word of [...parsed.supertypes, ...parsed.types]) main.add(word.toLowerCase());
-    for (const word of parsed.subtypes) subtypes.add(word.toLowerCase());
+    for (const word of [...parsed.supertypes, ...parsed.types, ...parsed.subtypes]) {
+      words.add(word.toLowerCase());
+    }
   }
-  return { main, subtypes };
+  return words;
 }
 
 function typeScore(guess, target) {
-  const g = typeSets(guess);
-  const t = typeSets(target);
-  if (g.main.size + g.subtypes.size + t.main.size + t.subtypes.size === 0) return null;
-  const main = jaccard(g.main, t.main) ?? 0;
-  // Subtypes are the sharper signal, but a shared card type is still worth
-  // something on its own ("Creature — Goblin" vs "Creature — Elf").
-  if (g.subtypes.size === 0 && t.subtypes.size === 0) return main;
-  const subtypes = jaccard(g.subtypes, t.subtypes) ?? 0;
-  return 0.6 * main + 0.4 * subtypes;
+  return jaccard(typeLineWords(guess), typeLineWords(target));
 }
 
 function hasColorField(card) {
@@ -273,11 +266,12 @@ export function levelForScore(ratio) {
 /**
  * Score one guess against the target: a weighted mean of per-property
  * similarities. Unlike the old per-property token Dice, every property is
- * measured on its own scale — colors and types by set overlap, numeric values
- * (mana value, P/T, loyalty, date) by distance, mana costs by symbol overlap,
- * and oracle text by word overlap. Properties the card simply doesn't have are
- * skipped rather than dragging the average down, while a property only the
- * target has (a creature's P/T vs a spell) contributes 0.
+ * measured on its own scale — the whole type line, colors and keywords by set
+ * overlap, numeric values (mana value, P/T, loyalty, date) by distance, mana
+ * costs by symbol overlap (a light tiebreaker), and oracle text by word overlap.
+ * Properties the card simply doesn't have are skipped rather than dragging the
+ * average down, while a property only the target has (a creature's P/T vs a
+ * spell) contributes 0.
  *
  * Returns `{ ratio, level }`; the UI shows the level, but the continuous ratio
  * is useful for tests and future tuning.

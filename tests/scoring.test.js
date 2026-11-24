@@ -153,7 +153,7 @@ describe('scoreGuess', () => {
   it('spreads close, related and distant cards across the lower levels', () => {
     expect(scoreGuess(near, target).level).toBe(4);
     expect(scoreGuess(related, target).level).toBe(4);
-    expect(scoreGuess(sameTypeOnly, target).level).toBe(3);
+    expect(scoreGuess(sameTypeOnly, target).level).toBe(2);
     expect(scoreGuess(colorsOnly, target).level).toBe(2);
     expect(scoreGuess(unrelated, target).level).toBe(1);
   });
