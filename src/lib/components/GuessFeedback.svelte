@@ -2,6 +2,7 @@
   /** Per-property feedback for one guess (spec §3). */
   import { manaParts, symbols } from '../api/symbology.js';
   import { scoreGuess } from '../game/scoring.js';
+  import MatchMeter from './MatchMeter.svelte';
 
   export let entry; // { card, results }
   export let targetCard = null;
@@ -13,38 +14,22 @@
   // `$symbols` is just a reactivity anchor — when the map finishes downloading
   // the store updates and any already-rendered mana rows re-render as images.
 
-  const RING_RADIUS = 18;
-  const RING_CIRC = 2 * Math.PI * RING_RADIUS;
-
   $: score = scoreGuess(entry.card, targetCard);
-  $: pct = Math.round(score.ratio * 100);
-  $: dashOffset = RING_CIRC * (1 - score.ratio);
 </script>
 
 <div class="guess-feedback">
-  <h3 class="card-name">
-    {entry.card.name}{#if conflicts.length}<span
-      class="conflict-badge"
-      role="img"
-      aria-label="Contradicts an earlier clue"
-      title="This guess contradicts an earlier clue"
-    >⚠️</span>{/if}
-  </h3>
+  <div class="card-header">
+    <h3 class="card-name">
+      {entry.card.name}{#if conflicts.length}<span
+        class="conflict-badge"
+        role="img"
+        aria-label="Contradicts an earlier clue"
+        title="This guess contradicts an earlier clue"
+      >⚠️</span>{/if}
+    </h3>
+    <MatchMeter level={score.level} />
+  </div>
   <div class="lines">
-    <div class="match-badge" title="{pct}% match">
-      <svg viewBox="0 0 44 44" aria-hidden="true">
-        <circle class="ring-bg" cx="22" cy="22" r={RING_RADIUS} />
-        <circle
-          class="ring-fill"
-          cx="22"
-          cy="22"
-          r={RING_RADIUS}
-          stroke-dasharray={RING_CIRC}
-          stroke-dashoffset={dashOffset}
-        />
-      </svg>
-      <span class="match-pct">{pct}%</span>
-    </div>
     {#each entry.results as r (r.key)}
       <div class="line {r.status}" class:conflict={conflictRows.has(r.key)}>
         <span class="prop-label" class:absent={r.absentOnTarget}>{r.label}</span>
@@ -120,8 +105,16 @@
     padding: 0.6rem 0.8rem;
     background: var(--surface);
   }
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+  }
   .card-name {
-    margin: 0 3rem 0.4rem;
+    flex: 1;
+    min-width: 0;
+    margin: 0;
     font-size: 0.95rem;
     overflow-wrap: anywhere;
   }
@@ -309,39 +302,5 @@
     font-size: 0.7rem;
     color: var(--muted);
     font-style: italic;
-  }
-  .match-badge {
-    position: absolute;
-    top: 0.6rem;
-    right: 0.6rem;
-    width: 44px;
-    height: 44px;
-  }
-  .match-badge svg {
-    width: 100%;
-    height: 100%;
-    transform: rotate(-90deg);
-  }
-  .ring-bg {
-    fill: none;
-    stroke: var(--border);
-    stroke-width: 3.5;
-  }
-  .ring-fill {
-    fill: none;
-    stroke: var(--accent);
-    stroke-width: 3.5;
-    stroke-linecap: round;
-    transition: stroke-dashoffset 0.3s ease;
-  }
-  .match-pct {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.65rem;
-    font-weight: 700;
-    color: var(--fg);
   }
 </style>

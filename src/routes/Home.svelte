@@ -12,7 +12,7 @@
 
 <div class="home">
   <h1>Match the Gatherer</h1>
-  <p class="tagline">Guess today's Magic: The Gathering card in 10 tries.</p>
+  <p class="tagline">Guess today's Magic: The Gathering card in 6 tries.</p>
 
   <StatsSummary />
 

@@ -44,7 +44,7 @@
 
       <h2 id="info-title">How to play</h2>
       <p id="info-desc" class="lede">
-        Guess the same daily Magic: The Gathering card as the whole world, in up to 10 tries. The
+        Guess the same daily Magic: The Gathering card as the whole world, in up to 6 tries. The
         daily card is served by the game's server, so everyone gets the same puzzle, and a new one
         arrives each day at midnight UTC.
       </p>
@@ -64,8 +64,11 @@
         <li>
           <strong>Read the feedback.</strong> Every property of your guess is compared against the target:
           green highlight means the value matches the target completely, means strikethrough means it isn't on the target at all,
-          and yellow highlights show which parts of your values hit. The percentage badge shows how closely
-          your guess matched overall.
+          and yellow highlights show which parts of your values hit. The six-block heat meter runs
+          from <strong>Cold</strong> to <strong>Matched</strong>
+          (<strong>Cold</strong> → <strong>Cool</strong> → <strong>Warm</strong> → <strong>Hot</strong> →
+          <strong>Blazing</strong> → <strong>Matched</strong>); more filled blocks means closer, and
+          <strong>Matched</strong> is the actual card.
 
           <ul class="props">
             <li>Mana cost and mana value (MV)</li>
@@ -88,7 +91,7 @@
 
         </li>
         <li>
-          <strong>Win,or reveal.</strong> Find the card in 10 tries to win; otherwise the target is revealed. At the end,
+          <strong>Win,or reveal.</strong> Find the card in 6 tries to win; otherwise the target is revealed. At the end,
           you can share your score as an emoji bar graph.
 
         </li>
