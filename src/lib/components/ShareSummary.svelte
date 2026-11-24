@@ -8,6 +8,9 @@
   export let hintsUsed = [];
   export let targetCard = null;
   export let hintCounts = {};
+  /** Pre-known clues (the day's revealed type-line word), so the row markers
+   * agree with the board's mistake flags. See `game/reveal.js`. */
+  export let baseHints = [];
   /** Still-matching count after the final guess (1 on a win), scored from the
    * hint set built from every guess; overrides the last row's stored count so
    * the summary reflects the fully-constrained search. */
@@ -22,7 +25,7 @@
     revealCount != null && guesses.length > 0
       ? { ...hintCounts, [guesses.length - 1]: revealCount }
       : hintCounts;
-  $: shareText = buildShareText({ dayKey: dayKey || label, guesses, url, hintsUsed, targetCard, hintCounts: finalCounts, format });
+  $: shareText = buildShareText({ dayKey: dayKey || label, guesses, url, hintsUsed, targetCard, hintCounts: finalCounts, format, baseHints });
 
   async function copy() {
     try {

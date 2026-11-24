@@ -12,6 +12,7 @@
   import { createGame, MAX_GUESSES } from '../game/gameState.js';
   import { gatherHints, buildScryfallSearchUrl, buildScryfallQuery } from '../game/hints.js';
   import { analyzeGuesses, countMistakes } from '../game/consistency.js';
+  import { revealHints } from '../game/reveal.js';
   import { scoreGuess } from '../game/scoring.js';
   import { barCountFor } from '../game/barTarget.js';
   import GuessInput from './GuessInput.svelte';
@@ -22,6 +23,7 @@
   import CommunityStats from './CommunityStats.svelte';
   import HintButton from './HintButton.svelte';
   import HintBar from './HintBar.svelte';
+  import RevealClue from './RevealClue.svelte';
 
   export let mode; // 'daily' | 'free'
 
@@ -38,16 +40,28 @@
   let submitError = '';
   let unsubscribe = null;
   let hintLink = { url: '', warning: null };
+  // The day's pre-revealed clue (daily only; free mode never has one). It is a
+  // clue from the very start, so it seeds the hint list and the mistake check.
+  let reveal = null;
+  // The free clue constrains the search before any guess, so its count is
+  // resolved once on load and becomes the bar's starting value. A failed count
+  // keeps the name-list size, which is a safe upper bound.
+  let preGuessCount = null;
+  let preGuessToken = null;
   let countedIndex = -1;
   let setupToken = 0;
   // The button's link and count are built from the same cumulative hint list,
   // so the number shown always matches the set the link opens.
-  $: hintHints = state.guesses.length > 0 ? gatherHints(state.guesses) : null;
+  $: baseHints = revealHints(reveal);
+  $: hintHints =
+    state.guesses.length > 0 || baseHints.length > 0 ? gatherHints(state.guesses, baseHints) : null;
   $: hintLink = hintHints ? buildScryfallSearchUrl(hintHints) : { url: '', warning: null };
   // Count the final, fully-constrained hint set once the game has ended, so the
   // bar can slide down to the true number (1 on a win) before the outcome shows.
   $: finalHints =
-    state.status !== 'playing' && state.guesses.length > 0 ? gatherHints(state.guesses) : null;
+    state.status !== 'playing' && state.guesses.length > 0
+      ? gatherHints(state.guesses, baseHints)
+      : null;
   $: revealCount = finalCountsResolved ? finalCountValue : null;
   // The bar's value (see `barTarget.js`): the latest resolved count, holding the
   // previous resolved value (never an unrelated fallback) while one resolves.
@@ -56,8 +70,24 @@
     hintCounts: state.hintCounts,
     status: state.status,
     revealCount,
-    initialCount: names.length,
+    // Before the first guess the bar starts at the name-list size, unless the
+    // free clue already narrowed the field (counted below).
+    initialCount: preGuessCount ?? names.length,
   });
+
+  $: if (baseHints.length > 0) {
+    const query = buildScryfallQuery(baseHints);
+    if (query !== preGuessToken) {
+      preGuessToken = query;
+      preGuessCount = null;
+      countSearchResults(query)
+        .then((n) => (preGuessCount = n))
+        .catch(() => {});
+    }
+  } else if (preGuessToken !== null) {
+    preGuessToken = null;
+    preGuessCount = null;
+  }
 
   // The final count (1 on a win, the real value on a loss) is scored from the
   // accumulated hints; on a win we know it is exactly the answer, so it is 1
@@ -138,7 +168,7 @@
     // Count the same cumulative hint set the button's link opens (hints from
     // this and every earlier guess), so the number shown always describes that
     // link. A per-guess set would ignore earlier clues and can even grow.
-    const hints = gatherHints(state.guesses.slice(0, index + 1));
+    const hints = gatherHints(state.guesses.slice(0, index + 1), baseHints);
     pendingForIndex = index;
     countPending = true;
     countSearchResults(buildScryfallQuery(hints))
@@ -161,8 +191,8 @@
   $: bestPct = Math.max(0, ...state.guesses.map((g) => Math.round(scoreGuess(g.card, targetCard).ratio * 100)));
   // Which earlier clue each guess contradicts, recomputed from the persisted
   // guesses (no storage schema change). Indexed like `state.guesses`.
-  $: conflictsByGuess = analyzeGuesses(state.guesses, targetCard);
-  $: mistakeCount = countMistakes(state.guesses, targetCard);
+  $: conflictsByGuess = analyzeGuesses(state.guesses, targetCard, baseHints);
+  $: mistakeCount = countMistakes(state.guesses, targetCard, baseHints);
 
   onMount(() => {
     setup();
@@ -194,6 +224,7 @@
         const daily = await fetchDailyCard();
         targetCard = daily.card;
         dayKey = daily.dayKey;
+        reveal = daily.reveal ?? null;
         targetName = targetCard.name;
       } else {
         targetCard = await resolveVintageLegalCard(names, () => Math.floor(Math.random() * names.length), fetchCardByName);
@@ -312,6 +343,7 @@
             hintCounts={state.hintCounts ?? {}}
             {revealCount}
             {targetCard}
+            {baseHints}
           />
           <CommunityStats stats={state.communityStats} />
         {:else}
@@ -319,6 +351,7 @@
         {/if}
       </div>
     {:else}
+      <RevealClue {reveal} />
       <GuessInput
         {names}
         exclude={guessedNames}
@@ -326,12 +359,12 @@
         on:select={onSelect}
       />
       <div class="hint-row">
-        <HintButton disabled={state.guesses.length === 0 || gameOver} on:press={onHintPress} />
+        <HintButton disabled={gameOver || !hintLink.url} on:press={onHintPress} />
       </div>
       {#if hintLink.warning}
         <p class="hint-warning" role="status">{hintLink.warning}</p>
       {/if}
-      <HintBar count={barCount} initialCount={names.length} pending={countPending} />
+      <HintBar count={barCount} initialCount={preGuessCount ?? names.length} pending={countPending} />
       {#if submitError}
         <p class="error-msg">{submitError}</p>
       {/if}

@@ -37,10 +37,16 @@ function pushUnique(hints, seen, hint) {
  *   are dropped;
  * - same-direction release-date bounds collapse to the tightest one
  *   (e.g. date>2001 AND date>2010 reduces to date>2010).
+ * `baseHints` are facts known before the first guess — today's pre-revealed
+ * clue (see `reveal.js`). They are seeded into the list, so the Hint link and
+ * the match count include them from the start, and a guess that yields the same
+ * fact collapses into them instead of duplicating it.
+ *
  * @param {Array<{ card: object, results: Array }>} guesses  game-state entries
+ * @param {Array<{ kind, value, negated?, dir? }>} [baseHints]  pre-known clues
  * @returns {Array<{ kind, value, negated?, dir? }>} hint list
  */
-export function gatherHints(guesses,) {
+export function gatherHints(guesses, baseHints = []) {
   // First pass: track which property lines were ever fully matched, so
   // their wrong counterparts elsewhere can be ignored. Exceptions:
   // `type`, `colors`, `keywords` and `oracle` — all set-valued and compared by
@@ -64,6 +70,9 @@ export function gatherHints(guesses,) {
   let hints = [];
   const seen = new Set();
   const push = (hint) => pushUnique(hints, seen, hint);
+  // Pre-known clues first, so they head the list and dedupe the guesses against
+  // them (a revealed subtype re-derived by a guess is the same clause).
+  for (const hint of baseHints ?? []) push(hint);
 
   const pushSetValues = (values, kind, negated = false) => {
     for (const v of values ?? []) {

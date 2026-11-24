@@ -3,8 +3,10 @@
 import { propertyTokens } from './comparison.js';
 import { countColor } from './countColors.js';
 import { analyzeGuesses } from './consistency.js';
+import { MAX_GUESSES } from './gameState.js';
 
-export const SHARE_BLOCKS = 10;
+/** One share block per guess, so the bar's width always matches the game's. */
+export const SHARE_BLOCKS = MAX_GUESSES;
 
 /** Row markers: no clue contradicted / contradicted an earlier clue. */
 const CORRECT_MARK = '\u2705';
@@ -106,9 +108,13 @@ export function buildShareText({
   targetCard,
   hintCounts = {},
   format = 'markdown',
+  baseHints = [],
 }) {
   const ratios = guesses.map((g) => scoreGuess(g.card, targetCard).ratio);
-  const conflicts = analyzeGuesses(guesses, targetCard);
+  // `baseHints` (the pre-revealed clue, see reveal.js) keeps the row markers in
+  // step with the board: without it a first guess that contradicts the revealed
+  // word would read ✅ here and ⚠️ on screen.
+  const conflicts = analyzeGuesses(guesses, targetCard, baseHints);
   const used = new Set(hintsUsed ?? []);
   const title = `Match the Gatherer ${dayKey}`;
   const header = format === 'markdown' && url ? `[${title}](${url})` : title;

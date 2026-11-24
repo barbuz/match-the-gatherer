@@ -233,14 +233,26 @@ Pitfalls that make this silently lie:
   negated) are used throughout, and a `//` face separator is never emitted as a
   filter value. Same-direction date bounds fold down to the
   tightest,and an exact date subsumes all date hints. The HintButton opens that URL, and
-  each used hint press marks its share row with 🔦 (`buildShareText` `hintsUsed`).
+  each used hint press marks its share row with 🔮 (`buildShareText` `hintsUsed`).
+  The button is **enabled before the first guess**: the daily free clue alone
+  yields a valid query (`t:creature f:v not:reprint`), so there is something to
+  open from the start. It is disabled only when there is nothing to search —
+  the game is over, or free mode (no clue, so `hintHints` stays null and the
+  link is empty).
+  `markHintUsed()` records the **guess about to be played** (`guesses.length`),
+  not the last one played, so a hint taken before the first guess is attributed
+  to guess 0 instead of being dropped (the summary used to lose that icon
+  entirely). The marker therefore always lands on a row that exists: a hint
+  cannot be taken after the final guess, because the game has concluded and
+  `markHintUsed()` returns early on a non-playing status. `hintsUsed` remains a
+  set of indices, deduped per upcoming guess.
   `buildScryfallQuery()` returns the raw (unencoded) clause string, and
   `buildScryfallSearchUrl()` is just it URL-encoded, so the hint's count and the
   link it opens always search the same set.
   - **Scryfall truncates `q` at ~1024 characters**, cutting it mid-clause so a
     long query 400s ("unclosed parentheses") or 404s as if nothing matched — not
     a syntax error, so it is easy to mistake for a genuine empty result. A
-    late-game daily (5 guesses) can gather ~50 clauses totalling >1100 chars.
+    late-game daily (6 guesses) can gather ~50 clauses totalling >1100 chars.
     A single shared `clampClauses()` in `hints.js` keeps every query we build
     (the link **and** the count) within `MAX_QUERY_LENGTH` (1000, a safe margin
     under the observed ~1024 cut): all clauses are kept when they fit, and only
@@ -349,6 +361,49 @@ Pitfalls that make this silently lie:
   URL at the end. The per-guess result is recomputed from the persisted guesses, so
   it needs no storage schema change and works on a reloaded daily game; free mode
   is unaffected (no new API calls).
+  - **`baseHints`**: both `analyzeGuesses`/`countMistakes` and `gatherHints` take
+    an optional third/second argument of facts known *before guess 0*. It exists
+    for the daily pre-revealed clue (`game/reveal.js`), which is a real clue, so
+    a first guess that lacks the revealed word is a mistake even though guess 0
+    is otherwise never judged. `buildShareText` forwards it too, or a first guess
+    would read ⚠️ on the board and ✅ in the share text. Free mode passes nothing.
+
+- **Pre-revealed daily clue** (`lib/game/reveal.js`, backend spec §3.7): every
+  daily answer carries `reveal: { property, value }` — one word of the target's
+  type line (`supertype`/`type`/`subtype`), chosen server-side per UTC day from
+  the card's own type-line words, so it is the same for everyone. `revealHints()`
+  turns it into a positive `type` hint (`t:kithkin`) seeded into `gatherHints`,
+  so the Hint link and the Possible-cards bar include it from the first guess,
+  and `GameBoard` counts that clue's constrained set once on load as the bar's
+  starting value. `RevealClue.svelte` renders it above the guess input as plain
+  centered text — no tag, box or frame, so it reads as a line of copy rather
+  than a widget — as the sentence "Today we are guessing a Kithkin" / "an
+  Artifact", with the revealed word in bold accent so the clue reads as the
+  actionable part. The sentence is composed from `revealParts()` (lead /
+  article / value) rather than one string, so the component styles only the
+  word; `revealText()` stays the plain-text form for tests and non-markup
+  consumers, and a test pins the two to recompose identically. The article
+  comes from `articleFor()` — a phonetic test, not a
+  vowel test: ~24% of type-line token occurrences need "an", and the `u` split
+  is real (`a Unicorn` but `an Urza`). Every H-initial token is pronounced, so
+  `h` always takes "a"; a silent-h word would need adding. The clue is one
+  printed word, so a multi-word subtype arrives split (`Time Lord` → `Time`)
+  and the sentence can read "a Time" — accepted; don't "fix" it by
+  reintroducing a label-plus-word layout. Known residue, 57 of 35,385 cards
+  (0.16%): a plural token (`Creature — Elves`), a function word (`Lady of
+  Proper Etiquette`), and the Un-set `Stickers` type. Filtering those belongs in
+  the backend's candidate pool, not in the copy. `dailyApi.js` parses
+  it defensively (missing/malformed → `null`, never a load failure) and caches it
+  under `mtg:daily-card:v2` — versioned so a pre-feature cached answer without a
+  clue is not reused for the rest of the day. Free mode never has a reveal.
+
+- **Guesses per game: 6** (`MAX_GUESSES` in `lib/game/gameState.js`, the one
+  place to tune it). The endgame share bar's width is **derived** from it
+  (`scoring.js SHARE_BLOCKS = MAX_GUESSES`) so a retune can't leave the two
+  disagreeing — the share block always has one square per guess. The backend
+  buckets wins 1..10 (`won_N_*` columns in D1); 7–10 simply stay zero under a
+  6-guess limit, so no backend change or migration is needed. Tests derive from
+  `MAX_GUESSES`/`SHARE_BLOCKS` rather than hardcoding the number.
 
 - Daily games persist per UTC day (`mtg:game:${dayKey}`, via `lib/game/gameState.js`);
   free-mode games are memory-only and never touch stats. Stats live in `storage/statsStore.js`

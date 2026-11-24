@@ -875,3 +875,31 @@ describe('buildScryfallQuery', () => {
     expect(decodeURIComponent(buildScryfallSearchUrl(hints).url).split('q=')[1]).toBe(query);
   });
 });
+
+describe('gatherHints with the pre-revealed clue (baseHints)', () => {
+  const reveal = [{ kind: 'type', value: 'Kithkin', negated: false }];
+
+  it('includes the revealed word from the first guess onward', () => {
+    const hints = gatherHints([], reveal);
+    expect(buildScryfallQuery(hints)).toContain('t:kithkin');
+  });
+
+  it('searches the clue alongside the guesses', () => {
+    const guess = guessEntry(makeCard({ name: 'A', type_line: 'Creature — Elf' }));
+    const hints = gatherHints([guess], reveal);
+    expect(buildScryfallQuery(hints)).toContain('t:kithkin');
+  });
+
+  it('collapses a guess that re-derives the same word into one clause', () => {
+    // A guess that shows the target has Kithkin must not emit `t:kithkin` twice.
+    const guess = guessEntry(makeCard({ name: 'K', type_line: 'Creature — Kithkin' }));
+    const hints = gatherHints([guess], reveal);
+    const clauses = buildScryfallQuery(hints).split(' ');
+    expect(clauses.filter((c) => c === 't:kithkin')).toHaveLength(1);
+  });
+
+  it('quotes a multi-word clue like any other type value', () => {
+    const hints = gatherHints([], [{ kind: 'type', value: 'Time Lord' }]);
+    expect(buildScryfallQuery(hints)).toContain('t:"time lord"');
+  });
+});
