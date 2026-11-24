@@ -164,10 +164,11 @@ Total cost per player per day: **2 backend requests** in the common path (one `G
 ## 11. End-of-Game Summary & Sharing
 
 At the end of a **daily** game (win or loss), show a summary that:
-- For each guess, computes a match score by **token overlap** (spec §11). For every property present on either the guessed or the target card, it counts how many of the guess's tokens appear anywhere on the target plus how many of the target's tokens appear on the guess, then divides that sum by the total number of tokens on both cards (the Sørensen–Dice coefficient). A property's score is therefore in [0, 1] regardless of which card has more tokens. The guess's score is the average of those per-property scores, scaled to a percentage for display. Duplicate tokens collapse, so repeated words can't inflate a property.
-- A property counts toward the average whenever *either* card has tokens for it, so a property the guess lacks but the target has (e.g. a non-creature guess against a creature) contributes 0 rather than being dropped. Because the score is an aggregate over all properties rather than a per-property reveal, the bar still does not disclose which specific properties exist on the target.
-- Renders each guess's score as a **horizontal bar made of emojis** (e.g. filled vs. empty block/square emoji), proportionally fuller the higher the match score — one row per guess.
-- Draws each row's bar in the **color of that guess's number of still-matching cards** (blue = 1, green ≤ 10, yellow ≤ 100, orange ≤ 1000, red > 1000; gray = unknown) rather than appending a separate square, so the same color scheme as the Hint button's bar is carried by the bar itself. The last row uses the count after all guesses (1 on a win).
+- For each guess, a **weighted per-property similarity** in [0, 1]. Each property is compared on its own scale: the whole type line as one Sørensen–Dice over supertypes, types and subtypes; colors and keywords by Sørensen–Dice set overlap; mana value, power/toughness/loyalty/defense and release date by numeric distance (equal is 1, roughly halving every two points or eight years); mana costs by Sørensen–Dice over the symbol multiset (a light tiebreaker, since the symbols overlap with colors and mana value); oracle text by Sørensen–Dice over the displayed rules clauses — the same clause tokens the Oracle row renders, with reminder text removed and keywords split into their own row; rarity by rank proximity; layout exactly. The weighted mean gives type the most influence; stats and release date next; colors, mana value, keywords and oracle text after those; mana cost, rarity and layout the least. A property is counted when either card has it: a guess missing a property the target has contributes 0 while its weight stays in the denominator, so it is not divided by a smaller total. A property absent from both cards is skipped entirely.
+- A property present on only one card (e.g. a creature's P/T against a spell) contributes 0 rather than being dropped.
+- Converts the continuous score to **six discrete match levels**, labelled as a heat meter — **Cold, Cool, Warm, Hot, Blazing, Matched**: 1 < 0.30, 2 < 0.45, 3 < 0.60, 4 < 0.80, 5 ≥ 0.80. Level 6 is reserved for the answer itself (same oracle id, else same name), so a functional reprint with identical properties still reads 5/6. The feedback card shows the level as a six-block meter plus the tier word (no numeric `N/6`); a lost game's heading reads "Best match: Hot".
+- Renders each guess's level as a **horizontal bar of six emoji blocks**, with one filled block per level and a white empty tail — one row per guess.
+- Draws each row's filled blocks in the **color of that guess's number of still-matching cards** (blue = 1, green ≤ 10, yellow ≤ 100, orange ≤ 1000, red > 1000; dark = unknown) rather than appending a separate square, so the same color scheme as the Hint button's bar is carried by the bar itself. The last row uses the count after all guesses (1 on a win).
 - Is copy-pasteable as a single shareable text block (the emoji bars), in either
   **Markdown** (default) or **plain text**. The block's header names the day only:
   in Markdown it is a link to the app, while in plain text the bare URL is
@@ -188,7 +189,7 @@ At the end of a **daily** game (win or loss), show a summary that:
 - Ends with the URL to the game in plain text; in Markdown the URL lives in the
   header link.
 
-Note: an earlier idea used a per-property emoji grid (one column per property), but this was dropped — it would reveal which properties exist on the target (e.g. a filled power/toughness column would confirm the target is a creature) before the player has actually guessed that. The bar approach only reveals an aggregate score per guess, not which specific properties matched, so it can be safely shown even for guesses that got some properties wrong.
+Note: an earlier idea used a per-property emoji grid (one column per property), but this was dropped — it would reveal which properties exist on the target (e.g. a filled power/toughness column would confirm the target is a creature) before the player has actually guessed that. The match level remains a single aggregate: it never lists which properties matched, so a six-block level can be shown even for guesses that got some properties wrong.
 
 ## 12. Technical Architecture
 
@@ -234,7 +235,7 @@ match-the-gatherer/
 │   │   ├── game/
 │   │   │   ├── dailySeed.js      # §5 — UTC date key + backend-selection reference
 │   │   │   ├── comparison.js     # §3 — per-property comparison rules (mana, color, type, otags…)
-│   │   │   ├── scoring.js        # §11 — token-overlap match score (per-property Dice, averaged)
+│   │   │   ├── scoring.js        # §11 — weighted property similarity → 6 match levels
 │   │   │   ├── countColors.js    # §8/§11 — shared match-count color bands + log scale
 │   │   │   ├── barTarget.js      # §8 — pure chooser for the Hint bar's displayed count
 │   │   │   └── gameState.js      # store: guesses, remaining attempts, win/loss, persisted per day
@@ -264,7 +265,7 @@ match-the-gatherer/
 │
 ├── tests/
 │   ├── comparison.test.js        # unit tests for §3 comparison rules (esp. mana cost tiers, otags)
-│   ├── scoring.test.js           # unit tests for §11 match-score calculation
+│   ├── scoring.test.js           # unit tests for §11 match levels
 │   ├── gameState.test.js         # unit tests for §5.1 result reporting + persistence
 │   ├── dailyApi.test.js          # unit tests for §5 daily endpoint + stats client
 │   ├── dailySeed.test.js         # unit tests for deterministic date → card mapping
