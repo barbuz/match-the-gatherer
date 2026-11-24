@@ -5,6 +5,7 @@ import {
   SHARE_BLOCKS,
   buildShareText,
   emojiBar,
+  levelDescription,
   levelForScore,
   levelLabel,
   scoreGuess,
@@ -113,11 +114,19 @@ describe('levelForScore', () => {
     expect(levelForScore(Number.NaN)).toBe(1);
   });
 
-  it('has a human-readable label for every level', () => {
-    for (let level = 1; level <= MATCH_LEVELS; level += 1) {
-      expect(levelLabel(level)).toBeTruthy();
-    }
+  it('labels the six levels as a heat meter from Cold to Matched', () => {
+    expect(Array.from({ length: MATCH_LEVELS }, (_, i) => levelLabel(i + 1))).toEqual([
+      'Cold',
+      'Cool',
+      'Warm',
+      'Hot',
+      'Blazing',
+      'Matched',
+    ]);
     expect(levelLabel(0)).toBe('No match');
+    expect(levelDescription(1)).toMatch(/nothing/i);
+    expect(levelDescription(3)).toMatch(/color or type/i);
+    expect(levelDescription(MATCH_LEVELS)).toMatch(/found/i);
   });
 });
 

@@ -199,8 +199,11 @@ Pitfalls that make this silently lie:
     not a percentage: 1 < 0.30, 2 < 0.45, 3 < 0.60, 4 < 0.80, 5 ≥ 0.80, 6 only for
     the actual answer (same `oracle_id`, else same name). Level 6 is gated rather
     than inferred from the ratio so a property-identical functional reprint reads
-    5/6, never 6/6. `GuessFeedback` renders a six-block `MatchMeter.svelte` (title
-    carries the level label); the lost-game heading prints `Best match N/6`.
+    5/6, never 6/6. The levels are labelled as a heat meter — **Cold, Cool, Warm,
+    Hot, Blazing, Matched** — and `GuessFeedback` renders each as a six-block
+    `MatchMeter.svelte` plus the tier word (no `N/6` numbers); the tooltip carries
+    the one-line explanation. The lost-game heading prints the best tier, e.g.
+    `Best match: Hot`.
   - The thresholds/weights were calibrated against the full Scryfall oracle-card
     list: random pairs land around 0.16 (level 1), "same colors + card type" around
     0.54 (level 3), close creatures around 0.63 (level 4), near-reprints around

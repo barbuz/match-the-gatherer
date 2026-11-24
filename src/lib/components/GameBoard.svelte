@@ -13,7 +13,7 @@
   import { gatherHints, buildScryfallSearchUrl, buildScryfallQuery } from '../game/hints.js';
   import { analyzeGuesses, countMistakes } from '../game/consistency.js';
   import { revealHints } from '../game/reveal.js';
-  import { MATCH_LEVELS, scoreGuess } from '../game/scoring.js';
+  import { levelLabel, scoreGuess } from '../game/scoring.js';
   import { barCountFor } from '../game/barTarget.js';
   import GuessInput from './GuessInput.svelte';
   import GuessFeedback from './GuessFeedback.svelte';
@@ -308,7 +308,7 @@
         {#if state.status === 'won'}
           <h2>{state.hintsUsed?.length === 0 ? '🔮 Peerless!' : '🎉 You found it!'}</h2>
         {:else}
-          <h2>Best match {bestLevel}/{MATCH_LEVELS}</h2>
+          <h2>Best match: {levelLabel(bestLevel)}</h2>
         {/if}
         <p class="outcome-line">
           {state.status === 'won' ? 'Solved in' : 'Used'}

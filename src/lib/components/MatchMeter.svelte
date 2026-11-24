@@ -1,12 +1,12 @@
 <script>
-  /** Six-block match-level meter shown in each guess's feedback header. */
-  import { MATCH_LEVELS, levelLabel } from '../game/scoring.js';
+  /** Six-block heat meter shown in each guess's feedback header. */
+  import { MATCH_LEVELS, levelDescription, levelLabel } from '../game/scoring.js';
 
   export let level = 1;
 
   $: safe = Math.max(0, Math.min(MATCH_LEVELS, Number(level) || 0));
-  $: text = `${safe}/${MATCH_LEVELS}`;
-  $: title = `Match level ${text} — ${levelLabel(safe)}`;
+  $: label = levelLabel(safe);
+  $: title = `${label} — ${levelDescription(safe)}`;
 </script>
 
 <span class="match-meter" role="img" aria-label={title} {title}>
@@ -15,7 +15,7 @@
       <span class="block" class:on={i < safe}></span>
     {/each}
   </span>
-  <span class="level-text" aria-hidden="true">{text}</span>
+  <span class="level-text" aria-hidden="true">{label}</span>
 </span>
 
 <style>

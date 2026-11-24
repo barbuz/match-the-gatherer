@@ -41,17 +41,32 @@ const EMPTY_SQUARE = '⬜';
 
 const LEVEL_LABELS = [
   'No match',
-  'Barely related',
-  'Loose connection',
-  'Related',
-  'Close',
-  'Very close',
-  'Exact card',
+  'Cold',
+  'Cool',
+  'Warm',
+  'Hot',
+  'Blazing',
+  'Matched',
 ];
 
-/** Human-readable name for a match level (used in the meter's tooltip). */
+const LEVEL_DESCRIPTIONS = [
+  'No comparison available',
+  'Almost nothing in common',
+  'A faint connection',
+  "Shares the target's color or type family",
+  'Close on several properties',
+  'Nearly the same card',
+  'You found the target',
+];
+
+/** Human-readable name for a match level (shown in the meter). */
 export function levelLabel(level) {
   return LEVEL_LABELS[level] ?? LEVEL_LABELS[0];
+}
+
+/** One-line explanation for the meter's tooltip. */
+export function levelDescription(level) {
+  return LEVEL_DESCRIPTIONS[level] ?? LEVEL_DESCRIPTIONS[0];
 }
 
 // How much each property contributes to the aggregate. Type, colors and the

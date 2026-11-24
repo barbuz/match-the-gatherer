@@ -64,8 +64,11 @@
         <li>
           <strong>Read the feedback.</strong> Every property of your guess is compared against the target:
           green highlight means the value matches the target completely, means strikethrough means it isn't on the target at all,
-          and yellow highlights show which parts of your values hit. The six-block meter shows how closely
-          your guess matched overall (1–6; 6 is the actual card).
+          and yellow highlights show which parts of your values hit. The six-block heat meter runs
+          from <strong>Cold</strong> to <strong>Matched</strong>
+          (<strong>Cold</strong> → <strong>Cool</strong> → <strong>Warm</strong> → <strong>Hot</strong> →
+          <strong>Blazing</strong> → <strong>Matched</strong>); more filled blocks means closer, and
+          <strong>Matched</strong> is the actual card.
 
           <ul class="props">
             <li>Mana cost and mana value (MV)</li>
