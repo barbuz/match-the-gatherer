@@ -135,7 +135,10 @@ function hasColorField(card) {
 }
 
 function colorScore(guess, target) {
-  if (!hasColorField(guess) || !hasColorField(target)) return null;
+  const guessHas = hasColorField(guess);
+  const targetHas = hasColorField(target);
+  if (!guessHas && !targetHas) return null;
+  if (!guessHas || !targetHas) return 0;
   return jaccard(setOf(colorTokens(guess)), setOf(colorTokens(target)));
 }
 
@@ -145,7 +148,10 @@ function numberCloseness(a, b) {
 }
 
 function manaValueScore(guess, target) {
-  if (guess?.cmc == null || target?.cmc == null) return null;
+  const guessHas = guess?.cmc != null;
+  const targetHas = target?.cmc != null;
+  if (!guessHas && !targetHas) return null;
+  if (!guessHas || !targetHas) return 0;
   return numberCloseness(guess.cmc, target.cmc);
 }
 
@@ -166,7 +172,10 @@ function manaSymbols(card) {
 }
 
 function manaCostScore(guess, target) {
-  if (!hasManaCostField(guess) || !hasManaCostField(target)) return null;
+  const guessHas = hasManaCostField(guess);
+  const targetHas = hasManaCostField(target);
+  if (!guessHas && !targetHas) return null;
+  if (!guessHas || !targetHas) return 0;
   return diceMultiset(manaSymbols(guess), manaSymbols(target));
 }
 
@@ -226,20 +235,27 @@ const RARITY_RANK = { common: 0, uncommon: 1, rare: 2, mythic: 3, special: 2, bo
 function rarityScore(guess, target) {
   const a = RARITY_RANK[String(guess?.rarity ?? '').trim().toLowerCase()];
   const b = RARITY_RANK[String(target?.rarity ?? '').trim().toLowerCase()];
-  if (a == null || b == null) return null;
+  if (a == null && b == null) return null;
+  if (a == null || b == null) return 0;
   return 1 - Math.abs(a - b) / 3;
 }
 
 function releasedScore(guess, target) {
   const a = Date.parse(guess?.released_at ?? '');
   const b = Date.parse(target?.released_at ?? '');
-  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  const guessHas = !Number.isNaN(a);
+  const targetHas = !Number.isNaN(b);
+  if (!guessHas && !targetHas) return null;
+  if (!guessHas || !targetHas) return 0;
   // Eight-year half-life: the same era is a clue, decades apart is not.
   return 0.5 ** (Math.abs(a - b) / (86_400_000 * 365.25 * 8));
 }
 
 function layoutScore(guess, target) {
-  if (guess?.layout == null || target?.layout == null) return null;
+  const guessHas = guess?.layout != null;
+  const targetHas = target?.layout != null;
+  if (!guessHas && !targetHas) return null;
+  if (!guessHas || !targetHas) return 0;
   return guess.layout === target.layout ? 1 : 0;
 }
 
@@ -269,9 +285,9 @@ export function levelForScore(ratio) {
  * measured on its own scale — the whole type line, colors and keywords by set
  * overlap, numeric values (mana value, P/T, loyalty, date) by distance, mana
  * costs by symbol overlap (a light tiebreaker), and oracle text by word overlap.
- * Every property's weight stays in the denominator. A property absent from the
- * guess — or from both cards — contributes 0, so a guess is not divided by a
- * smaller total just because it lacks a property the target has.
+ * A property is compared when either card has it: a guess missing a property the
+ * target has contributes 0 while its weight stays in the denominator. If both
+ * cards lack the property, the property is skipped entirely.
  *
  * Returns `{ ratio, level }`; the UI shows the level, but the continuous ratio
  * is useful for tests and future tuning.
@@ -294,7 +310,8 @@ export function scoreGuess(guess, target) {
   let sum = 0;
   let total = 0;
   for (const [key, value] of Object.entries(parts)) {
-    sum += (value ?? 0) * WEIGHTS[key];
+    if (value == null) continue;
+    sum += value * WEIGHTS[key];
     total += WEIGHTS[key];
   }
   const ratio = total === 0 ? 0 : sum / total;

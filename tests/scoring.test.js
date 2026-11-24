@@ -196,20 +196,43 @@ describe('scoreGuess', () => {
     expect(scoreGuess({}, {}).level).toBe(1);
   });
 
-  it('keeps a property weight in the denominator when both cards lack it', () => {
+  it('ignores a property absent from both cards', () => {
     const keywordlessTarget = { ...target, keywords: [] };
     const missing = { ...keywordlessTarget, name: 'a', oracle_id: 'a' };
     const nonMatching = {
       ...keywordlessTarget,
       name: 'b',
       oracle_id: 'b',
-      keywords: ['Flying'],
+      keywords: ['Haste'],
     };
-    // Missing and non-matching both contribute 0 for keywords; neither may
-    // shrink the denominator by omitting the keyword weight.
-    expect(scoreGuess(missing, keywordlessTarget).ratio).toBeCloseTo(
+    // The keyword weight is skipped only when neither card has a keyword; a
+    // guess that adds a keyword the target lacks is still a mismatch.
+    expect(scoreGuess(missing, keywordlessTarget).ratio).toBeGreaterThan(
       scoreGuess(nonMatching, keywordlessTarget).ratio,
     );
+  });
+
+  it('keeps a property weight when the target has it and the guess does not', () => {
+    const keywordTarget = { ...target, keywords: ['Haste'] };
+    const missing = { ...keywordTarget, name: 'a', oracle_id: 'a', keywords: [] };
+    const matching = { ...keywordTarget, name: 'b', oracle_id: 'b' };
+    expect(scoreGuess(matching, keywordTarget).ratio).toBeGreaterThan(
+      scoreGuess(missing, keywordTarget).ratio,
+    );
+  });
+
+  it('treats a property present on only one card as a mismatch', () => {
+    const withoutCost = {
+      ...target,
+      name: 'a',
+      oracle_id: 'a',
+      mana_cost: undefined,
+      card_faces: undefined,
+    };
+    const withCost = { ...target, name: 'b', oracle_id: 'b' };
+    const missing = scoreGuess(withoutCost, target);
+    expect(missing.ratio).toBeLessThan(1);
+    expect(missing.ratio).toBeLessThan(scoreGuess(withCost, target).ratio);
   });
 });
 

@@ -194,11 +194,12 @@ Pitfalls that make this silently lie:
   colors and mana value; rarity, date and layout barely move the needle. The
   type score is one Jaccard over all supertype/type/subtype words, so sharing
   only `Creature` against `Creature — Beast` is 1/4, not a 0.6 baseline.
-  Every property's weight stays in the denominator. A property absent from the
-  guess — or from both cards — contributes 0 rather than shrinking the
-  denominator, so a keyword-less guess is not rewarded for skipping the keyword
-  weight (Llanowar Elves is not divided by a smaller total than Hundroog). The
-  aggregate still never reveals which individual properties exist on the target.
+  A property is counted when either card has it. A guess missing a property the
+  target has contributes 0 while its weight stays in the denominator, so a
+  keyword-less guess against a keyword target is not divided by a smaller total.
+  Only a property absent from both cards is skipped, so neither card is
+  penalised for a property neither has. The aggregate still never reveals which
+  individual properties exist on the target.
   `GuessFeedback`/`GameBoard`/`ShareSummary` all pass `targetCard` so the score can be
   computed at render time (results rows no longer carry enough info).
   - The continuous ratio is presented as **6 discrete match levels** (`MATCH_LEVELS`),
@@ -211,10 +212,11 @@ Pitfalls that make this silently lie:
     the one-line explanation. The lost-game heading prints the best tier, e.g.
     `Best match: Hot`.
   - The thresholds/weights were calibrated against the full Scryfall oracle-card
-    list: random pairs land around 0.16 (level 1), "same colors + card type" around
-    0.46 (level 3), close creatures around 0.55 (level 3), near-reprints around
-    0.72–0.75 (level 4); only the answer reaches 6. Retune the thresholds in
-    `levelForScore`/`WEIGHTS`, not the UI.
+    list: random pairs land around 0.17 (level 1), "same colors only" around 0.37
+    (level 2), "same colors + card type" around 0.48 (level 3), close creatures
+    around 0.57 (level 3), near-reprints around 0.84–0.99 (level 5); only the
+    answer reaches 6. Retune the thresholds in `levelForScore`/`WEIGHTS`, not the
+    UI.
   - The share bar has one block per level, drawn in that guess's count color
     (`SHARE_BLOCKS = MATCH_LEVELS`, deliberately independent of `MAX_GUESSES`). An
     unresolved count uses ⬛ for filled blocks so the level stays visible against the
