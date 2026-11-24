@@ -94,13 +94,6 @@ function facesOf(card) {
 
 const setOf = (values) => new Set(values ?? []);
 
-function jaccard(a, b) {
-  if (a.size === 0 && b.size === 0) return null;
-  let shared = 0;
-  for (const value of a) if (b.has(value)) shared += 1;
-  return shared / (a.size + b.size - shared);
-}
-
 /** Sørensen–Dice over two sets: 2|A∩B| / (|A|+|B|). */
 function diceSet(a, b) {
   if (a.size === 0 && b.size === 0) return null;
@@ -135,7 +128,7 @@ function typeLineWords(card) {
 }
 
 function typeScore(guess, target) {
-  return jaccard(typeLineWords(guess), typeLineWords(target));
+  return diceSet(typeLineWords(guess), typeLineWords(target));
 }
 
 function hasColorField(card) {
@@ -147,7 +140,7 @@ function colorScore(guess, target) {
   const targetHas = hasColorField(target);
   if (!guessHas && !targetHas) return null;
   if (!guessHas || !targetHas) return 0;
-  return jaccard(setOf(colorTokens(guess)), setOf(colorTokens(target)));
+  return diceSet(setOf(colorTokens(guess)), setOf(colorTokens(target)));
 }
 
 /** Closeness on a numeric axis: 1 at equal, roughly halving every 2 points. */
@@ -273,10 +266,11 @@ export function levelForScore(ratio) {
 /**
  * Score one guess against the target: a weighted mean of per-property
  * similarities. Unlike the old per-property token Dice, every property is
- * measured on its own scale — the whole type line, colors and keywords by set
- * overlap, numeric values (mana value, P/T, loyalty, date) by distance, mana
- * costs by symbol overlap (a light tiebreaker), and oracle text by Sørensen–Dice
- * over the displayed rules clauses (the same clause tokens the Oracle row renders).
+ * measured on its own scale — the whole type line, colors and keywords by
+ * Sørensen–Dice set overlap, numeric values (mana value, P/T, loyalty, date) by
+ * distance, mana costs by Sørensen–Dice over the symbol multiset (a light
+ * tiebreaker), and oracle text by Sørensen–Dice over the displayed rules clauses
+ * (the same clause tokens the Oracle row renders).
  * A property is compared when either card has it: a guess missing a property the
  * target has contributes 0 while its weight stays in the denominator. If both
  * cards lack the property, the property is skipped entirely.
@@ -293,7 +287,7 @@ export function scoreGuess(guess, target) {
     manaValue: manaValueScore(g, t),
     manaCost: manaCostScore(g, t),
     stats: statsScore(g, t),
-    keywords: jaccard(setOf(keywordTokens(g)), setOf(keywordTokens(t))),
+    keywords: diceSet(setOf(keywordTokens(g)), setOf(keywordTokens(t))),
     oracle: oracleScore(g, t),
     rarity: rarityScore(g, t),
     released: releasedScore(g, t),

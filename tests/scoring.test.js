@@ -153,7 +153,7 @@ describe('scoreGuess', () => {
   it('spreads close, related and distant cards across the lower levels', () => {
     expect(scoreGuess(near, target).level).toBe(4);
     expect(scoreGuess(related, target).level).toBe(4);
-    expect(scoreGuess(sameTypeOnly, target).level).toBe(2);
+    expect(scoreGuess(sameTypeOnly, target).level).toBe(3);
     expect(scoreGuess(colorsOnly, target).level).toBe(2);
     expect(scoreGuess(unrelated, target).level).toBe(1);
   });
@@ -211,6 +211,36 @@ describe('scoreGuess', () => {
       oracle_text: 'Shock deals 2 damage to any target.',
     };
     expect(scoreGuess(bolt, shock).ratio).toBe(0);
+  });
+
+  it('uses Sørensen–Dice for type, colors and keywords', () => {
+    const typeGuess = { name: 'a', oracle_id: 'a', type_line: 'Creature — Goblin Scout' };
+    const typeTarget = { name: 'b', oracle_id: 'b', type_line: 'Creature — Elf' };
+    expect(scoreGuess(typeGuess, typeTarget).ratio).toBeCloseTo(0.4);
+
+    const colorGuess = { name: 'c', oracle_id: 'c', colors: ['R'] };
+    const colorTarget = { name: 'd', oracle_id: 'd', colors: ['R', 'U'] };
+    expect(scoreGuess(colorGuess, colorTarget).ratio).toBeCloseTo(2 / 3);
+
+    const keywordGuess = {
+      name: 'e',
+      oracle_id: 'e',
+      oracle_text: 'Flying',
+      keywords: ['Flying'],
+    };
+    const keywordTarget = {
+      name: 'f',
+      oracle_id: 'f',
+      oracle_text: 'Flying, haste',
+      keywords: ['Flying', 'Haste'],
+    };
+    expect(scoreGuess(keywordGuess, keywordTarget).ratio).toBeCloseTo(2 / 3);
+  });
+
+  it('compares mana costs as a symbol multiset', () => {
+    const single = { name: 'a', oracle_id: 'a', mana_cost: '{U}' };
+    const double = { name: 'b', oracle_id: 'b', mana_cost: '{U}{U}' };
+    expect(scoreGuess(single, double).ratio).toBeCloseTo(2 / 3);
   });
 
   it('does not treat absent properties as a perfect match', () => {
