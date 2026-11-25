@@ -5,10 +5,12 @@ import {
   SHARE_BLOCKS,
   buildShareText,
   emojiBar,
+  formatShareText,
   levelDescription,
   levelForScore,
   levelLabel,
   scoreGuess,
+  shareSummary,
 } from '../src/lib/game/scoring.js';
 
 /** A real-shaped card so the metric's property weights are exercised. */
@@ -342,17 +344,31 @@ describe('buildShareText', () => {
     expect(rows[rows.length - 1]).not.toBe('https://example.com/');
   });
 
-  it('plain text keeps the header plain and appends the bare URL', () => {
+  it('is always markdown: the header links the app and no bare URL is appended', () => {
     const rows = buildShareText({
       dayKey: '2026-08-26',
       guesses: [{ card: lookalike }],
       url: 'https://example.com/',
       targetCard: target,
-      format: 'plaintext',
+      format: 'plaintext', // a stale caller cannot opt out of the link
     }).split('\n');
-    expect(rows[0]).toBe('Match the Gatherer 2026-08-26');
-    expect(rows).toHaveLength(3); // header + 1 bar + url
-    expect(rows[rows.length - 1]).toBe('https://example.com/');
+    expect(rows[0]).toBe('[Match the Gatherer 2026-08-26](https://example.com/)');
+    expect(rows).toHaveLength(2); // header + 1 bar
+    expect(rows[rows.length - 1]).not.toBe('https://example.com/');
+  });
+
+  it('renders the same block from the structured summary', () => {
+    const args = {
+      dayKey: '2026-08-26',
+      guesses: [{ card: lookalike }, { card: target }],
+      url: 'https://example.com/',
+      targetCard: target,
+      hintsUsed: [1],
+    };
+    const summary = shareSummary(args);
+    expect(summary.url).toBe('https://example.com/');
+    expect(summary.rows).toHaveLength(2);
+    expect(formatShareText(summary)).toBe(buildShareText(args));
   });
 
   it('falls back to a plain header when no URL is known', () => {
@@ -453,7 +469,23 @@ describe('buildShareText with the pre-revealed clue', () => {
     );
     expect(component).toContain('export let baseHints');
     // …and forwarded into the share text, not just declared.
-    const call = component.slice(component.indexOf('buildShareText({'));
+    const call = component.slice(component.indexOf('shareSummary({'));
     expect(call.slice(0, call.indexOf('})'))).toContain('baseHints');
+  });
+
+  it('renders the summary as centered, frameless markup with a real link', () => {
+    const component = readFileSync(
+      new URL('../src/lib/components/ShareSummary.svelte', import.meta.url),
+      'utf8',
+    );
+    // Markdown is the only form: no format toggle to switch away from the link.
+    expect(component).not.toContain('plaintext');
+    expect(component).not.toContain('aria-pressed');
+    // The header is an anchor, not a `[title](url)` string inside a <pre>.
+    expect(component).toContain('<a href={summary.url}>{summary.title}</a>');
+    expect(component).not.toContain('<pre');
+    // Centered and unframed.
+    expect(component).toMatch(/\.share \{[^}]*text-align: center/);
+    expect(component).not.toMatch(/\.share-text \{/);
   });
 });

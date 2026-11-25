@@ -390,9 +390,13 @@ Pitfalls that make this silently lie:
   mistakes", and `buildShareText` marks each share row ✅ or ⚠️ (a mistake,
   matching the yellow conflict accent on the feedback card)
   before the 🔮 hint marker instead of summarizing mistakes in the header. The
-  header itself carries only the day, and the share block has two formats —
-  `markdown` (default) links the header to the app, `plaintext` appends the bare
-  URL at the end. The per-guess result is recomputed from the persisted guesses, so
+  header itself carries only the day. The share block is markdown-only:
+  `scoring.js shareSummary()` returns `{ title, url, rows }` as data, and
+  `ShareSummary.svelte` renders it as markup — the header is a real `<a>` to the
+  app, one centered `<p>` per bar row, no box/frame — while `formatShareText()`
+  / `buildShareText()` flatten the same summary to `[title](url)` + rows for the
+  clipboard, so the copied text and the screen can never disagree. The per-guess
+  result is recomputed from the persisted guesses, so
   it needs no storage schema change and works on a reloaded daily game.
   - **`baseHints`**: both `analyzeGuesses`/`countMistakes` and `gatherHints` take
     an optional third/second argument of facts known *before guess 0*. It exists

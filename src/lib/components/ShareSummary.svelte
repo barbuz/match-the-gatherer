@@ -1,6 +1,6 @@
 <script>
   /** Emoji-bar share summary + copy to clipboard (spec §11). */
-  import { buildShareText } from '../game/scoring.js';
+  import { formatShareText, shareSummary } from '../game/scoring.js';
 
   export let guesses = []; // [{ card, results }]
   export let dayKey = '';
@@ -17,7 +17,6 @@
   export let revealCount = null;
 
   let copied = false;
-  let format = 'markdown';
 
   $: url = typeof location !== 'undefined' ? location.origin + location.pathname : '';
   // The last row ends the game, so its count is the fully-constrained one.
@@ -25,7 +24,16 @@
     revealCount != null && guesses.length > 0
       ? { ...hintCounts, [guesses.length - 1]: revealCount }
       : hintCounts;
-  $: shareText = buildShareText({ dayKey: dayKey || label, guesses, url, hintsUsed, targetCard, hintCounts: finalCounts, format, baseHints });
+  $: summary = shareSummary({
+    dayKey: dayKey || label,
+    guesses,
+    url,
+    hintsUsed,
+    targetCard,
+    hintCounts: finalCounts,
+    baseHints,
+  });
+  $: shareText = formatShareText(summary);
 
   async function copy() {
     try {
@@ -44,20 +52,17 @@
 </script>
 
 <div class="share">
-  <pre class="share-text">{shareText}</pre>
-  <div class="formats" role="group" aria-label="Share format">
-    <button
-      class="format"
-      class:active={format === 'markdown'}
-      aria-pressed={format === 'markdown'}
-      on:click={() => (format = 'markdown')}
-    >Markdown</button>
-    <button
-      class="format"
-      class:active={format === 'plaintext'}
-      aria-pressed={format === 'plaintext'}
-      on:click={() => (format = 'plaintext')}
-    >Plain text</button>
+  <p class="share-header">
+    {#if summary.url}
+      <a href={summary.url}>{summary.title}</a>
+    {:else}
+      {summary.title}
+    {/if}
+  </p>
+  <div class="share-rows" aria-label="Share result">
+    {#each summary.rows as row}
+      <p class="share-row">{row}</p>
+    {/each}
   </div>
   <button class="copy" on:click={copy}>{copied ? '✓ Copied' : 'Copy result'}</button>
 </div>
@@ -67,40 +72,30 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.5rem;
-    margin: 1rem 0;
-  }
-  .share-text {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.6rem 0.8rem;
-    font-size: 0.85rem;
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-width: 100%;
-    margin: 0;
-    text-align: left;
-  }
-  .formats {
-    display: flex;
     gap: 0.35rem;
+    margin: 1rem 0;
+    text-align: center;
   }
-  .format {
-    padding: 0.2rem 0.65rem;
-    font-size: 0.75rem;
-    border-radius: 999px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: inherit;
-    cursor: pointer;
+  .share-header {
+    margin: 0 0 0.15rem;
+    font-size: 0.9rem;
   }
-  .format.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
+  .share-header a {
+    color: var(--accent);
+  }
+  .share-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .share-row {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.3;
+    white-space: nowrap;
   }
   .copy {
+    margin-top: 0.4rem;
     padding: 0.4rem 1rem;
     border-radius: 8px;
     border: 1px solid var(--border);
