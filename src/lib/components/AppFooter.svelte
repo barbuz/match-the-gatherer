@@ -11,7 +11,7 @@
   <p class="foot__links">
     <a class="foot__brand" href={SITE} target="_blank" rel="noopener" aria-label="made by barbuz">
       <img class="foot__mark" src={BARBUZ_MARK} alt="" />
-      <span>made by <strong>arbuz</strong></span>
+      <span>made by <strong>barbuz</strong></span>
     </a>
     <span aria-hidden="true">·</span>
     <a href={REPO} target="_blank" rel="noopener">source ↗</a>
