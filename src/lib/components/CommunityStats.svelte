@@ -65,7 +65,9 @@
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.8rem;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
   }
   .head {
     color: var(--muted);

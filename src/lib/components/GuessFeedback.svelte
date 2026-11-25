@@ -149,6 +149,9 @@
   }
   .prop-label {
     flex: 0 0 7.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.01em;
     color: var(--muted);
   }
   .prop-label.absent {

@@ -3,17 +3,41 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Match the Gatherer — a daily Magic: The Gathering card guessing game" />
+    <meta
+      name="description"
+      content="A daily Magic: The Gathering card guessing game. One card, six guesses, everyone playing the same one."
+    />
+    <meta name="theme-color" content="#0a0e17" />
+    <meta name="apple-mobile-web-app-title" content="match the gatherer" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>Match the Gatherer</title>
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <title>match the gatherer</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+
     <script>
+      // Resolve the theme before first paint: no flash, and the shared palette
+      // is already on <html> when the first frame draws.
       (function () {
         var t = null;
-        try { t = localStorage.getItem('mtg:theme'); } catch (e) {}
+        try {
+          t = localStorage.getItem('mtg:theme');
+        } catch (e) {}
         if (t !== 'light' && t !== 'dark') {
-          t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          t =
+            window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light';
         }
         document.documentElement.dataset.theme = t;
+        document.documentElement.classList.add(t === 'dark' ? 'face--barbuz' : 'face--leo');
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', t === 'dark' ? '#0a0e17' : '#faf8f3');
       })();
     </script>
   </head>
