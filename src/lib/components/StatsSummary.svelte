@@ -40,11 +40,14 @@
     align-items: center;
   }
   .value {
-    font-size: 1.4rem;
-    font-weight: 700;
+    font-family: var(--font-mono);
+    font-size: 1.35rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
   .label {
-    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.64rem;
     color: var(--muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;

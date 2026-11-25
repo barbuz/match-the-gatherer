@@ -115,7 +115,10 @@
     flex: 1;
     min-width: 0;
     margin: 0;
+    font-family: var(--font-ui);
     font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0;
     overflow-wrap: anywhere;
   }
   .conflict-badge {
@@ -149,6 +152,9 @@
   }
   .prop-label {
     flex: 0 0 7.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.01em;
     color: var(--muted);
   }
   .prop-label.absent {

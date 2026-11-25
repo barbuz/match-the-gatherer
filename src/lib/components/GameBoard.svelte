@@ -287,7 +287,8 @@
     </div>
   {:else}
     <p class="hint">
-      Daily puzzle — {dayKey} (UTC)
+      <span class="hint__label">daily puzzle</span>
+      <span class="hint__date">{dayKey} (UTC)</span>
       {#if !gameOverVisible}
         · {remaining} {remaining === 1 ? 'guess' : 'guesses'} left
       {/if}
@@ -296,7 +297,7 @@
     {#if gameOverVisible}
       <div class="game-over">
         {#if state.status === 'won'}
-          <h2>{state.hintsUsed?.length === 0 ? '🔮 Peerless!' : '🎉 You found it!'}</h2>
+          <h2>{state.hintsUsed?.length === 0 ? 'Peerless.' : 'You found it.'}</h2>
         {:else}
           <h2>Best match: {levelLabel(bestLevel)}</h2>
         {/if}
@@ -379,7 +380,19 @@
   .hint {
     text-align: center;
     color: var(--muted);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
+  }
+  .hint__label {
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .hint__date {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
   }
   .hint-row {
     display: flex;

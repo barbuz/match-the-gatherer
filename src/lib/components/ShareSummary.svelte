@@ -128,7 +128,7 @@
     border-radius: 8px;
     border: 1px solid var(--border);
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-ink);
     cursor: pointer;
   }
 </style>

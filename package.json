@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "mock": "node scripts/mock-server.mjs"
+    "mock": "node scripts/mock-server.mjs",
+    "icons": "node scripts/gen-icons.mjs"
   },
   "dependencies": {
     "idb-keyval": "^6.2.1",

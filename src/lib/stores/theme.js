@@ -36,7 +36,14 @@ function createThemeStore() {
 }
 
 function apply(theme) {
-  if (typeof document !== 'undefined') document.documentElement.dataset.theme = theme;
+  if (typeof document !== 'undefined') {
+    const root = document.documentElement;
+    root.dataset.theme = theme;
+    root.classList.toggle('face--barbuz', theme === 'dark');
+    root.classList.toggle('face--leo', theme === 'light');
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#0a0e17' : '#faf8f3');
+  }
   try {
     localStorage.setItem(THEME_KEY, theme);
   } catch {

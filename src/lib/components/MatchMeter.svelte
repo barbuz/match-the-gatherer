@@ -24,7 +24,8 @@
     align-items: center;
     gap: 0.35rem;
     color: var(--muted);
-    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;

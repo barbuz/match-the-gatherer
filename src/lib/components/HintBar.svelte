@@ -121,8 +121,11 @@
   }
   .label {
     flex: 0 0 auto;
-    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
     font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
     color: var(--muted);
     white-space: nowrap;
     /* Match the track's height so the text is vertically centred on the bar. */

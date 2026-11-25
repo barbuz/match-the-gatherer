@@ -16,12 +16,12 @@ export default defineConfig({
       filename: 'service-worker.js',
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Match the Gatherer',
-        short_name: 'MtGatherer',
+        name: 'match the gatherer',
+        short_name: 'gatherer',
         description: 'A daily Magic: The Gathering card guessing game',
         display: 'standalone',
-        theme_color: '#12141a',
-        background_color: '#12141a',
+        theme_color: '#0a0e17',
+        background_color: '#0a0e17',
         icons: [
           { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },

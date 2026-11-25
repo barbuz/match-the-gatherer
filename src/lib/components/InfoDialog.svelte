@@ -8,11 +8,17 @@
 
   let open = false;
   let visible = false;
+  let dialogEl;
 
   function openModal() {
     open = true;
     visible = false;
-    requestAnimationFrame(() => (visible = true));
+    requestAnimationFrame(() => {
+      // Always start at the top: a reopened dialog can otherwise keep the
+      // scroll position from the last time it was shown.
+      if (dialogEl) dialogEl.scrollTop = 0;
+      visible = true;
+    });
   }
 
   function closeModal() {
@@ -29,7 +35,10 @@
 </script>
 
 <button class="info-btn" on:click={openModal} title="How to play" aria-label="How to play" aria-expanded={open}>
-  <span aria-hidden="true">ⓘ</span>
+  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5M12 8h.01" />
+  </svg>
 </button>
 
 {#if open}
@@ -39,7 +48,7 @@
     on:click|self={closeModal}
     on:keydown={onKeydown}
   >
-    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="info-title" aria-describedby="info-desc">
+    <div class="dialog" bind:this={dialogEl} role="dialog" aria-modal="true" aria-labelledby="info-title" aria-describedby="info-desc">
       <button class="close-btn" on:click={closeModal} aria-label="Close" title="Close (Esc)">×</button>
 
       <h2 id="info-title">How to play</h2>
@@ -63,7 +72,7 @@
         </li>
         <li>
           <strong>Read the feedback.</strong> Every property of your guess is compared against the target:
-          green highlight means the value matches the target completely, means strikethrough means it isn't on the target at all,
+          a green highlight means the value matches the target completely, a strikethrough means it isn't on the target at all,
           and yellow highlights show which parts of your values hit. The six-block heat meter runs
           from <strong>Cold</strong> to <strong>Matched</strong>
           (<strong>Cold</strong> → <strong>Cool</strong> → <strong>Warm</strong> → <strong>Hot</strong> →
@@ -73,7 +82,7 @@
           <ul class="props">
             <li>Mana cost and mana value (MV)</li>
             <li>Colors</li>
-            <li>Type line — supertypes, types,and subtypes</li>
+            <li>Type line — supertypes, types, and subtypes</li>
             <li>Power/toughness (creatures), loyalty (planeswalkers), defense (battles)</li>
             <li>Layout (e.g. double-faced)</li>
             <li>First release date (showing also if it's older or newer)</li>
@@ -86,12 +95,12 @@
           dividers showing what's older than, same day as, or newer than the target. Press <strong>Hint</strong> to
           open a Scryfall search for every card still matching everything you've learned so far — the bar
           beneath it colors how many cards are still in contention (blue for just one, through green,
-          yellow and orange, up to red for more than a thousand). The same colors mark each guess's row
+          yellow and orange, up to red for more than a thousand). The same colours mark each guess's row
           in the end-of-game summary.
 
         </li>
         <li>
-          <strong>Win,or reveal.</strong> Find the card in 6 tries to win; otherwise the target is revealed. At the end,
+          <strong>Win, or reveal.</strong> Find the card in 6 tries to win; otherwise the target is revealed. At the end,
           you can share your score as an emoji bar graph.
 
         </li>
@@ -113,7 +122,7 @@
 
       <div class="disclaimer" aria-label="Disclaimer and attribution">
         <p>
-          Match the Gatherer is unofficial Fan Content permitted under the Fan Content Policy. Not
+          match the gatherer is unofficial Fan Content permitted under the Fan Content Policy. Not
           approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the
           Coast. ©Wizards of the Coast LLC.
         </p>
@@ -160,12 +169,13 @@
   }
   .dialog {
     position: relative;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
     max-width: 32rem;
     width: 100%;
     max-height: 85vh;
     overflow-y: auto;
     background: var(--surface);
-    border: 1px solid var(--border);
     border-radius: 12px;
     padding: 1.2rem 1.4rem;
     transform: translateY(8px) scale(0.98);

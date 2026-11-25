@@ -49,7 +49,7 @@
     width: 1.35rem;
     height: 1.35rem;
     border-radius: 50%;
-    background: #23262b;
+    background: var(--surface-2);
     display: inline-flex;
     align-items: center;
     justify-content: center;
