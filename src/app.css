@@ -3,8 +3,9 @@
 /*
  * Match the Gatherer runs on the barbuz night palette by default, and on the
  * warm day palette when the player asks for light. The theme is a palette
- * switch only: the app keeps one type stack (Bricolage + JetBrains Mono) so it
- * reads as one app, not a flip between two sites.
+ * switch only: Bricolage carries the display voice, Instrument Sans the reading
+ * text, and JetBrains Mono the data, so it reads as one app, not a flip between
+ * two sites.
  *
  * `data-theme` drives colour-scheme; `face--barbuz` / `face--leo` (set by the
  * pre-paint script and the theme store) supply the shared colour variables.
@@ -13,6 +14,7 @@
 :root {
   --font-display: 'Bricolage Grotesque', system-ui, sans-serif;
   --font-body: 'Bricolage Grotesque', system-ui, sans-serif;
+  --font-ui: 'Instrument Sans', system-ui, sans-serif;
   --font-display-weight: 800;
 
   /* The app's older variable names, mapped onto the shared palette. */

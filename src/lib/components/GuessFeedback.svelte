@@ -115,7 +115,10 @@
     flex: 1;
     min-width: 0;
     margin: 0;
+    font-family: var(--font-ui);
     font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0;
     overflow-wrap: anywhere;
   }
   .conflict-badge {
