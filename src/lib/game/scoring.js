@@ -317,29 +317,27 @@ export function emojiBar(level, blocks = SHARE_BLOCKS, count = undefined) {
 }
 
 /**
- * Copy-pasteable share block: one emoji-bar row per guess, preceded by a header
- * naming the day. `targetCard` is needed to score each guess. Each row's filled
- * blocks encode that guess's match level (1–6) and are drawn in the guess's
- * Scryfall match-count color (from `hintCounts`) — the same color scheme as the
- * on-screen summary — or dark when the count never resolved. Every row ends
- * with a correctness marker: ⚠️ when the guess contradicted an earlier clue (a
- * mistake, see consistency.js) and ✅ otherwise, followed by the 🔮 marker when
- * a hint was used for that row. The warning sign matches the yellow accent that
- * flags the offending row on the guess's feedback card, so the share marker
- * points back at what the board highlighted.
+ * Share block as data: the day header (plus the app URL) and one emoji-bar row
+ * per guess. `buildShareText` flattens it for the clipboard; `ShareSummary`
+ * renders the header as a real link and the rows as centered lines.
  *
- * `format` picks the header/link style: `'markdown'` (default) turns the header
- * into a link to the app, while `'plaintext'` keeps a plain header and appends
- * the bare URL at the end.
+ * `targetCard` is needed to score each guess. Each row's filled blocks encode
+ * that guess's match level (1–6) and are drawn in the guess's Scryfall
+ * match-count color (from `hintCounts`) — the same color scheme as the on-screen
+ * summary — or dark when the count never resolved. Every row ends with a
+ * correctness marker: ⚠️ when the guess contradicted an earlier clue (a mistake,
+ * see consistency.js) and ✅ otherwise, followed by the 🔮 marker when a hint was
+ * used for that row. The warning sign matches the yellow accent that flags the
+ * offending row on the guess's feedback card, so the share marker points back at
+ * what the board highlighted.
  */
-export function buildShareText({
+export function shareSummary({
   dayKey,
   guesses,
   url,
   hintsUsed = [],
   targetCard,
   hintCounts = {},
-  format = 'markdown',
   baseHints = [],
 }) {
   const levels = guesses.map((g) => scoreGuess(g.card, targetCard).level);
@@ -348,12 +346,24 @@ export function buildShareText({
   // word would read ✅ here and ⚠️ on screen.
   const conflicts = analyzeGuesses(guesses, targetCard, baseHints);
   const used = new Set(hintsUsed ?? []);
-  const title = `Match the Gatherer ${dayKey}`;
-  const header = format === 'markdown' && url ? `[${title}](${url})` : title;
-  const rows = guesses.map((g, i) => {
-    const marker = conflicts[i]?.length ? ERROR_MARK : CORRECT_MARK;
-    const hint = used.has(i) ? HINT_MARK : '';
-    return `${emojiBar(levels[i], SHARE_BLOCKS, hintCounts?.[i])}${marker}${hint}`;
-  });
-  return (format === 'markdown' ? [header, ...rows] : [header, ...rows, url]).join('\n');
+  return {
+    title: `Match the Gatherer ${dayKey}`,
+    url: url ?? '',
+    rows: guesses.map((g, i) => {
+      const marker = conflicts[i]?.length ? ERROR_MARK : CORRECT_MARK;
+      const hint = used.has(i) ? HINT_MARK : '';
+      return `${emojiBar(levels[i], SHARE_BLOCKS, hintCounts?.[i])}${marker}${hint}`;
+    }),
+  };
+}
+
+/** Copy-pasteable form of a `shareSummary` result: markdown header linking the
+ * app, then one emoji-bar row per guess. */
+export function formatShareText({ title, url, rows }) {
+  const header = url ? `[${title}](${url})` : title;
+  return [header, ...rows].join('\n');
+}
+
+export function buildShareText(args) {
+  return formatShareText(shareSummary(args));
 }
