@@ -17,7 +17,10 @@
     ...Object.entries(byGuesses).map(([, v]) => (v?.plain ?? 0) + (v?.hint ?? 0)),
   );
   $: lost = stats?.lost ?? 0;
-  $: abandoned = stats?.abandoned ?? 0;
+  $: wins = Object.values(byGuesses).reduce(
+    (sum, v) => sum + (v?.plain ?? 0) + (v?.hint ?? 0),
+    0,
+  );
 </script>
 
 {#if stats}
@@ -48,9 +51,10 @@
       </tbody>
     </table>
     <p class="totals">
-      Everyone solved in N tries, worldwide. {lost} lost · {abandoned} abandoned.
-      <span class="legend">Solid = no hint · faded = used a hint.</span>
+      Worldwide today: <strong>{wins}</strong> solved{#if lost > 0} ·
+      {lost} ran out of guesses{/if}.
     </p>
+    <p class="legend">Solid bar = solved without a hint · faded = solved with a hint.</p>
   </div>
 {/if}
 
@@ -104,7 +108,13 @@
     font-size: 0.75rem;
     margin: 0.6rem 0 0;
   }
+  .totals strong {
+    color: var(--fg);
+    font-weight: 600;
+  }
   .legend {
-    margin-left: 0.5rem;
+    color: var(--muted);
+    font-size: 0.7rem;
+    margin: 0.15rem 0 0;
   }
 </style>
