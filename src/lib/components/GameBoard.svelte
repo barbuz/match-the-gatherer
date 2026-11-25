@@ -440,11 +440,6 @@
     text-align: center;
     margin-top: 1rem;
   }
-  .game-over h2 {
-    font-family: var(--font-ui);
-    font-weight: 600;
-    letter-spacing: -0.01em;
-  }
   .outcome-line {
     margin: 0.2rem 0 0.6rem;
     color: var(--muted);
