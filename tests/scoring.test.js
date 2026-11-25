@@ -371,6 +371,27 @@ describe('buildShareText', () => {
     expect(formatShareText(summary)).toBe(buildShareText(args));
   });
 
+  it('drops the link when includeLink is off', () => {
+    const args = {
+      dayKey: '2026-08-26',
+      guesses: [{ card: lookalike }],
+      url: 'https://example.com/',
+      targetCard: target,
+      includeLink: false,
+    };
+    const rows = buildShareText(args).split('\n');
+    expect(rows[0]).toBe('Match the Gatherer 2026-08-26');
+    expect(rows).toHaveLength(2); // header + 1 bar, the bare URL is not appended
+    expect(buildShareText(args)).not.toContain('https://example.com/');
+    // The structured form honours the same flag.
+    expect(formatShareText(shareSummary(args), { includeLink: false })).toBe(
+      buildShareText(args),
+    );
+    expect(formatShareText(shareSummary(args))).toContain(
+      '[Match the Gatherer 2026-08-26](https://example.com/)',
+    );
+  });
+
   it('falls back to a plain header when no URL is known', () => {
     const rows = buildShareText({ dayKey: 'd', guesses: [{ card: lookalike }], url: '', targetCard: target }).split('\n');
     expect(rows[0]).toBe('Match the Gatherer d');
@@ -487,5 +508,12 @@ describe('buildShareText with the pre-revealed clue', () => {
     // Centered and unframed.
     expect(component).toMatch(/\.share \{[^}]*text-align: center/);
     expect(component).not.toMatch(/\.share-text \{/);
+    // The bars are aligned as one block (a hint marker must not skew its row),
+    // while the block itself stays centered by the flex parent.
+    expect(component).toMatch(/\.share-rows \{[^}]*text-align: left/);
+    // "Include link" checkbox beside the copy button, checked by default.
+    expect(component).toContain('let includeLink = true');
+    expect(component).toContain('bind:checked={includeLink}');
+    expect(component).toContain('formatShareText(summary, { includeLink })');
   });
 });

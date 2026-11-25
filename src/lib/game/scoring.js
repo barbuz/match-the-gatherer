@@ -357,13 +357,14 @@ export function shareSummary({
   };
 }
 
-/** Copy-pasteable form of a `shareSummary` result: markdown header linking the
- * app, then one emoji-bar row per guess. */
-export function formatShareText({ title, url, rows }) {
-  const header = url ? `[${title}](${url})` : title;
+/** Copy-pasteable form of a `shareSummary` result: header, then one emoji-bar
+ * row per guess. The header links the app as markdown unless `includeLink` is
+ * off, in which case it is the bare title. */
+export function formatShareText({ title, url, rows }, { includeLink = true } = {}) {
+  const header = includeLink && url ? `[${title}](${url})` : title;
   return [header, ...rows].join('\n');
 }
 
-export function buildShareText(args) {
-  return formatShareText(shareSummary(args));
+export function buildShareText({ includeLink = true, ...args }) {
+  return formatShareText(shareSummary(args), { includeLink });
 }

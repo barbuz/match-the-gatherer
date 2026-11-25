@@ -17,6 +17,9 @@
   export let revealCount = null;
 
   let copied = false;
+  /** Checkbox beside the copy button: the on-screen header is always a link, but
+   * the copied markdown can drop it (a plain title reads better in some chats). */
+  let includeLink = true;
 
   $: url = typeof location !== 'undefined' ? location.origin + location.pathname : '';
   // The last row ends the game, so its count is the fully-constrained one.
@@ -33,7 +36,7 @@
     hintCounts: finalCounts,
     baseHints,
   });
-  $: shareText = formatShareText(summary);
+  $: shareText = formatShareText(summary, { includeLink });
 
   async function copy() {
     try {
@@ -64,7 +67,13 @@
       <p class="share-row">{row}</p>
     {/each}
   </div>
-  <button class="copy" on:click={copy}>{copied ? '✓ Copied' : 'Copy result'}</button>
+  <div class="share-actions">
+    <label class="include-link">
+      <input type="checkbox" bind:checked={includeLink} />
+      Include link
+    </label>
+    <button class="copy" on:click={copy}>{copied ? '✓ Copied' : 'Copy result'}</button>
+  </div>
 </div>
 
 <style>
@@ -83,10 +92,13 @@
   .share-header a {
     color: var(--accent);
   }
+  /* Rows are left-aligned inside a block that is itself centered, so a row with a
+     hint marker does not sit off-centre from the bars above it. */
   .share-rows {
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
+    text-align: left;
   }
   .share-row {
     margin: 0;
@@ -94,8 +106,24 @@
     line-height: 1.3;
     white-space: nowrap;
   }
-  .copy {
+  .share-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
     margin-top: 0.4rem;
+  }
+  .include-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .include-link input {
+    margin: 0;
+    cursor: pointer;
+  }
+  .copy {
     padding: 0.4rem 1rem;
     border-radius: 8px;
     border: 1px solid var(--border);

@@ -393,10 +393,18 @@ Pitfalls that make this silently lie:
   header itself carries only the day. The share block is markdown-only:
   `scoring.js shareSummary()` returns `{ title, url, rows }` as data, and
   `ShareSummary.svelte` renders it as markup — the header is a real `<a>` to the
-  app, one centered `<p>` per bar row, no box/frame — while `formatShareText()`
+  app, one `<p>` per bar row, no box/frame — while `formatShareText()`
   / `buildShareText()` flatten the same summary to `[title](url)` + rows for the
-  clipboard, so the copied text and the screen can never disagree. The per-guess
-  result is recomputed from the persisted guesses, so
+  clipboard, so the copied text and the screen can never disagree. The rows are
+  `text-align: left` inside a fit-content block that the flex parent centers, so
+  the bars share one left edge (a row ending in the 🔮 hint marker would
+  otherwise be centred on its own longer width and read as skewed); the block is
+  still centred on the page as a whole. An **Include link** checkbox beside the
+  copy button (checked by default) drops the markdown link from the *copied*
+  text only — `formatShareText(summary, { includeLink })` then emits the bare
+  `Match the Gatherer <date>` title. The on-screen header is always a link.
+
+  The per-guess result is recomputed from the persisted guesses, so
   it needs no storage schema change and works on a reloaded daily game.
   - **`baseHints`**: both `analyzeGuesses`/`countMistakes` and `gatherHints` take
     an optional third/second argument of facts known *before guess 0*. It exists
