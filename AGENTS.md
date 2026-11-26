@@ -217,6 +217,19 @@ Pitfalls that make this silently lie:
     `MatchMeter.svelte` plus the tier word (no `N/6` numbers); the tooltip carries
     the one-line explanation. The lost-game heading prints the best tier, e.g.
     `Best match: Hot`.
+  - The endgame heading comes from `game/endgame.js` `endgameMessage()`, with a
+    separate ladder per combination of hints and mistakes: clean
+    (Lucky guess → Peerless → Sharp → Clean sweep → Clutch → Last-guess hero),
+    mistakes only (This should be impossible → Almost perfect → Impressive →
+    Well done → You know your cards → You need no hint), hints only (Bullseye →
+    Quick → Neat → Precisely → Never didn't have it → Slow and steady), and both
+    (Impossible → Found it fast → There it is → You got there → Down to the wire
+    → Just in time). The 1-guess mistake rungs are unreachable, since the sole
+    guess cannot also contradict an earlier clue. A loss gets `Unlucky.`
+    (no mistakes), `Need a hint?` (no hints) or `Better luck next time.`
+    (hints and mistakes); the `Best match: <tier>` line stays as a subline under
+    that heading. All inputs — guesses, `countMistakes()` and `hintsUsed` — are
+    already on screen, so it leaks nothing.
   - The thresholds/weights were calibrated against the full Scryfall oracle-card
     list: random pairs land around 0.20 (level 1), "same colors only" around 0.34
     (level 2), "same colors + card type" around 0.50 (level 3), close creatures

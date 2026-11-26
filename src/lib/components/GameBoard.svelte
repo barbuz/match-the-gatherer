@@ -12,6 +12,7 @@
   import { createGame, MAX_GUESSES } from '../game/gameState.js';
   import { gatherHints, buildScryfallSearchUrl, buildScryfallQuery } from '../game/hints.js';
   import { analyzeGuesses, countMistakes } from '../game/consistency.js';
+  import { endgameMessage } from '../game/endgame.js';
   import { revealHints } from '../game/reveal.js';
   import { levelLabel, scoreGuess } from '../game/scoring.js';
   import { barCountFor } from '../game/barTarget.js';
@@ -193,6 +194,13 @@
   // guesses (no storage schema change). Indexed like `state.guesses`.
   $: conflictsByGuess = analyzeGuesses(state.guesses, targetCard, baseHints);
   $: mistakeCount = countMistakes(state.guesses, targetCard, baseHints);
+  $: endMessage = endgameMessage({
+    status: state.status,
+    guesses: state.guesses.length,
+    mistakes: mistakeCount,
+    hintsUsed: state.hintsUsed?.length ?? 0,
+    maxGuesses: MAX_GUESSES,
+  });
 
   onMount(() => {
     setup();
@@ -296,10 +304,9 @@
 
     {#if gameOverVisible}
       <div class="game-over">
-        {#if state.status === 'won'}
-          <h2>{state.hintsUsed?.length === 0 ? 'Peerless.' : 'You found it.'}</h2>
-        {:else}
-          <h2>Best match: {levelLabel(bestLevel)}</h2>
+        <h2>{endMessage}</h2>
+        {#if state.status === 'lost'}
+          <p class="best-match">Best match: {levelLabel(bestLevel)}</p>
         {/if}
         <p class="outcome-line">
           {state.status === 'won' ? 'Solved in' : 'Used'}
@@ -439,6 +446,11 @@
   .game-over {
     text-align: center;
     margin-top: 1rem;
+  }
+  .best-match {
+    margin: 0.15rem 0 0;
+    color: var(--muted);
+    font-size: 0.9rem;
   }
   .outcome-line {
     margin: 0.2rem 0 0.6rem;
