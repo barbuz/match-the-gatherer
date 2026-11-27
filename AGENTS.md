@@ -115,18 +115,16 @@ Pitfalls that make this silently lie:
     one chip per rules **clause** — with `{ break: true }` between printed lines.
     A line whose keyword was removed therefore renders no blank row, and a
     printed line break stays visible. A multi-faced guess joins its two faces'
-    keyword spans / rules clauses with a `{ sep: true, text: '//' }` segment, the
-    same face separator the type-line and mana rows use. In the wrapping oracle
-    row that separator is styled `display: block`, so it sits on its own line
-    between the two faces rather than landing mid-line. An oracle segment carries `text` (the
+    rules clauses with a `{ sep: true, text: '//' }` segment, the same face
+    separator the type-line and mana rows use. In the wrapping oracle row that
+    separator is styled `display: block`, so it sits on its own line between the
+    two faces rather than landing mid-line. An oracle segment carries `text` (the
     compared/hinted value, verbatim `{...}` braces in place) and `quotes` (the
     enclosing-quote marker, drawn as siblings just outside the frame). There is
     **no per-part muting**: a keyword that appears mid-rules-text (e.g.
     `Proliferate`) or a brace run (`{T}`) is an ordinary literal inside its
     clause chip and gets no distinct highlight — only
-    the whole chip is marked by status. A keyword segment carries `nameText` (the
-    canonical name) so only the name is marked as the token, not its printed
-    parameter; that muting is Keywords-row only. Both rows draw a **frame**
+    the whole chip is marked by status. Both rows draw a **frame**
     around each chip (the Oracle row wraps within the value column; it is no
     longer a dotted list). Oracle chips are `display: inline` with `box-decoration-break: slice`,
     so a token that wraps is framed **per line** — top/bottom on every line, the
@@ -140,19 +138,22 @@ Pitfalls that make this silently lie:
     oracle text with reminder spans removed, so the client and Scryfall index the
     same string. Square brackets are **not** reminder text (cleave text is
     indexed by `o:`), and an unmatched `)` stays literal.
-  - **Keywords** are extracted only from the *leading* keyword occurrence of
-    each line, using `card.keywords` as recognition **vocabulary** (longest name
-    first). Handles the comma-separated keyword list (`Flying, first strike`),
-    ability words (`Landfall — …`, where the dash and following space are
-    consumed but the rules text is kept verbatim), and keyword costs/parameters
-    (`Kicker {2}`, `Protection from red`, `Ward {2}`, `Equip legendary creature
-    {1}`). A comma ends a text parameter unless the keyword's value may contain
-    one (`Partner with Krav, the Unredeemed`). `card.keywords` is **not** the
-    printed list: entries like `Treasure`/`Food`/`Double`/`Monstrosity` never
-    appear as a leading keyword line, so they stay in the oracle text and emit
-    **no** `kw:` hint (gating rule). The Keywords row renders the printed span
-    verbatim (punctuation and parameters included) and compares by canonical
-    name, exactly as `kw:` matches, so `Kicker {2}` vs `{4}` is still correct.
+  - **Keywords** come straight from `card.keywords`: the Keywords row renders
+    that array unchanged (names joined by `, `) and compares each name against
+    the target's `card.keywords`, exactly as `kw:` matches. Every entry is
+    listed, including ones that never lead a printed line (`Treasure`, `Food`,
+    `Double`, `Monstrosity`, `Transform`), and each emits a `kw:` hint.
+  - The oracle text is parsed with `card.keywords` as recognition vocabulary
+    (longest name first) to strip only **bare** leading keyword occurrences
+    (`Flying, first strike`; an ability word like `Landfall — …` contributes only
+    its word, the following rules text stays). A keyword printed with a
+    parameter (`Enchant creature`, `Protection from red`, `Kicker {2}`,
+    `Ward {2}`, `Equip legendary creature {3}`) stays in the oracle text,
+    because the parameter is not covered by `card.keywords`; it is therefore
+    compared and hinted as an `o:` token too. A comma ends a text parameter
+    unless the keyword's value may contain one (`Partner with Krav, the
+    Unredeemed`). `parseOracleText`'s `keywords` output lists only the bare
+    spans removed from the rules text.
   - Hints: the oracle row uses `o:"<token>"` (positive keeps the answer,
     `-o:"<token>"` excludes only literal occurrences); the keywords row uses
     `kw:<canonical-name>` (lowercased, from `card.keywords`). Because a guessed
@@ -164,8 +165,8 @@ Pitfalls that make this silently lie:
     literal; the keywords row additionally carries `correctNames`/`wrongNames`
     for the hint values. `oracle` and `keywords` join `type`/`colors` as
     contains-match exceptions: negated hints survive a fully-matched row. The
-    rows render only when the guess has the property (text / a printed keyword),
-    so a text-less or keyword-less target is never leaked. Substring semantics are deliberate:
+    rows render only when the guess has the property (text / any
+    `card.keywords` entry), so a text-less or keyword-less target is never leaked. Substring semantics are deliberate:
     over-broad positives are harmless and
   negatives exclude only literal occurrences.
 - `catalog/card-names` needs `A-` prefix filtering (Alchemy-only cards. The

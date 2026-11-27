@@ -393,30 +393,29 @@ function parseKeywordPrefix(line, vocab) {
 }
 
 /**
- * Split one face's oracle text into the rules-text tokens and the printed
- * keyword spans shared by the feedback rows and the Scryfall hint search.
+ * Split one face's oracle text into the rules-text tokens shared by the
+ * feedback rows and the Scryfall hint search.
  *
  * Reminder `(...)` spans are stripped (depth-aware) and excluded from matching.
- * A leading keyword ability on each line is removed from the rules text and
- * returned separately, verbatim (punctuation and parameters included): the
- * comma/semicolon-separated keyword list, ability words (`Landfall — …`), and
- * keyword costs (`Kicker {2}`, `Protection from red`). The remaining rules text
- * is split into tokens at newlines, `:`, `.`, and `"` (see `ruleLineTokens`),
- * keeps `{...}` mana symbols and `[...]` spans opaque, and trims only the ends,
- * so every rules token is a verbatim substring of the stripped text — which is
- * exactly what Scryfall's `o:` indexes.
+ * A leading **bare** keyword on a line (`Flying`, `first strike`, an ability
+ * word like `Landfall — …`) is removed from the rules text. A keyword printed
+ * with a parameter (`Enchant creature`, `Protection from red`, `Kicker {2}`)
+ * stays in the rules text: its canonical name is carried by `card.keywords`,
+ * but the parameter is not, so removing the span would lose it. The remaining
+ * rules text is split into tokens at newlines, `:`, `.`, and `"` (see
+ * `ruleLineTokens`), keeps `{...}` mana symbols and `[...]` spans opaque, and
+ * trims only the ends, so every rules token is a verbatim substring of the
+ * stripped text — which is exactly what Scryfall's `o:` indexes.
  *
  * Returns `{ rules, keywords, segments, keywordSegments, rulesSegments }`:
- * `rules` is the ordered rules tokens, `keywords` the `{ text, name }` printed
- * keyword items, and the three `*segments` are display streams — `segments` the
- * full ordered display, `keywordSegments`/`rulesSegments` the Keywords and
- * Oracle-text rows separately. A keyword chip is one segment per printed
- * ability; each rules token is one segment, with `{ break: true }` between
- * printed lines so a row never renders a blank line where a keyword was removed
- * and a printed line break is always visible. An oracle segment carries the
- * compared/hinted `text` and a `quotes` marker (`'open'`/`'close'`/`'both'`/`''`)
- * so the UI can draw any enclosing quotes outside the token frame; nothing is
- * muted inside the chip.
+ * `rules` is the ordered rules tokens, `keywords` the `{ text, name }` bare
+ * keyword spans removed from them, and the three `*segments` are display
+ * streams — `segments` the full ordered display, `keywordSegments`/
+ * `rulesSegments` the removed-keyword and Oracle-text rows separately. Each
+ * rules token is one segment, with `{ break: true }` between printed lines. An
+ * oracle segment carries the compared/hinted `text` and a `quotes` marker
+ * (`'open'`/`'close'`/`'both'`/`''`) so the UI can draw any enclosing quotes
+ * outside the token frame; nothing is muted inside the chip.
  */
 export function parseOracleText(text = '', keywords = []) {
   const vocab = Array.isArray(keywords) ? [...keywords].sort((a, b) => b.length - a.length) : [];
@@ -428,17 +427,19 @@ export function parseOracleText(text = '', keywords = []) {
   const rulesSegments = [];
   for (const line of stripped.split('\n')) {
     const parsed = parseKeywordPrefix(line, vocab);
-    let remainder = line;
     const lineKeywords = [];
+    const ruleChunks = [];
     if (parsed) {
-      let prevEnd = 0;
       for (const item of parsed.items) {
-        const sep = line.slice(prevEnd, item.start);
-        if (sep) lineKeywords.push({ text: sep });
         const span = line.slice(item.start, item.end);
+        // A printed parameter (`creature`, `from red`, `{2}`) is not covered by
+        // the canonical keyword name, so keep that span in the oracle text.
+        if (item.end - item.start > item.name.length) {
+          ruleChunks.push(span);
+          continue;
+        }
         keywordItems.push({ text: span, name: item.name });
-        // Only the canonical name is the compared token; the printed parameter
-        // (`{2}{W}{U}{B}{R}{G}`, `from red`, …) is shown but not marked.
+        // Only the canonical name is the compared token.
         lineKeywords.push({
           text: span,
           token: true,
@@ -446,11 +447,13 @@ export function parseOracleText(text = '', keywords = []) {
           name: item.name,
           nameText: span.slice(0, item.name.length),
         });
-        prevEnd = item.end;
       }
-      remainder = line.slice(parsed.end);
+      const rest = line.slice(parsed.end);
+      if (rest) ruleChunks.push(rest);
+    } else {
+      ruleChunks.push(line);
     }
-    const lineRules = ruleLineTokens(remainder);
+    const lineRules = ruleChunks.flatMap((chunk) => ruleLineTokens(chunk));
     rules.push(...lineRules.map((r) => r.text));
     // One segment per token: the whole printed clause is the compared unit, so
     // it is framed as a single chip. `text` is the compared/hinted token; any
@@ -502,17 +505,22 @@ export function oracleTokens(card) {
   return out;
 }
 
-/** Printed keyword items for a whole card (union of faces), in reading order. */
+/** The card's own `card.keywords`, in Scryfall's order, as `{ text, name }`. */
 function keywordItems(card) {
-  const vocab = keywordVocabulary(card);
   const out = [];
-  for (const f of facesOf(card)) {
-    for (const k of parseOracleText(f.oracle_text ?? '', vocab).keywords) out.push(k);
+  const seen = new Set();
+  for (const k of Array.isArray(card?.keywords) ? card.keywords : []) {
+    const name = String(k ?? '').trim();
+    if (!name) continue;
+    const lower = name.toLocaleLowerCase();
+    if (seen.has(lower)) continue;
+    seen.add(lower);
+    out.push({ text: name, name });
   }
   return out;
 }
 
-/** Lowercased canonical keyword names actually printed on the card (deduplicated). */
+/** Lowercased canonical keyword names from `card.keywords` (deduplicated). */
 export function keywordTokens(card) {
   const out = [];
   const seen = new Set();
@@ -687,28 +695,26 @@ export function compareCards(guess, target) {
 
 
 
-  // Keywords row: only when the GUESS prints keyword abilities (anti-leak). The
-  // printed spans are compared by canonical-name membership, exactly as
-  // Scryfall's `kw:` matches, so parameters (`Kicker {2}` vs `{1}`) don't matter.
+  // Keywords row: the GUESS's own `card.keywords`, verbatim. Rendered only
+  // when the guess has any (anti-leak), and compared by canonical name against
+  // the target's `card.keywords`, exactly as Scryfall's `kw:` matches.
   const gKeywords = keywordItems(guess);
   if (gKeywords.length > 0) {
     const targetKeywords = new Set(keywordTokens(target));
     const segments = [];
-    for (const f of facesOf(guess)) {
-      const parsed = parseOracleText(f.oracle_text ?? '', keywordVocabulary(guess));
-      if (!parsed.keywordSegments.some((s) => s.token && s.kind === 'keyword')) continue;
-      if (segments.length > 0) segments.push({ sep: true, text: '//' });
-      // Keep the non-token separators (`, `) so the row reads exactly as
-      // printed, and colour only the keyword spans.
-      segments.push(...parsed.keywordSegments.map((s) => (
-        s.token && s.kind === 'keyword'
-          ? { ...s, status: targetKeywords.has(s.name.toLocaleLowerCase()) ? 'correct' : 'wrong' }
-          : s
-      )));
+    for (const k of gKeywords) {
+      if (segments.length > 0) segments.push({ text: ', ' });
+      segments.push({
+        text: k.text,
+        token: true,
+        kind: 'keyword',
+        name: k.name,
+        nameText: k.text,
+        status: targetKeywords.has(k.name.toLocaleLowerCase()) ? 'correct' : 'wrong',
+      });
     }
     const ok = (k) => targetKeywords.has(k.name.toLocaleLowerCase());
-    // Canonical names (lowercased) for `kw:` hints; the verbatim `text` is for
-    // display only, since `kw:` matches by name and ignores parameters.
+    // Canonical names (lowercased) for `kw:` hints; the `text` is for display.
     const correctNames = gKeywords.filter(ok).map((k) => k.name.toLocaleLowerCase());
     const wrongNames = gKeywords.filter((k) => !ok(k)).map((k) => k.name.toLocaleLowerCase());
     results.push(line('keywords', 'Keywords', segments, { correctNames, wrongNames }));

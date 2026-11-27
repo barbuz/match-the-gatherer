@@ -685,14 +685,14 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
     expect(hints).toContainEqual({ kind: 'keyword', value: 'haste', negated: true });
   });
 
-  it('does not emit kw: for vocabulary keywords that are not printed keyword lines', () => {
+  it('emits kw: for every card.keywords entry, even one that is not a printed keyword line', () => {
     const target = makeCard({ keywords: ['Treasure'], oracle_text: 'Create a Treasure token.' });
     const guess = makeCard({
       keywords: ['Treasure'],
       oracle_text: 'Create a Treasure token.',
     });
     const hints = gatherHints([guessEntry(guess, target)]);
-    expect(hints.some((h) => h.kind === 'keyword')).toBe(false);
+    expect(hints).toContainEqual({ kind: 'keyword', value: 'treasure', negated: false });
   });
 });
 
