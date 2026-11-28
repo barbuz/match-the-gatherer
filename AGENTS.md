@@ -50,6 +50,9 @@ Pitfalls that make this silently lie:
   the page can run the *previous* build (e.g. the production API) while you think
   you're testing the mock. Confirm by reading the mock's request log, not the UI.
 - The mock origin has no prior SW/cache, so a fresh origin is the cleanest.
+  **Restart the mock** after editing `src/lib/game/*` — `/mock/played` computes its
+  guesses' `compareCards` results with the module it imported at startup, so a
+  running server keeps serving rows built by the old code.
 
 ## Key facts
 
