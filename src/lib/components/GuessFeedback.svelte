@@ -110,9 +110,7 @@
         </span>
         {#if r.noteBold && !exactReleaseKnown}
           <span class="note"
-            >{r.noteLead}<strong>{r.noteBold}</strong>{#if releasedBound} than <span class="note-date"
-                >{releasedBound.value}</span
-              >{/if}</span
+            >{r.noteLead}<strong>{r.noteBold}</strong>{#if releasedBound}{` than ${releasedBound.value}`}{/if}</span
           >
         {:else if r.note && !exactReleaseKnown}
           <span class="note">{r.note}</span>
@@ -356,11 +354,7 @@
   }
   .note {
     font-size: 0.7rem;
-    color: var(--muted);
-    font-style: italic;
-  }
-
-  .note-date {
     color: var(--warn-fg);
+    font-style: italic;
   }
 </style>

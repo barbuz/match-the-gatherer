@@ -270,8 +270,9 @@ Pitfalls that make this silently lie:
   direction bold and no date of its own. The bound is spelled out only when the
   guess contradicts a clue already known — `GuessFeedback.svelte` finds the
   excluded `released` conflict and appends ``than <that clue's date>`` (the
-  *earlier guess's* date, i.e. the bound the guess broke), in the warning accent
-  but otherwise the note's italic muted style. Once an earlier guess pinned the
+  *earlier guess's* date, i.e. the bound the guess broke). The whole note is
+  italic in the warning accent (never muted grey), so the sentence reads as one
+  warning line. Once an earlier guess pinned the
   exact date, the sentence is dropped altogether — the dashed date chip already
   says it. `noteBold` is what `hints.js` turns into `date<` / `date>`.
 
