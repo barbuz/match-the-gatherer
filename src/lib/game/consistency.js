@@ -63,8 +63,8 @@ const ROW_OF_KIND = {
   oracle: 'oracle',
   mana: 'mana',
   manaValue: 'mana',
-  power: 'pt',
-  toughness: 'pt',
+  power: 'power',
+  toughness: 'toughness',
   loyalty: 'loyalty',
   layout: 'layout',
   rarity: 'rarity',
@@ -189,6 +189,93 @@ export function findGuessConflicts(card, hints) {
     conflicts.push({ kind, row, hint });
   }
   return conflicts;
+}
+
+const isDisplayedValue = (seg) => seg?.status === 'correct' || seg?.status === 'wrong';
+
+/** Does one displayed segment carry the exact value the hint rules out? */
+function segmentCarriesHint(seg, hint) {
+  if (!isDisplayedValue(seg)) return false;
+  const { text } = seg;
+  if (text == null) return false;
+  const value = hint.value;
+  switch (hint.kind) {
+    case 'keyword':
+      // `kw:` hints carry the canonical (lowercased) name; the segment keeps
+      // the printed span and the canonical name separately.
+      return lower(seg.name ?? text) === lower(value);
+    case 'type':
+    case 'color':
+    case 'oracle':
+    case 'layout':
+    case 'rarity':
+      return lower(text) === lower(value);
+    case 'mana':
+      if (text === NO_MANA_COST || value === NO_MANA_COST) return text === value;
+      return normalizeManaCost(text) === normalizeManaCost(value);
+    case 'power':
+    case 'toughness':
+    case 'loyalty': {
+      const v = statValue(text);
+      return v != null && v === statValue(value);
+    }
+    case 'released':
+      // The row shows exactly the guess's release date, which is the value on
+      // the wrong side of the bound (the hint carries the bound, not the date).
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Locate the displayed tokens that made a guess contradict an earlier clue, so
+ * the feedback can mark those tokens (not just the whole row).
+ *
+ * Returns an object keyed by row: `{ segments: Set, mv: Set, missing: Array }`,
+ * where `segments` / `mv` address that row's own `segments` / `mvValues` (an
+ * `excluded` conflict, i.e. a value the guess carries that a clue ruled out)
+ * and `missing` lists the clue's own values that the guess lacks
+ * (`{ kind, text }`, rendered as dashed warning chips because there is no
+ * guess token to mark). Every value comes from a hint the earlier feedback
+ * already exposed, so neither shape reveals anything new.
+ *
+ * @param {Array<{ key, segments, mvValues? }>} results  compareCards() output
+ * @param {Array<{ kind, row, hint }>} conflicts  findGuessConflicts() output
+ */
+export function conflictTokens(results, conflicts) {
+  const out = {};
+  const bucket = (row) => {
+    if (!out[row]) out[row] = { segments: new Set(), mv: new Set(), missing: [] };
+    return out[row];
+  };
+  for (const conflict of conflicts ?? []) {
+    const { kind, row, hint } = conflict;
+    if (!row) continue;
+    if (kind === 'missing') {
+      const text = hint?.display ?? hint?.value;
+      if (text == null || text === '') continue;
+      const entry = bucket(row);
+      if (!entry.missing.some((m) => m.kind === hint.kind && m.text === String(text))) {
+        entry.missing.push({ kind: hint.kind, text: String(text) });
+      }
+      continue;
+    }
+    if (kind !== 'excluded') continue;
+    const result = (results ?? []).find((r) => r.key === row);
+    if (!result) continue;
+    const entry = bucket(row);
+    if (hint.kind === 'manaValue') {
+      (result.mvValues ?? []).forEach((mv, i) => {
+        if (mv.text != null && String(mv.text) === String(hint.value)) entry.mv.add(i);
+      });
+      continue;
+    }
+    (result.segments ?? []).forEach((seg, i) => {
+      if (segmentCarriesHint(seg, hint)) entry.segments.add(i);
+    });
+  }
+  return out;
 }
 
 /**

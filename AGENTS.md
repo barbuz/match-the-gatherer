@@ -32,6 +32,13 @@ against production. Point the app at a local mock instead:
 3. Open the mock origin in the browser and play. Confirm counts, endgame
    summary, and — on reload of a finished game — a `GET /api/stats/<date>` read
    (not another `POST`).
+4. To inspect an **already-played** board (e.g. the token-level mistake marks)
+   without typing six guesses, open `http://127.0.0.1:<port>/mock/played` (also
+   linked from the control page). It computes each guess's `compareCards`
+   results with the real `src/lib/game/comparison.js`, then writes the finished
+   game + `mtg:stats` into this origin's IndexedDB and reloads the game. The
+   seeded match is a six-guess Sol Ring win whose five wrong guesses each
+   contradict the revealed `Artifact` clue.
 
 Pitfalls that make this silently lie:
 - **Serve the app from the mock origin itself**, not the dev/preview origin.
@@ -43,6 +50,9 @@ Pitfalls that make this silently lie:
   the page can run the *previous* build (e.g. the production API) while you think
   you're testing the mock. Confirm by reading the mock's request log, not the UI.
 - The mock origin has no prior SW/cache, so a fresh origin is the cleanest.
+  **Restart the mock** after editing `src/lib/game/*` — `/mock/played` computes its
+  guesses' `compareCards` results with the module it imported at startup, so a
+  running server keeps serving rows built by the old code.
 
 ## Key facts
 
@@ -97,11 +107,14 @@ Pitfalls that make this silently lie:
   parseOracleText`) feeds both rows and the hint URL, so what the player sees
   marked is exactly what the search filters on. It strips reminder text, splits
   each face's `oracle_text` into a **Keywords** stream and an **Oracle text**
-  stream, and splits the rules text into tokens at newlines, `:`, `.` and `"`
-  (`ruleLineTokens`). `{...}` mana symbols are **opaque** (a `.`/`:`/`"` inside
+  stream, and splits the rules text into tokens at newlines, `.` and `"`
+  (`ruleLineTokens`). `{...}` mana symbols are **opaque** (a `.`/`"` inside
   one never splits; Scryfall indexes braces literally, verified: `o:"Add {G}"`
   matches Llanowar Elves while `o:"Add G"` matches nothing) and `[...]` spans are
-  kept whole. A `:`/`.` **stays on the token it ends** (`{T}:`, `Add {G}.`); a
+  kept whole. A `:` is **not** a boundary: an activation cost stays with its
+  effect (`{3}, {T}: Draw a card.`), so the whole ability is the compared unit —
+  splitting the cost off made `{T}:` substring-match inside a different cost
+  (`{3}, {T}:`). A `.` **stays on the token it ends** (`Add {G}.`); a
   `"` splits but is **not part of any token**. Each segment records a `quotes`
   marker (`'open'`/`'close'`/`'both'`/`''`) from the quote's position (line start
   or after whitespace marks the following run, otherwise the preceding run), so
@@ -160,10 +173,14 @@ Pitfalls that make this silently lie:
     token can sit inside a longer target run, the oracle row matches by
     case-insensitive **substring** (mirroring `o:`) rather than whole-token
     equality, so a contained token reads correct instead of emitting a `-o:` that
-    would exclude the answer. `compareCards`' `correct`/`wrong` carry the
+    would exclude the answer. The compared unit is the whole ability (cost +
+    effect), so `{T}:` never becomes a token that could match inside `{3}, {T}:`.
+    `compareCards`' `correct`/`wrong` carry the
     **original-case** token (matching stays case-insensitive), since `o:` is
     literal; the keywords row additionally carries `correctNames`/`wrongNames`
-    for the hint values. `oracle` and `keywords` join `type`/`colors` as
+    for the hint values (each `kw:` hint also keeps `display`, the printed
+    casing, for the feedback chip; the clause uses `value`). `oracle` and
+    `keywords` join `type`/`colors` as
     contains-match exceptions: negated hints survive a fully-matched row. The
     rows render only when the guess has the property (text / any
     `card.keywords` entry), so a text-less or keyword-less target is never leaked. Substring semantics are deliberate:
@@ -192,7 +209,7 @@ Pitfalls that make this silently lie:
   a **weighted per-property similarity**, not a matched/applicable count:
   `scoring.js scoreGuess(guess, target)` compares each property on its own scale
   (the whole type line, colors and keywords by Sørensen–Dice set overlap; mana
-  value, P/T/loyalty/defense and release date by numeric distance; mana costs by
+  value, power/toughness/loyalty/defense and release date by numeric distance; mana costs by
   Sørensen–Dice over the symbol multiset; oracle text by Sørensen–Dice over the
   displayed rules clauses — the same clause tokens the Oracle row renders, with
   reminder text removed and keywords split into their own row) and takes a
@@ -247,6 +264,17 @@ Pitfalls that make this silently lie:
   share text consume) plus `status` are derived from the segments' statuses, so a row
   builder only describes what it renders. Plain rows (layout, released, rarity, the
   `—` placeholders) are just a single segment per value, so the UI has one render path.
+
+- The **First released** row carries a direction note (`comparison.js`
+  `releaseNote()`): the generic `target is older` / `target is newer`, with the
+  direction bold and no date of its own. The bound is spelled out only when the
+  guess contradicts a clue already known — `GuessFeedback.svelte` finds the
+  excluded `released` conflict and appends ``than <that clue's date>`` (the
+  *earlier guess's* date, i.e. the bound the guess broke). The whole note is
+  italic in the warning accent (never muted grey), so the sentence reads as one
+  warning line. Once an earlier guess pinned the
+  exact date, the sentence is dropped altogether — the dashed date chip already
+  says it. `noteBold` is what `hints.js` turns into `date<` / `date>`.
 
 - The **Colors** row is per-face **only when a face carries its own `colors`**.
   Scryfall omits the field from every face of the "combined" layouts (split,
@@ -398,11 +426,27 @@ Pitfalls that make this silently lie:
   a positive oracle hint is a whole rules clause, so treating the target's prose
   as a checklist would flag nearly every non-answer (`MISSING_KINDS`), whereas
   guessing a clause the target was shown not to contain is a real contradiction.
-  `GuessFeedback.svelte` accents the offending row and puts a ⚠️ badge by the
-  card name (no wording); the
+  `GuessFeedback.svelte` draws the conflict on the exact value, not just the
+  row: `consistency.js conflictTokens()` matches each hint per property
+  (type/color/keyword/oracle/layout/rarity by name, mana by normalized cost,
+  stats by coerced value, release date by direction) and returns, per row, the
+  guess's offending segments/`mv` (an **excluded** conflict) plus the clue's own
+  values the guess **lacks** (`missing`). Excluded tokens keep their
+  strike-through but take the warning accent (`--warn-fg`); a missing value is
+  drawn as a dashed warning chip at the end of its row (e.g. a revealed
+  `Artifact` under the guess's type line, or the known mana value beside a
+  different one — the chip is the bare value, the row already prints `MV`), so
+  the row shows *why* it broke the clue. A directional release-date clue is a
+  bound, not a value, so it only ever produces an `excluded` conflict (a guess
+  on the wrong side of it); only an exact known date yields a chip. The row and
+  the ⚠️ badge use the same
+  accent, and no wording is added — every shown value came from a green token on
+  an earlier card, so nothing leaks. `power` and `toughness` are separate
+  comparison rows (each with its own `pow=`/`tou=` hint), so a missing stat
+  cannot land on the wrong axis. The
   endgame block prints "Solved in N guesses with M
   mistakes", and `buildShareText` marks each share row ✅ or ⚠️ (a mistake,
-  matching the yellow conflict accent on the feedback card)
+  matching the mistake accent on the feedback card)
   before the 🔮 hint marker instead of summarizing mistakes in the header. The
   header itself carries only the day. The share block is markdown-only:
   `scoring.js shareSummary()` returns `{ title, url, rows }` as data, and

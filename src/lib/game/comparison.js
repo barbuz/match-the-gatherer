@@ -182,9 +182,14 @@ function braceEnd(text, i) {
 }
 
 /**
- * Split one rules line into display segments at `:`, `.`, and `"`, treating
- * `{...}` mana symbols as opaque so a `.`/`:`/`"` inside one never splits.
- * `[...]` spans are kept whole (Scryfall indexes cleave brackets under `o:`).
+ * Split one rules line into display segments at `.` and `"`, treating `{...}`
+ * mana symbols as opaque so a `.`/`"` inside one never splits. `[...]` spans
+ * are kept whole (Scryfall indexes cleave brackets under `o:`).
+ *
+ * A `:` is deliberately **not** a boundary: an activation cost stays with its
+ * effect (`{3}, {T}: Draw a card.`), so the whole ability is the compared unit.
+ * Splitting the cost off would let `{T}:` match inside a different cost
+ * (`{3}, {T}:`), lighting up an unrelated ability.
  *
  * A quote is a delimiter: it splits the line but is not part of any token (a
  * quote inside a quoted `o:"…"` clause would make Scryfall silently drop it).
@@ -192,7 +197,7 @@ function braceEnd(text, i) {
  * `'close'`, `'both'`, or `''`), determined by position — an opening quote
  * (line start or after whitespace) marks the following run, a closing quote
  * marks the preceding run. The UI renders those quotes outside the token frame.
- * A `:`/`.` terminator stays on the token it ends, so the token matches the
+ * A `.` terminator stays on the token it ends, so the token matches the
  * literal text Scryfall indexes. Segments with no letter/digit or below the
  * 2-char floor are dropped.
  */
@@ -218,7 +223,7 @@ function ruleLineTokens(line) {
       flush(i);
       atoms.push({ quote: true, at: i });
       start = i + 1;
-    } else if (ch === ':' || ch === '.') {
+    } else if (ch === '.') {
       flush(i + 1);
       start = i + 1;
     }
@@ -402,7 +407,7 @@ function parseKeywordPrefix(line, vocab) {
  * with a parameter (`Enchant creature`, `Protection from red`, `Kicker {2}`)
  * stays in the rules text: its canonical name is carried by `card.keywords`,
  * but the parameter is not, so removing the span would lose it. The remaining
- * rules text is split into tokens at newlines, `:`, `.`, and `"` (see
+ * rules text is split into tokens at newlines, `.`, and `"` (see
  * `ruleLineTokens`), keeps `{...}` mana symbols and `[...]` spans opaque, and
  * trims only the ends, so every rules token is a verbatim substring of the
  * stripped text — which is exactly what Scryfall's `o:` indexes.
@@ -627,23 +632,26 @@ function manaLine(key, label, guessCard, targetCard) {
   return { ...line(key, label, segments), mvValues: [mvValue] };
 }
 
-function statsLine(key, label, guessCard, targetCard) {
-  const gPower = scalarTokens(guessCard, 'power');
-  const gTough = scalarTokens(guessCard, 'toughness');
-  const tPower = new Set(scalarTokens(targetCard, 'power').map(statKey));
-  const tTough = new Set(scalarTokens(targetCard, 'toughness').map(statKey));
-  if (gPower.length + gTough.length === 0) return null;
+/**
+ * Direction sentence under the release-date row. It stays generic — the bound
+ * ("older than 2021-06-18") is only spelled out once a known clue is
+ * contradicted, which the UI learns from the conflicts, not from this
+ * comparison.
+ */
+function releaseNote(direction) {
+  if (!direction) return {};
+  return { note: `target is ${direction}`, noteBold: direction, noteLead: 'target is ' };
+}
+
+function statLine(key, label, guessCard, targetCard) {
+  if (scalarTokens(guessCard, key).length === 0) return null;
+  const tSet = new Set(scalarTokens(targetCard, key).map(statKey));
   const segments = joinFaces(facesOf(guessCard).map((f) => {
-    const p = f.power == null ? null : String(f.power);
-    const t = f.toughness == null ? null : String(f.toughness);
-    const segs = [];
-    if (p != null) segs.push({ text: p, status: tPower.has(statKey(p)) ? 'correct' : 'wrong' });
-    if (p != null && t != null) segs.push({ slash: true });
-    if (t != null) segs.push({ text: t, status: tTough.has(statKey(t)) ? 'correct' : 'wrong' });
-    return segs;
+    const v = f[key];
+    return v == null ? [] : [{ text: String(v), status: tSet.has(statKey(v)) ? 'correct' : 'wrong' }];
   }));
-  const absent = gPower.length + gTough.length > 0 && tPower.size === 0 && tTough.size === 0;
-  return line(key, label, segments, absent ? { absentOnTarget: true } : {});
+  if (segments.length === 0) return null;
+  return line(key, label, segments, tSet.size === 0 ? { absentOnTarget: true } : {});
 }
 
 function scalarRow(key, label, guessCard, targetCard, targetKey) {
@@ -666,8 +674,10 @@ export function compareCards(guess, target) {
   results.push(manaLine('mana', 'Mana cost', guess, target));
   results.push(colorLine('colors', 'Colors', guess, target));
   results.push(typeLine('type', 'Type', guess, target));
-  const stats = statsLine('pt', 'P/T', guess, target);
-  if (stats) results.push(stats);
+  const power = statLine('power', 'Power', guess, target);
+  if (power) results.push(power);
+  const toughness = statLine('toughness', 'Toughness', guess, target);
+  if (toughness) results.push(toughness);
   for (const key of ['loyalty', 'defense']) {
     const l = scalarRow(key, key === 'loyalty' ? 'Loyalty' : 'Defense', guess, target, key);
     if (l) results.push(l);
@@ -684,7 +694,7 @@ export function compareCards(guess, target) {
     line(
       'released', 'First released',
       [{ text: guess.released_at, status: sameDate ? 'correct' : 'wrong' }],
-      { note: direction ? `target is ${direction}` : undefined, noteBold: direction }
+      releaseNote(direction)
     )
   );
 

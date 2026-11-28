@@ -2,6 +2,7 @@
   /** Per-property feedback for one guess (spec §3). */
   import { manaParts, symbols } from '../api/symbology.js';
   import { scoreGuess } from '../game/scoring.js';
+  import { conflictTokens } from '../game/consistency.js';
   import MatchMeter from './MatchMeter.svelte';
 
   export let entry; // { card, results }
@@ -10,6 +11,16 @@
   export let conflicts = [];
 
   $: conflictRows = new Set(conflicts.map((c) => c.row).filter(Boolean));
+  // The tokens/values that connect this guess to an earlier clue, per row:
+  // `segments`/`mv` mark the guess's own offending values, `missing` lists the
+  // clue's values the guess lacks (drawn as dashed chips).
+  $: conflictMarks = conflictTokens(entry.results, conflicts);
+
+  // A release-date clue that this guess contradicts names its bound
+  // ("older than 2018-04-27"); a satisfied one stays generic.
+  $: releasedBound = conflicts.find((c) => c.kind === 'excluded' && c.hint?.kind === 'released')?.hint ?? null;
+  // Once an earlier guess pinned the exact date, the dashed chip says it all.
+  $: exactReleaseKnown = (conflictMarks.released?.missing ?? []).some((m) => m.kind === 'released');
 
   // `$symbols` is just a reactivity anchor — when the map finishes downloading
   // the store updates and any already-rendered mana rows re-render as images.
@@ -49,26 +60,26 @@
                    as printed on the card. Only the canonical name is the
                    compared token, so the parameter stays muted. -->
               <span class="keyword">
-                <span class="val keyword-name {seg.status}">{seg.nameText}</span>{#if seg.nameText.length < seg.text.length}<span class="keyword-param">{seg.text.slice(seg.nameText.length)}</span>{/if}
+                <span class="val keyword-name {seg.status}" class:mistake={conflictMarks[r.key]?.segments.has(i)}>{seg.nameText}</span>{#if seg.nameText.length < seg.text.length}<span class="keyword-param">{seg.text.slice(seg.nameText.length)}</span>{/if}
               </span>
             {:else if seg.kind === 'oracle'}
               <!-- One rules token = one compared chip, rendered verbatim: `{...}`
                    braces keep their printed position with no special highlight.
                    Any enclosing quotes are drawn outside the frame so the token
                    border hugs the text, not the quotes. -->
-              <span class="oracle-wrap">{#if seg.quotes === 'open' || seg.quotes === 'both'}<span class="oracle-quote">"</span>{/if}<span class="oracle-token {seg.status}">{seg.text}</span>{#if seg.quotes === 'close' || seg.quotes === 'both'}<span class="oracle-quote">"</span>{/if}</span>
+              <span class="oracle-wrap">{#if seg.quotes === 'open' || seg.quotes === 'both'}<span class="oracle-quote">"</span>{/if}<span class="oracle-token {seg.status}" class:mistake={conflictMarks[r.key]?.segments.has(i)}>{seg.text}</span>{#if seg.quotes === 'close' || seg.quotes === 'both'}<span class="oracle-quote">"</span>{/if}</span>
             {:else if seg.token}
               {#if $symbols && manaParts(seg.text)}
-                <span class="val mana {seg.status}">
+                <span class="val mana {seg.status}" class:mistake={conflictMarks[r.key]?.segments.has(i)}>
                   {#each manaParts(seg.text) as p, pi (pi)}
                     <img class="mana-img" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
                   {/each}
                 </span>
               {:else}
-                <span class="val {seg.status}">{seg.text}</span>
+                <span class="val {seg.status}" class:mistake={conflictMarks[r.key]?.segments.has(i)}>{seg.text}</span>
               {/if}
             {:else if seg.status}
-              <span class="val {seg.status}">{seg.text}</span>
+              <span class="val {seg.status}" class:mistake={conflictMarks[r.key]?.segments.has(i)}>{seg.text}</span>
             {:else}
               <span class="plain">{seg.text}</span>
             {/if}
@@ -79,18 +90,30 @@
                 <span class="pt-sep">,</span>
               {/if}
               <span class="prop-label mv-label">MV</span>
-              <span class="val {mv.status}">{mv.text}</span>
+              <span class="val {mv.status}" class:mistake={conflictMarks[r.key]?.mv.has(i)}>{mv.text}</span>
             {/each}
           {/if}
-        </span>
-        {#if r.note}
-          <span class="note">
-            {#if r.noteBold}
-              {r.note.replace(r.noteBold, '')}<strong>{r.noteBold}</strong>
+          {#each conflictMarks[r.key]?.missing ?? [] as m, mi (`m${mi}`)}
+            {#if m.kind === 'mana' && $symbols && manaParts(m.text)}
+              <span class="val mana missing" title="Mana cost known from an earlier clue: {m.text}">
+                {#each manaParts(m.text) as p, pi (pi)}
+                  <img class="mana-img" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
+                {/each}
+              </span>
             {:else}
-              {r.note}
+              <span
+                class="val missing"
+                title="{m.kind === 'manaValue' ? 'Mana value' : 'Value'} known from an earlier clue: {m.text}"
+              >{m.text}</span>
             {/if}
-          </span>
+          {/each}
+        </span>
+        {#if r.noteBold && !exactReleaseKnown}
+          <span class="note"
+            >{r.noteLead}<strong>{r.noteBold}</strong>{#if releasedBound}{` than ${releasedBound.value}`}{/if}</span
+          >
+        {:else if r.note && !exactReleaseKnown}
+          <span class="note">{r.note}</span>
         {/if}
       </div>
     {/each}
@@ -124,7 +147,7 @@
   .conflict-badge {
     margin-left: 0.3rem;
     /* Colour emoji ignore `color`, but the monochrome fallback (some Linux
-       fonts, headless browsers) then still reads as the yellow warning accent. */
+       fonts, headless browsers) then still reads as the warning accent. */
     color: var(--warn-fg);
   }
   /* A row the guess got wrong *and* that an earlier clue already ruled out. */
@@ -184,6 +207,28 @@
     color: var(--bad-fg);
     text-decoration: line-through;
   }
+  /* The exact token a clue already ruled out: it stays struck through (it is
+     wrong) but takes the warning accent instead of the plain red, so the
+     player can see which value broke the clue. */
+  .val.wrong.mistake,
+  .keyword-name.wrong.mistake,
+  .values.seg-values.oracle .oracle-token.wrong.mistake {
+    color: var(--warn-fg);
+    text-decoration-color: var(--warn-fg);
+  }
+  /* A value an earlier clue already established that this guess lacks: the same
+     warning accent, drawn as a dashed frame rather than a strike-through,
+     because the value is not printed on the guess. */
+  .values.seg-values .val.missing {
+    color: var(--warn-fg);
+    border: 1px dashed var(--warn-fg);
+    border-radius: 4px;
+    padding: 0 0.25rem;
+    background: transparent;
+  }
+  .values.seg-values .val.missing.mana {
+    padding: 0.15rem 0.3rem;
+  }
   .val.mana {
     display: inline-flex;
     align-items: center;
@@ -216,8 +261,11 @@
     transform: translateY(-50%);
     pointer-events: none;
   }
-  /* Segments rows phrase values in order:the type line like the card
-     ("Supertypes Types — Subtypes"),the P/T row as "3/2". */
+  .val.wrong.mana.mistake::after {
+    background: var(--warn-fg);
+  }
+  /* Segments rows phrase values in order: the type line like the card
+     ("Supertypes Types — Subtypes"), each Power/Toughness row as one value. */
   .values.seg-values {
     gap: 0.3em;
     align-items: baseline;
@@ -306,7 +354,7 @@
   }
   .note {
     font-size: 0.7rem;
-    color: var(--muted);
+    color: var(--warn-fg);
     font-style: italic;
   }
 </style>
