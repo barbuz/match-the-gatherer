@@ -417,16 +417,15 @@ describe('compareCards — release date and oracle text', () => {
     ]);
   });
 
-  it('splits a line at the colon, keeping braced symbols inline', () => {
+  it('keeps an activation cost with its effect as one token', () => {
     const guess = makeCard({ oracle_text: 'Add {G}: draw a card' });
     const target = makeCard({ oracle_text: 'Add {G}: draw a card' });
     const line = byKey(compareCards(guess, target), 'oracle');
     expect(line.status).toBe('correct');
-    expect(line.correct).toEqual(['Add {G}:', 'draw a card']);
+    expect(line.correct).toEqual(['Add {G}: draw a card']);
     expect(line.wrong).toEqual([]);
     expect(line.segments).toEqual([
-      { text: 'Add {G}:', token: true, kind: 'oracle', quotes: '', status: 'correct' },
-      { text: 'draw a card', token: true, kind: 'oracle', quotes: '', status: 'correct' },
+      { text: 'Add {G}: draw a card', token: true, kind: 'oracle', quotes: '', status: 'correct' },
     ]);
   });
 
@@ -435,8 +434,37 @@ describe('compareCards — release date and oracle text', () => {
     const target = makeCard({ oracle_text: 'Add {2}{W/U}: storm and more.' });
     const line = byKey(compareCards(guess, target), 'oracle');
     expect(line.status).toBe('correct');
-    expect(line.correct).toEqual(['ADD {2}{W/U}:', 'STORM']);
+    expect(line.correct).toEqual(['ADD {2}{W/U}: STORM']);
     expect(line.wrong).toEqual([]);
+  });
+
+  it('compares a whole ability, so a cost is never matched inside a different one', () => {
+    // Regression: `{T}:` used to be split off as its own clause and then
+    // substring-matched inside the target's `{3}, {T}:`, lighting up an
+    // unrelated ability. The activation cost now stays with its effect, so the
+    // whole ability is the compared (and hinted) unit in both directions.
+    const liquimetal = makeCard({
+      name: 'Liquimetal Coating',
+      oracle_text: '{T}: Target permanent becomes an artifact in addition to its other types until end of turn.',
+    });
+    const cellar = makeCard({
+      name: 'Cellar Door',
+      oracle_text: "{3}, {T}: Target player puts the bottom card of their library into their graveyard. If it's a creature card, you create a 2/2 black Zombie creature token.",
+    });
+    const liquimetalAbility = 'Target permanent becomes an artifact in addition to its other types until end of turn.';
+    const cellarCostAbility = 'Target player puts the bottom card of their library into their graveyard.';
+    const cellarToken = `{3}, {T}: ${cellarCostAbility}`;
+    const cellarIf = "If it's a creature card, you create a 2/2 black Zombie creature token.";
+
+    const forward = byKey(compareCards(liquimetal, cellar), 'oracle');
+    expect(forward.status).toBe('wrong');
+    expect(forward.correct).toEqual([]);
+    expect(forward.wrong).toEqual([`{T}: ${liquimetalAbility}`]);
+
+    const reverse = byKey(compareCards(cellar, liquimetal), 'oracle');
+    expect(reverse.status).toBe('wrong');
+    expect(reverse.correct).toEqual([]);
+    expect(reverse.wrong).toEqual([cellarToken, cellarIf]);
   });
 
   it('ignores reminder text for matching, including nested parentheses', () => {
@@ -564,8 +592,7 @@ describe('compareCards — keywords', () => {
     // The cost is a parameter, so it stays in the oracle row too.
     const oracle = byKey(compareCards(guess, target), 'oracle');
     expect(oracle.correct).toEqual([
-      ', Discard this card:',
-      'Draw a card.',
+      ', Discard this card: Draw a card.',
     ]);
     expect(oracle.wrong).toEqual(['Channel — {6}']);
   });
@@ -612,7 +639,7 @@ describe('compareCards — keywords', () => {
     });
     const results = compareCards(card, card);
     expect(byKey(results, 'keywords').correct).toEqual(['Monstrosity']);
-    expect(byKey(results, 'oracle').correct).toEqual(['{5}{B}{G}:', 'Monstrosity 4.']);
+    expect(byKey(results, 'oracle').correct).toEqual(['{5}{B}{G}: Monstrosity 4.']);
   });
 });
 
@@ -856,8 +883,8 @@ describe('parseOracleText', () => {
       .toEqual(['Destroy target artifact.']);
   });
 
-  it('splits on the colon and keeps braced mana symbols opaque', () => {
-    expect(rulesOf('{T}: Add {G}.')).toEqual(['{T}:', 'Add {G}.']);
+  it('keeps an activation cost with its effect, and braced mana symbols opaque', () => {
+    expect(rulesOf('{T}: Add {G}.')).toEqual(['{T}: Add {G}.']);
     expect(rulesOf('Add {2}{W/U}')).toEqual(['Add {2}{W/U}']);
   });
 
@@ -873,8 +900,7 @@ describe('parseOracleText', () => {
   it('renders the whole clause verbatim, braces and all', () => {
     const { segments } = parseOracleText('{T}: Add {G}.', []);
     expect(segments.filter((s) => s.token)).toEqual([
-      { text: '{T}:', token: true, kind: 'oracle', quotes: '' },
-      { text: 'Add {G}.', token: true, kind: 'oracle', quotes: '' },
+      { text: '{T}: Add {G}.', token: true, kind: 'oracle', quotes: '' },
     ]);
   });
 
@@ -934,7 +960,7 @@ describe('parseOracleText', () => {
       ['Channel'],
     );
     expect(channel.keywords).toEqual([]);
-    expect(channel.rules).toEqual(['Channel — {6}', ', Discard this card:', 'Draw a card.']);
+    expect(channel.rules).toEqual(['Channel — {6}', ', Discard this card: Draw a card.']);
   });
 
   it('keeps text-parameter keywords in the rules text', () => {
@@ -997,8 +1023,7 @@ describe('parseOracleText', () => {
     const parsed = parseOracleText(text, ['Proliferate']);
     expect(parsed.keywords).toEqual([]);
     expect(parsed.rules).toEqual([
-      '0:',
-      'You draw a card and lose 1 life.',
+      '0: You draw a card and lose 1 life.',
       'Proliferate.',
     ]);
     const seg = parsed.rulesSegments.find((s) => s.token && s.text === 'Proliferate.');
@@ -1010,12 +1035,12 @@ describe('parseOracleText', () => {
     const { rulesSegments } = parseOracleText(text, []);
     const tokens = rulesSegments.filter((s) => s.token);
     // The brace run stays verbatim inside its clause token; only the whole chip
-    // is marked, with no special brace highlight. The `:` still splits the
-    // clause, as for any rules text. Quotes are metadata, not part of the token.
+    // is marked, with no special brace highlight. The `:` stays inside the
+    // activation-cost clause, as for any rules text. Quotes are metadata, not
+    // part of the token.
     expect(tokens[0]).toMatchObject({ text: 'Target creature becomes a Treasure artifact with', quotes: '' });
-    expect(tokens[1]).toMatchObject({ text: '{T}, Sacrifice this artifact:', quotes: 'open' });
-    expect(tokens[2]).toMatchObject({ text: 'Add one mana of any color', quotes: 'close' });
-    expect(tokens[3]).toMatchObject({ text: 'and loses all other card types.', quotes: '' });
+    expect(tokens[1]).toMatchObject({ text: '{T}, Sacrifice this artifact: Add one mana of any color', quotes: 'both' });
+    expect(tokens[2]).toMatchObject({ text: 'and loses all other card types.', quotes: '' });
   });
 
   it('frames each clause as its own segment, with quotes as outside-frame metadata', () => {

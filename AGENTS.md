@@ -97,11 +97,14 @@ Pitfalls that make this silently lie:
   parseOracleText`) feeds both rows and the hint URL, so what the player sees
   marked is exactly what the search filters on. It strips reminder text, splits
   each face's `oracle_text` into a **Keywords** stream and an **Oracle text**
-  stream, and splits the rules text into tokens at newlines, `:`, `.` and `"`
-  (`ruleLineTokens`). `{...}` mana symbols are **opaque** (a `.`/`:`/`"` inside
+  stream, and splits the rules text into tokens at newlines, `.` and `"`
+  (`ruleLineTokens`). `{...}` mana symbols are **opaque** (a `.`/`"` inside
   one never splits; Scryfall indexes braces literally, verified: `o:"Add {G}"`
   matches Llanowar Elves while `o:"Add G"` matches nothing) and `[...]` spans are
-  kept whole. A `:`/`.` **stays on the token it ends** (`{T}:`, `Add {G}.`); a
+  kept whole. A `:` is **not** a boundary: an activation cost stays with its
+  effect (`{3}, {T}: Draw a card.`), so the whole ability is the compared unit —
+  splitting the cost off made `{T}:` substring-match inside a different cost
+  (`{3}, {T}:`). A `.` **stays on the token it ends** (`Add {G}.`); a
   `"` splits but is **not part of any token**. Each segment records a `quotes`
   marker (`'open'`/`'close'`/`'both'`/`''`) from the quote's position (line start
   or after whitespace marks the following run, otherwise the preceding run), so
@@ -160,7 +163,9 @@ Pitfalls that make this silently lie:
     token can sit inside a longer target run, the oracle row matches by
     case-insensitive **substring** (mirroring `o:`) rather than whole-token
     equality, so a contained token reads correct instead of emitting a `-o:` that
-    would exclude the answer. `compareCards`' `correct`/`wrong` carry the
+    would exclude the answer. The compared unit is the whole ability (cost +
+    effect), so `{T}:` never becomes a token that could match inside `{3}, {T}:`.
+    `compareCards`' `correct`/`wrong` carry the
     **original-case** token (matching stays case-insensitive), since `o:` is
     literal; the keywords row additionally carries `correctNames`/`wrongNames`
     for the hint values. `oracle` and `keywords` join `type`/`colors` as
@@ -398,11 +403,16 @@ Pitfalls that make this silently lie:
   a positive oracle hint is a whole rules clause, so treating the target's prose
   as a checklist would flag nearly every non-answer (`MISSING_KINDS`), whereas
   guessing a clause the target was shown not to contain is a real contradiction.
-  `GuessFeedback.svelte` accents the offending row and puts a ⚠️ badge by the
-  card name (no wording); the
+  `GuessFeedback.svelte` marks the exact token that carried the ruled-out value
+  (`consistency.js conflictTokens()`, matched per property: type/color/keyword/
+  oracle/layout/rarity by name, mana by normalized cost, stats by coerced value,
+  release date by direction) in a **subdued** amber — `--mistake-fg`, the accent
+  yellow pulled toward `--muted` — keeping the strike-through, and accents the
+  row and the ⚠️ badge in the same colour (a `missing` conflict has no token on
+  the guess, so only the row is accented). No wording is added; the
   endgame block prints "Solved in N guesses with M
   mistakes", and `buildShareText` marks each share row ✅ or ⚠️ (a mistake,
-  matching the yellow conflict accent on the feedback card)
+  matching the mistake accent on the feedback card)
   before the 🔮 hint marker instead of summarizing mistakes in the header. The
   header itself carries only the day. The share block is markdown-only:
   `scoring.js shareSummary()` returns `{ title, url, rows }` as data, and

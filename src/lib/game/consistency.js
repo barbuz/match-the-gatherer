@@ -191,6 +191,81 @@ export function findGuessConflicts(card, hints) {
   return conflicts;
 }
 
+const isDisplayedValue = (seg) => seg?.status === 'correct' || seg?.status === 'wrong';
+
+/** Does one displayed segment carry the exact value the hint rules out? */
+function segmentCarriesHint(seg, hint) {
+  if (!isDisplayedValue(seg)) return false;
+  const { text } = seg;
+  if (text == null) return false;
+  const value = hint.value;
+  switch (hint.kind) {
+    case 'keyword':
+      // `kw:` hints carry the canonical (lowercased) name; the segment keeps
+      // the printed span and the canonical name separately.
+      return lower(seg.name ?? text) === lower(value);
+    case 'type':
+    case 'color':
+    case 'oracle':
+    case 'layout':
+    case 'rarity':
+      return lower(text) === lower(value);
+    case 'mana':
+      if (text === NO_MANA_COST || value === NO_MANA_COST) return text === value;
+      return normalizeManaCost(text) === normalizeManaCost(value);
+    case 'power':
+    case 'toughness':
+    case 'loyalty': {
+      const v = statValue(text);
+      return v != null && v === statValue(value);
+    }
+    case 'released':
+      // The row shows exactly the guess's release date, which is the value on
+      // the wrong side of the bound (the hint carries the bound, not the date).
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Locate the displayed tokens that made a guess contradict an earlier clue, so
+ * the feedback can mark those tokens (not just the whole row).
+ *
+ * Returns an object keyed by row: `{ segments: Set, mv: Set }`, where the
+ * indices address that row's `segments` / `mvValues`. Only `excluded` conflicts
+ * carry a value on the guess; a `missing` conflict means the guess lacks the
+ * value by definition, so it contributes no token (the row accent covers it).
+ *
+ * @param {Array<{ key, segments, mvValues? }>} results  compareCards() output
+ * @param {Array<{ kind, row, hint }>} conflicts  findGuessConflicts() output
+ */
+export function conflictTokens(results, conflicts) {
+  const out = {};
+  const bucket = (row) => {
+    if (!out[row]) out[row] = { segments: new Set(), mv: new Set() };
+    return out[row];
+  };
+  for (const conflict of conflicts ?? []) {
+    if (conflict.kind !== 'excluded') continue;
+    const { row, hint } = conflict;
+    if (!row) continue;
+    const result = (results ?? []).find((r) => r.key === row);
+    if (!result) continue;
+    const entry = bucket(row);
+    if (hint.kind === 'manaValue') {
+      (result.mvValues ?? []).forEach((mv, i) => {
+        if (mv.text != null && String(mv.text) === String(hint.value)) entry.mv.add(i);
+      });
+      continue;
+    }
+    (result.segments ?? []).forEach((seg, i) => {
+      if (segmentCarriesHint(seg, hint)) entry.segments.add(i);
+    });
+  }
+  return out;
+}
+
 /**
  * Conflicts for every guess, keyed by guess index. Guess *i* is checked against
  * the hints distilled from guesses `0..i-1` only, so the first guess can never

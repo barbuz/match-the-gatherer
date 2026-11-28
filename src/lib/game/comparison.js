@@ -182,9 +182,14 @@ function braceEnd(text, i) {
 }
 
 /**
- * Split one rules line into display segments at `:`, `.`, and `"`, treating
- * `{...}` mana symbols as opaque so a `.`/`:`/`"` inside one never splits.
- * `[...]` spans are kept whole (Scryfall indexes cleave brackets under `o:`).
+ * Split one rules line into display segments at `.` and `"`, treating `{...}`
+ * mana symbols as opaque so a `.`/`"` inside one never splits. `[...]` spans
+ * are kept whole (Scryfall indexes cleave brackets under `o:`).
+ *
+ * A `:` is deliberately **not** a boundary: an activation cost stays with its
+ * effect (`{3}, {T}: Draw a card.`), so the whole ability is the compared unit.
+ * Splitting the cost off would let `{T}:` match inside a different cost
+ * (`{3}, {T}:`), lighting up an unrelated ability.
  *
  * A quote is a delimiter: it splits the line but is not part of any token (a
  * quote inside a quoted `o:"…"` clause would make Scryfall silently drop it).
@@ -192,7 +197,7 @@ function braceEnd(text, i) {
  * `'close'`, `'both'`, or `''`), determined by position — an opening quote
  * (line start or after whitespace) marks the following run, a closing quote
  * marks the preceding run. The UI renders those quotes outside the token frame.
- * A `:`/`.` terminator stays on the token it ends, so the token matches the
+ * A `.` terminator stays on the token it ends, so the token matches the
  * literal text Scryfall indexes. Segments with no letter/digit or below the
  * 2-char floor are dropped.
  */
@@ -218,7 +223,7 @@ function ruleLineTokens(line) {
       flush(i);
       atoms.push({ quote: true, at: i });
       start = i + 1;
-    } else if (ch === ':' || ch === '.') {
+    } else if (ch === '.') {
       flush(i + 1);
       start = i + 1;
     }
@@ -402,7 +407,7 @@ function parseKeywordPrefix(line, vocab) {
  * with a parameter (`Enchant creature`, `Protection from red`, `Kicker {2}`)
  * stays in the rules text: its canonical name is carried by `card.keywords`,
  * but the parameter is not, so removing the span would lose it. The remaining
- * rules text is split into tokens at newlines, `:`, `.`, and `"` (see
+ * rules text is split into tokens at newlines, `.`, and `"` (see
  * `ruleLineTokens`), keeps `{...}` mana symbols and `[...]` spans opaque, and
  * trims only the ends, so every rules token is a verbatim substring of the
  * stripped text — which is exactly what Scryfall's `o:` indexes.

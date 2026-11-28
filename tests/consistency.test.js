@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { compareCards } from '../src/lib/game/comparison.js';
 import {
   analyzeGuesses,
+  conflictTokens,
   countMistakes,
   findGuessConflicts,
   rowForHint,
@@ -226,5 +227,94 @@ describe('analyzeGuesses with the pre-revealed clue (baseHints)', () => {
   it('treats missing base hints as no prior clues', () => {
     expect(countMistakes([elf])).toBe(0);
     expect(analyzeGuesses([elf])[0]).toEqual([]);
+  });
+});
+
+describe('conflictTokens — locate the exact token that broke a clue', () => {
+  const target = card({
+    name: 'Target',
+    oracle_id: 't',
+    mana_cost: '{2}{R}',
+    cmc: 3,
+    colors: ['R'],
+    type_line: 'Creature — Elf',
+    power: '2',
+    toughness: '2',
+    released_at: '2021-01-01',
+    keywords: ['Vigilance'],
+    oracle_text: 'Vigilance\nDraw a card.',
+  });
+
+  /** Marked segment indices for the row the hint maps to. */
+  const marked = (guess, hint) => {
+    const conflicts = findGuessConflicts(guess, [hint]);
+    const tokens = conflictTokens(compareCards(guess, target), conflicts);
+    return {
+      row: rowForHint(hint),
+      indices: [...(tokens[rowForHint(hint)]?.segments ?? [])].sort((a, b) => a - b),
+      mv: [...(tokens[rowForHint(hint)]?.mv ?? [])],
+    };
+  };
+
+  it('marks only the conflicting type word', () => {
+    const guess = card({ type_line: 'Artifact Creature — Golem' });
+    const { row, indices } = marked(guess, { kind: 'type', value: 'Artifact', negated: true });
+    expect(row).toBe('type');
+    const segs = compareCards(guess, target).find((r) => r.key === 'type').segments;
+    expect(indices.map((i) => segs[i].text)).toEqual(['Artifact']);
+  });
+
+  it('marks the conflicting color letter', () => {
+    const guess = card({ colors: ['U'] });
+    const { indices } = marked(guess, { kind: 'color', value: 'U', negated: true });
+    const segs = compareCards(guess, target).find((r) => r.key === 'colors').segments;
+    expect(indices.map((i) => segs[i].text)).toEqual(['U']);
+  });
+
+  it('marks the conflicting keyword by canonical name', () => {
+    const guess = card({ keywords: ['Flying'], oracle_text: 'Flying' });
+    const { row, indices } = marked(guess, { kind: 'keyword', value: 'flying', negated: true });
+    expect(row).toBe('keywords');
+    const segs = compareCards(guess, target).find((r) => r.key === 'keywords').segments;
+    expect(indices.map((i) => segs[i].text)).toEqual(['Flying']);
+  });
+
+  it('marks only the conflicting oracle clause', () => {
+    const guess = card({ keywords: [], oracle_text: 'Draw a card.\nDiscard a card.' });
+    const { row, indices } = marked(guess, { kind: 'oracle', value: 'Draw a card.', negated: true });
+    expect(row).toBe('oracle');
+    const segs = compareCards(guess, target).find((r) => r.key === 'oracle').segments;
+    expect(indices.map((i) => segs[i].text)).toEqual(['Draw a card.']);
+  });
+
+  it('marks the conflicting mana cost and mana value', () => {
+    const guess = card({ mana_cost: '{4}{R}', cmc: 5 });
+    const cost = marked(guess, { kind: 'mana', value: '{4}{R}', negated: true });
+    const costSegs = compareCards(guess, target).find((r) => r.key === 'mana').segments;
+    expect(cost.indices.map((i) => costSegs[i].text)).toEqual(['{4}{R}']);
+
+    const mv = marked(guess, { kind: 'manaValue', value: '5', negated: true });
+    expect(mv.row).toBe('mana');
+    expect(mv.mv).toEqual([0]);
+  });
+
+  it('marks the conflicting stat and release date', () => {
+    const guess = card({ power: '3' });
+    const pt = marked(guess, { kind: 'power', value: '3', negated: true });
+    expect(pt.row).toBe('pt');
+    const ptSegs = compareCards(guess, target).find((r) => r.key === 'pt').segments;
+    expect(pt.indices.map((i) => ptSegs[i].text)).toEqual(['3']);
+
+    const old = card({ released_at: '2019-07-12' });
+    const released = marked(old, { kind: 'released', value: '2020-01-01', dir: '>' });
+    expect(released.row).toBe('released');
+    expect(released.indices).toEqual([0]);
+  });
+
+  it('marks nothing for a missing value (the guess does not show it)', () => {
+    const guess = card({ type_line: 'Instant' });
+    const conflicts = findGuessConflicts(guess, [{ kind: 'type', value: 'Creature' }]);
+    expect(conflicts[0].kind).toBe('missing');
+    expect(conflictTokens(compareCards(guess, target), conflicts)).toEqual({});
   });
 });

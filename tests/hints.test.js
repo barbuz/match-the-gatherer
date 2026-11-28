@@ -662,6 +662,35 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
     expect(emitted).toEqual(highlighted);
   });
 
+  it('keeps an activation cost with its effect in the oracle hint', () => {
+    // Regression: the cost used to be its own token, so `{T}:` was substring-
+    // matched inside the target's `{3}, {T}:` and read correct while the hint
+    // set still excluded it. The whole ability is now the unit, so the row and
+    // the hint agree in both directions.
+    const liquimetal = makeCard({
+      name: 'Liquimetal Coating',
+      oracle_text: '{T}: Target permanent becomes an artifact in addition to its other types until end of turn.',
+    });
+    const cellar = makeCard({
+      name: 'Cellar Door',
+      oracle_text: "{3}, {T}: Target player puts the bottom card of their library into their graveyard. If it's a creature card, you create a 2/2 black Zombie creature token.",
+    });
+    const liquimetalAbility = 'Target permanent becomes an artifact in addition to its other types until end of turn.';
+    const cellarToken = '{3}, {T}: Target player puts the bottom card of their library into their graveyard.';
+
+    const forward = gatherHints([guessEntry(liquimetal, cellar)]).filter((h) => h.kind === 'oracle');
+    expect(forward).toContainEqual({ kind: 'oracle', value: `{T}: ${liquimetalAbility}`, negated: true });
+    expect(forward.some((h) => h.value === '{T}:')).toBe(false);
+
+    const reverse = gatherHints([guessEntry(cellar, liquimetal)]).filter((h) => h.kind === 'oracle');
+    expect(reverse).toContainEqual({ kind: 'oracle', value: cellarToken, negated: true });
+    expect(reverse).toContainEqual({
+      kind: 'oracle',
+      value: "If it's a creature card, you create a 2/2 black Zombie creature token.",
+      negated: true,
+    });
+  });
+
   it('emits kw: hints from printed keywords, using the canonical name', () => {
     const target = makeCard({ keywords: ['Flying'], oracle_text: 'Flying' });
     const guess = makeCard({
