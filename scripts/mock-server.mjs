@@ -22,6 +22,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
+import { compareCards } from '../src/lib/game/comparison.js';
 
 const args = process.argv.slice(2);
 const argOf = (flag, fallback) => {
@@ -48,6 +49,17 @@ const SCENARIOS = [
   { id: 'akroma', label: 'Akroma, Angel of Wrath', why: 'supertypes are candidates too', name: 'Akroma, Angel of Wrath' },
   { id: 'doctor', label: 'The Tenth Doctor', why: 'multi-word subtype splits ("Time", "Lord", "Doctor")', name: 'The Tenth Doctor' },
 ];
+
+/**
+ * A finished match, seeded into IndexedDB so the ended-game board (and the
+ * token-level mistake marks) can be inspected without typing six guesses.
+ * Every non-answer lacks the revealed `Artifact`, so it is a mistake; the
+ * answer itself is the last guess.
+ */
+const PLAYED = {
+  target: 'solring',
+  guesses: ['llanowar', 'kithkin', 'counterspell', 'akroma', 'doctor', 'solring'],
+};
 
 // ---------------------------------------------------------------- utilities
 
@@ -177,6 +189,32 @@ function statsFor(date) {
   return statsByDay.get(date);
 }
 
+/**
+ * The IndexedDB record for the pre-played match: the game key, the game (with
+ * `compareCards` results, exactly as `addGuess` persists them) and the local
+ * stats. Returns `null` while a card is still missing.
+ */
+function playedFixture() {
+  const target = cards.get(PLAYED.target);
+  const sequence = PLAYED.guesses.map((id) => cards.get(id));
+  if (!target || sequence.some((card) => !card)) return null;
+  const guesses = sequence.map((card) => ({ card, results: compareCards(card, target) }));
+  return {
+    dbName: 'keyval-store',
+    storeName: 'keyval',
+    gameKey: `mtg:game:${activeDate}`,
+    game: {
+      targetName: target.name,
+      guesses,
+      hintsUsed: [],
+      hintCounts: {},
+      status: 'won',
+      communityStats: statsFor(activeDate),
+    },
+    stats: { played: 1, won: 1, days: [activeDate], results: { [activeDate]: true } },
+  };
+}
+
 // -------------------------------------------------------------------- http
 
 const TYPES = {
@@ -211,6 +249,7 @@ function readBody(req) {
 }
 
 function controlPage() {
+  const playedReady = Boolean(playedFixture());
   const rows = SCENARIOS.map((s) => {
     const card = cards.get(s.id);
     const reveal = card ? selectReveal(activeDate, card) : null;
@@ -263,6 +302,10 @@ card rather than a cached answer for today.</div>
   ${rows}
 </table>
 <a class="play" href="/#/daily">Play the daily game →</a>
+${playedReady ? `<a class="play" href="/mock/played">View an already-played match →</a>
+<p class="why">Seeds a won six-guess match for <code>${cards.get(PLAYED.target)?.name}</code>
+(five guesses contradict the revealed clue) into this origin's storage, so the
+ended-game board and its mistake marks can be inspected without playing.</p>` : ''}
 <h2>Request log</h2>
 <p>Every API call is printed to the server's stdout, so you can confirm which
 requests the app actually makes.</p>
@@ -307,6 +350,63 @@ function clearingPage(id) {
 </body></html>`;
 }
 
+/** Seeds a finished match into IndexedDB, then loads it. The game (and its
+ *  computed results) lives client-side, so a plain 302 cannot do this. */
+function playedPage() {
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Seeding an already-played match…</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font:15px/1.5 system-ui,sans-serif;margin:4rem auto;max-width:32rem;text-align:center;}</style>
+</head><body>
+<p>Seeding an already-played match…</p>
+<p id="s">Clearing caches…</p>
+<script>
+const set = (t) => { document.getElementById('s').textContent = t; };
+(async () => {
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+    for (const d of await indexedDB.databases()) {
+      if (d.name) await new Promise((r) => {
+        const req = indexedDB.deleteDatabase(d.name);
+        req.onsuccess = req.onerror = req.onblocked = r;
+      });
+    }
+    if ('caches' in window) {
+      for (const k of await caches.keys()) await caches.delete(k);
+    }
+    if (navigator.serviceWorker) {
+      for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+    }
+    set('Writing the played match…');
+    const fx = await fetch('/mock/fixture/played').then((r) => {
+      if (!r.ok) throw new Error('fixture ' + r.status);
+      return r.json();
+    });
+    const db = await new Promise((resolve, reject) => {
+      const open = indexedDB.open(fx.dbName);
+      open.onupgradeneeded = () => open.result.createObjectStore(fx.storeName);
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => resolve(open.result);
+    });
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(fx.storeName, 'readwrite');
+      tx.objectStore(fx.storeName).put(fx.game, fx.gameKey);
+      tx.objectStore(fx.storeName).put(fx.stats, 'mtg:stats');
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    localStorage.setItem('mtg:device-id', 'mock-played');
+    set('Loading the played match…');
+    location.replace('/?fresh=' + Date.now() + '#/daily');
+  } catch (err) {
+    set('Could not seed the played match: ' + err.message);
+  }
+})();
+</script>
+</body></html>`;
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
   console.log(`${req.method} ${url.pathname}${url.search}`);
@@ -325,6 +425,19 @@ const server = http.createServer(async (req, res) => {
     // redirect would keep showing the previous card. Clear everything first,
     // then navigate; a 302 can't do that, hence this page.
     return send(res, 200, clearingPage(sel[1]), { 'Content-Type': TYPES['.html'] });
+  }
+
+  // ---- pre-played match fixture
+  if (url.pathname === '/mock/played') {
+    activeId = PLAYED.target;
+    if (!playedFixture()) return sendJson(res, 503, { error: 'played-match cards not loaded' });
+    return send(res, 200, playedPage(), { 'Content-Type': TYPES['.html'] });
+  }
+  if (url.pathname === '/mock/fixture/played') {
+    const fixture = playedFixture();
+    return fixture
+      ? sendJson(res, 200, fixture)
+      : sendJson(res, 503, { error: 'played-match cards not loaded' });
   }
 
   // ---- api

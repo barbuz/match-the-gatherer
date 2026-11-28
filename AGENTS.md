@@ -32,6 +32,13 @@ against production. Point the app at a local mock instead:
 3. Open the mock origin in the browser and play. Confirm counts, endgame
    summary, and — on reload of a finished game — a `GET /api/stats/<date>` read
    (not another `POST`).
+4. To inspect an **already-played** board (e.g. the token-level mistake marks)
+   without typing six guesses, open `http://127.0.0.1:<port>/mock/played` (also
+   linked from the control page). It computes each guess's `compareCards`
+   results with the real `src/lib/game/comparison.js`, then writes the finished
+   game + `mtg:stats` into this origin's IndexedDB and reloads the game. The
+   seeded match is a six-guess Sol Ring win whose five wrong guesses each
+   contradict the revealed `Artifact` clue.
 
 Pitfalls that make this silently lie:
 - **Serve the app from the mock origin itself**, not the dev/preview origin.
