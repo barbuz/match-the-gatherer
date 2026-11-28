@@ -63,8 +63,8 @@ const ROW_OF_KIND = {
   oracle: 'oracle',
   mana: 'mana',
   manaValue: 'mana',
-  power: 'pt',
-  toughness: 'pt',
+  power: 'power',
+  toughness: 'toughness',
   loyalty: 'loyalty',
   layout: 'layout',
   rarity: 'rarity',
@@ -232,10 +232,13 @@ function segmentCarriesHint(seg, hint) {
  * Locate the displayed tokens that made a guess contradict an earlier clue, so
  * the feedback can mark those tokens (not just the whole row).
  *
- * Returns an object keyed by row: `{ segments: Set, mv: Set }`, where the
- * indices address that row's `segments` / `mvValues`. Only `excluded` conflicts
- * carry a value on the guess; a `missing` conflict means the guess lacks the
- * value by definition, so it contributes no token (the row accent covers it).
+ * Returns an object keyed by row: `{ segments: Set, mv: Set, missing: Array }`,
+ * where `segments` / `mv` address that row's own `segments` / `mvValues` (an
+ * `excluded` conflict, i.e. a value the guess carries that a clue ruled out)
+ * and `missing` lists the clue's own values that the guess lacks
+ * (`{ kind, text }`, rendered as dashed warning chips because there is no
+ * guess token to mark). Every value comes from a hint the earlier feedback
+ * already exposed, so neither shape reveals anything new.
  *
  * @param {Array<{ key, segments, mvValues? }>} results  compareCards() output
  * @param {Array<{ kind, row, hint }>} conflicts  findGuessConflicts() output
@@ -243,13 +246,22 @@ function segmentCarriesHint(seg, hint) {
 export function conflictTokens(results, conflicts) {
   const out = {};
   const bucket = (row) => {
-    if (!out[row]) out[row] = { segments: new Set(), mv: new Set() };
+    if (!out[row]) out[row] = { segments: new Set(), mv: new Set(), missing: [] };
     return out[row];
   };
   for (const conflict of conflicts ?? []) {
-    if (conflict.kind !== 'excluded') continue;
-    const { row, hint } = conflict;
+    const { kind, row, hint } = conflict;
     if (!row) continue;
+    if (kind === 'missing') {
+      const text = hint?.display ?? hint?.value;
+      if (text == null || text === '') continue;
+      const entry = bucket(row);
+      if (!entry.missing.some((m) => m.kind === hint.kind && m.text === String(text))) {
+        entry.missing.push({ kind: hint.kind, text: String(text) });
+      }
+      continue;
+    }
+    if (kind !== 'excluded') continue;
     const result = (results ?? []).find((r) => r.key === row);
     if (!result) continue;
     const entry = bucket(row);

@@ -25,10 +25,6 @@
   --bad-bg: color-mix(in srgb, var(--danger) 16%, var(--surface));
   --bad-fg: color-mix(in srgb, var(--danger) 78%, var(--text));
   --warn-fg: color-mix(in srgb, var(--warning) 82%, var(--text));
-  /* A mistake marker: the accent yellow is loud, so pull it toward `--muted`.
-     Used for the exact tokens that contradict an earlier clue and for the
-     subdued row accent around them. */
-  --mistake-fg: color-mix(in srgb, var(--warning) 48%, var(--muted));
 }
 
 :root[data-theme='dark'] {

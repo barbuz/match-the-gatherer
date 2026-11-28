@@ -175,7 +175,9 @@ Pitfalls that make this silently lie:
     `compareCards`' `correct`/`wrong` carry the
     **original-case** token (matching stays case-insensitive), since `o:` is
     literal; the keywords row additionally carries `correctNames`/`wrongNames`
-    for the hint values. `oracle` and `keywords` join `type`/`colors` as
+    for the hint values (each `kw:` hint also keeps `display`, the printed
+    casing, for the feedback chip; the clause uses `value`). `oracle` and
+    `keywords` join `type`/`colors` as
     contains-match exceptions: negated hints survive a fully-matched row. The
     rows render only when the guess has the property (text / any
     `card.keywords` entry), so a text-less or keyword-less target is never leaked. Substring semantics are deliberate:
@@ -204,7 +206,7 @@ Pitfalls that make this silently lie:
   a **weighted per-property similarity**, not a matched/applicable count:
   `scoring.js scoreGuess(guess, target)` compares each property on its own scale
   (the whole type line, colors and keywords by Sørensen–Dice set overlap; mana
-  value, P/T/loyalty/defense and release date by numeric distance; mana costs by
+  value, power/toughness/loyalty/defense and release date by numeric distance; mana costs by
   Sørensen–Dice over the symbol multiset; oracle text by Sørensen–Dice over the
   displayed rules clauses — the same clause tokens the Oracle row renders, with
   reminder text removed and keywords split into their own row) and takes a
@@ -410,13 +412,20 @@ Pitfalls that make this silently lie:
   a positive oracle hint is a whole rules clause, so treating the target's prose
   as a checklist would flag nearly every non-answer (`MISSING_KINDS`), whereas
   guessing a clause the target was shown not to contain is a real contradiction.
-  `GuessFeedback.svelte` marks the exact token that carried the ruled-out value
-  (`consistency.js conflictTokens()`, matched per property: type/color/keyword/
-  oracle/layout/rarity by name, mana by normalized cost, stats by coerced value,
-  release date by direction) in a **subdued** amber — `--mistake-fg`, the accent
-  yellow pulled toward `--muted` — keeping the strike-through, and accents the
-  row and the ⚠️ badge in the same colour (a `missing` conflict has no token on
-  the guess, so only the row is accented). No wording is added; the
+  `GuessFeedback.svelte` draws the conflict on the exact value, not just the
+  row: `consistency.js conflictTokens()` matches each hint per property
+  (type/color/keyword/oracle/layout/rarity by name, mana by normalized cost,
+  stats by coerced value, release date by direction) and returns, per row, the
+  guess's offending segments/`mv` (an **excluded** conflict) plus the clue's own
+  values the guess **lacks** (`missing`). Excluded tokens keep their
+  strike-through but take the warning accent (`--warn-fg`); a missing value is
+  drawn as a dashed warning chip at the end of its row (e.g. a revealed
+  `Artifact` under the guess's type line, or `MV 1` beside a different MV), so
+  the row shows *why* it broke the clue. The row and the ⚠️ badge use the same
+  accent, and no wording is added — every shown value came from a green token on
+  an earlier card, so nothing leaks. `power` and `toughness` are separate
+  comparison rows (each with its own `pow=`/`tou=` hint), so a missing stat
+  cannot land on the wrong axis. The
   endgame block prints "Solved in N guesses with M
   mistakes", and `buildShareText` marks each share row ✅ or ⚠️ (a mistake,
   matching the mistake accent on the feedback card)

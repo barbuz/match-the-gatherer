@@ -632,23 +632,15 @@ function manaLine(key, label, guessCard, targetCard) {
   return { ...line(key, label, segments), mvValues: [mvValue] };
 }
 
-function statsLine(key, label, guessCard, targetCard) {
-  const gPower = scalarTokens(guessCard, 'power');
-  const gTough = scalarTokens(guessCard, 'toughness');
-  const tPower = new Set(scalarTokens(targetCard, 'power').map(statKey));
-  const tTough = new Set(scalarTokens(targetCard, 'toughness').map(statKey));
-  if (gPower.length + gTough.length === 0) return null;
+function statLine(key, label, guessCard, targetCard) {
+  if (scalarTokens(guessCard, key).length === 0) return null;
+  const tSet = new Set(scalarTokens(targetCard, key).map(statKey));
   const segments = joinFaces(facesOf(guessCard).map((f) => {
-    const p = f.power == null ? null : String(f.power);
-    const t = f.toughness == null ? null : String(f.toughness);
-    const segs = [];
-    if (p != null) segs.push({ text: p, status: tPower.has(statKey(p)) ? 'correct' : 'wrong' });
-    if (p != null && t != null) segs.push({ slash: true });
-    if (t != null) segs.push({ text: t, status: tTough.has(statKey(t)) ? 'correct' : 'wrong' });
-    return segs;
+    const v = f[key];
+    return v == null ? [] : [{ text: String(v), status: tSet.has(statKey(v)) ? 'correct' : 'wrong' }];
   }));
-  const absent = gPower.length + gTough.length > 0 && tPower.size === 0 && tTough.size === 0;
-  return line(key, label, segments, absent ? { absentOnTarget: true } : {});
+  if (segments.length === 0) return null;
+  return line(key, label, segments, tSet.size === 0 ? { absentOnTarget: true } : {});
 }
 
 function scalarRow(key, label, guessCard, targetCard, targetKey) {
@@ -671,8 +663,10 @@ export function compareCards(guess, target) {
   results.push(manaLine('mana', 'Mana cost', guess, target));
   results.push(colorLine('colors', 'Colors', guess, target));
   results.push(typeLine('type', 'Type', guess, target));
-  const stats = statsLine('pt', 'P/T', guess, target);
-  if (stats) results.push(stats);
+  const power = statLine('power', 'Power', guess, target);
+  if (power) results.push(power);
+  const toughness = statLine('toughness', 'Toughness', guess, target);
+  if (toughness) results.push(toughness);
   for (const key of ['loyalty', 'defense']) {
     const l = scalarRow(key, key === 'loyalty' ? 'Loyalty' : 'Defense', guess, target, key);
     if (l) results.push(l);

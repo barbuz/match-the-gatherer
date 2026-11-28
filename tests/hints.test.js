@@ -553,10 +553,10 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
       type_line: 'Creature — Elf Druid', power: '0', toughness: '1', oracle_text: '',
     });
     const entry = guessEntry(guess, target);
-    const pt = entry.results.find((r) => r.key === 'pt');
-    expect(pt.segments).toEqual([
+    expect(entry.results.find((r) => r.key === 'power').segments).toEqual([
       { text: '*', status: 'correct' },
-      { slash: true },
+    ]);
+    expect(entry.results.find((r) => r.key === 'toughness').segments).toEqual([
       { text: '1+*', status: 'correct' },
     ]);
 
@@ -698,8 +698,8 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
       oracle_text: 'Flying, kicker {2} (You may pay {2}.)\nDraw a card.',
     });
     const hints = gatherHints([guessEntry(guess, target)]);
-    expect(hints).toContainEqual({ kind: 'keyword', value: 'flying', negated: false });
-    expect(hints).toContainEqual({ kind: 'keyword', value: 'kicker', negated: true });
+    expect(hints).toContainEqual(expect.objectContaining({ kind: 'keyword', value: 'flying', negated: false, display: 'Flying' }));
+    expect(hints).toContainEqual(expect.objectContaining({ kind: 'keyword', value: 'kicker', negated: true, display: 'Kicker' }));
     // `kw:` matches by name, so the printed parameter never leaks into a hint.
     expect(hints.some((h) => h.kind === 'keyword' && /[{}]/.test(h.value))).toBe(false);
   });
@@ -710,8 +710,8 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
       guessEntry(makeCard({ keywords: ['Flying'], oracle_text: 'Flying' }), target),
       guessEntry(makeCard({ keywords: ['Flying', 'Haste'], oracle_text: 'Flying, haste' }), target),
     ]);
-    expect(hints).toContainEqual({ kind: 'keyword', value: 'flying', negated: false });
-    expect(hints).toContainEqual({ kind: 'keyword', value: 'haste', negated: true });
+    expect(hints).toContainEqual(expect.objectContaining({ kind: 'keyword', value: 'flying', negated: false, display: 'Flying' }));
+    expect(hints).toContainEqual(expect.objectContaining({ kind: 'keyword', value: 'haste', negated: true, display: 'Haste' }));
   });
 
   it('emits kw: for every card.keywords entry, even one that is not a printed keyword line', () => {
@@ -721,7 +721,7 @@ it('emits a negated exact-cost hint on a same-MV different-cost wrong line', () 
       oracle_text: 'Create a Treasure token.',
     });
     const hints = gatherHints([guessEntry(guess, target)]);
-    expect(hints).toContainEqual({ kind: 'keyword', value: 'treasure', negated: false });
+    expect(hints).toContainEqual(expect.objectContaining({ kind: 'keyword', value: 'treasure', negated: false, display: 'Treasure' }));
   });
 });
 

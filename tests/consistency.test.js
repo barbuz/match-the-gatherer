@@ -108,7 +108,8 @@ describe('findGuessConflicts — shape and edge cases', () => {
 
   it('maps every hint kind to its comparison row', () => {
     expect(rowForHint({ kind: 'manaValue' })).toBe('mana');
-    expect(rowForHint({ kind: 'toughness' })).toBe('pt');
+    expect(rowForHint({ kind: 'power' })).toBe('power');
+    expect(rowForHint({ kind: 'toughness' })).toBe('toughness');
     expect(rowForHint({ kind: 'oracle' })).toBe('oracle');
     expect(rowForHint({ kind: 'nonsense' })).toBe(null);
   });
@@ -253,6 +254,7 @@ describe('conflictTokens — locate the exact token that broke a clue', () => {
       row: rowForHint(hint),
       indices: [...(tokens[rowForHint(hint)]?.segments ?? [])].sort((a, b) => a - b),
       mv: [...(tokens[rowForHint(hint)]?.mv ?? [])],
+      missing: tokens[rowForHint(hint)]?.missing ?? [],
     };
   };
 
@@ -300,10 +302,10 @@ describe('conflictTokens — locate the exact token that broke a clue', () => {
 
   it('marks the conflicting stat and release date', () => {
     const guess = card({ power: '3' });
-    const pt = marked(guess, { kind: 'power', value: '3', negated: true });
-    expect(pt.row).toBe('pt');
-    const ptSegs = compareCards(guess, target).find((r) => r.key === 'pt').segments;
-    expect(pt.indices.map((i) => ptSegs[i].text)).toEqual(['3']);
+    const power = marked(guess, { kind: 'power', value: '3', negated: true });
+    expect(power.row).toBe('power');
+    const powerSegs = compareCards(guess, target).find((r) => r.key === 'power').segments;
+    expect(power.indices.map((i) => powerSegs[i].text)).toEqual(['3']);
 
     const old = card({ released_at: '2019-07-12' });
     const released = marked(old, { kind: 'released', value: '2020-01-01', dir: '>' });
@@ -311,10 +313,38 @@ describe('conflictTokens — locate the exact token that broke a clue', () => {
     expect(released.indices).toEqual([0]);
   });
 
-  it('marks nothing for a missing value (the guess does not show it)', () => {
+  it('keeps power and toughness marks on their own rows', () => {
+    // Same printed value on both axes: only the toughness row may be marked.
+    const both = card({ power: '3', toughness: '3' });
+    const conflicts = findGuessConflicts(both, [
+      { kind: 'toughness', value: '3', negated: true },
+    ]);
+    const marks = conflictTokens(compareCards(both, target), conflicts);
+    expect(marks.power).toBeUndefined();
+    expect([...marks.toughness.segments]).toEqual([0]);
+  });
+
+  it('reports a missing clue value so the row can show it dashed', () => {
     const guess = card({ type_line: 'Instant' });
-    const conflicts = findGuessConflicts(guess, [{ kind: 'type', value: 'Creature' }]);
+    const conflicts = findGuessConflicts(guess, [{ kind: 'type', value: 'Artifact' }]);
     expect(conflicts[0].kind).toBe('missing');
+    const tokens = conflictTokens(compareCards(guess, target), conflicts);
+    expect(tokens.type.segments.size).toBe(0);
+    expect(tokens.type.missing).toEqual([{ kind: 'type', text: 'Artifact' }]);
+  });
+
+  it('keeps the printed keyword casing for a missing keyword chip', () => {
+    const guess = card({ keywords: [] });
+    const conflicts = findGuessConflicts(guess, [
+      { kind: 'keyword', value: 'first strike', display: 'First strike' },
+    ]);
+    const tokens = conflictTokens(compareCards(guess, target), conflicts);
+    expect(tokens.keywords.missing).toEqual([{ kind: 'keyword', text: 'First strike' }]);
+  });
+
+  it('drops a missing value with no displayable text', () => {
+    const guess = card({ type_line: 'Instant' });
+    const conflicts = findGuessConflicts(guess, [{ kind: 'type', value: '' }]);
     expect(conflictTokens(compareCards(guess, target), conflicts)).toEqual({});
   });
 });

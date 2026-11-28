@@ -253,19 +253,16 @@ describe('compareCards — sets', () => {
 });
 
 describe('compareCards — creature stats applicability', () => {
-  it('exact power/toughness match is a single correct P/T row', () => {
+  it('exact power/toughness match is two correct rows', () => {
     const guess = makeCard({ name: 'A', oracle_id: 'g1' });
     const results = compareCards(guess, makeCard());
-    const pt = byKey(results, 'pt');
-    expect(pt).toMatchObject({ status: 'correct', applicable: true });
-    expect(pt.segments).toEqual([
-      { text: '3', status: 'correct' },
-      { slash: true },
-      { text: '2', status: 'correct' },
-    ]);
+    expect(byKey(results, 'power')).toMatchObject({ status: 'correct', applicable: true });
+    expect(byKey(results, 'power').segments).toEqual([{ text: '3', status: 'correct' }]);
+    expect(byKey(results, 'toughness')).toMatchObject({ status: 'correct', applicable: true });
+    expect(byKey(results, 'toughness').segments).toEqual([{ text: '2', status: 'correct' }]);
   });
 
-  it('non-creature guess has no P/T row', () => {
+  it('non-creature guess has no power or toughness row', () => {
     const guess = makeCard({
       name: 'A',
       oracle_id: 'g1',
@@ -274,56 +271,43 @@ describe('compareCards — creature stats applicability', () => {
       toughness: undefined,
     });
     const results = compareCards(guess, makeCard());
-    expect(byKey(results, 'pt')).toBeUndefined();
+    expect(byKey(results, 'power')).toBeUndefined();
+    expect(byKey(results, 'toughness')).toBeUndefined();
   });
 
   it('creature guess vs non-creature target marks both stats wrong but applicable', () => {
     const target = makeCard({ type_line: 'Instant', power: undefined, toughness: undefined });
     const results = compareCards(makeCard({ name: 'A', oracle_id: 'g1' }), target);
-    const pt = byKey(results, 'pt');
-    expect(pt).toMatchObject({ status: 'wrong', applicable: true });
-    expect(pt.segments).toEqual([
-      { text: '3', status: 'wrong' },
-      { slash: true },
-      { text: '2', status: 'wrong' },
-    ]);
+    expect(byKey(results, 'power')).toMatchObject({ status: 'wrong', applicable: true });
+    expect(byKey(results, 'power').segments).toEqual([{ text: '3', status: 'wrong' }]);
+    expect(byKey(results, 'toughness')).toMatchObject({ status: 'wrong', applicable: true });
+    expect(byKey(results, 'toughness').segments).toEqual([{ text: '2', status: 'wrong' }]);
   });
 
-  it('P/T row marks absentOnTarget when the target has no P/T', () => {
+  it('each stat row marks absentOnTarget when the target has no stat', () => {
     const target = makeCard({ type_line: 'Instant', power: undefined, toughness: undefined });
-    const pt = byKey(compareCards(makeCard({ name: 'A', oracle_id: 'g1' }), target), 'pt');
-    expect(pt).toMatchObject({ status: 'wrong', applicable: true, absentOnTarget: true });
-    expect(pt.segments).toEqual([
-      { text: '3', status: 'wrong' },
-      { slash: true },
-      { text: '2', status: 'wrong' },
-    ]);
+    const results = compareCards(makeCard({ name: 'A', oracle_id: 'g1' }), target);
+    expect(byKey(results, 'power')).toMatchObject({ status: 'wrong', applicable: true, absentOnTarget: true });
+    expect(byKey(results, 'toughness')).toMatchObject({ status: 'wrong', applicable: true, absentOnTarget: true });
   });
 
-  it('wrong P/T match colors each side independently', () => {
+  it('wrong power/toughness colors each axis independently', () => {
     const results = compareCards(
       makeCard({ name: 'A', oracle_id: 'g1', power: '3', toughness: '5' }),
       makeCard()
     );
-    const pt = byKey(results, 'pt');
-    expect(pt.status).toBe('wrong');
-    expect(pt.segments).toEqual([
-      { text: '3', status: 'correct' },
-      { slash: true },
-      { text: '5', status: 'wrong' },
-    ]);
+    expect(byKey(results, 'power').status).toBe('correct');
+    expect(byKey(results, 'toughness').status).toBe('wrong');
+    expect(byKey(results, 'toughness').segments).toEqual([{ text: '5', status: 'wrong' }]);
   });
 
-  it('symmetric P/T row has unique per-segment keys for the UI', () => {
-    // A creature with equal power and toughness renders "3 / 3". The
-    // distinc separator keeps the two values distinguishable; the keyed
-    // each-block in GuessFeedback is index-based, so duplicate texts are safe.
-    const pt = byKey(compareCards(makeCard({ name: 'A', oracle_id: 'g1', power: '3', toughness: '3' }), makeCard()), 'pt');
-    expect(pt.segments).toEqual([
-      { text: '3', status: 'correct' },
-      { slash: true },
-      { text: '3', status: 'wrong' },
-    ]);
+  it('equal power and toughness live in distinct rows', () => {
+    const results = compareCards(
+      makeCard({ name: 'A', oracle_id: 'g1', power: '3', toughness: '3' }),
+      makeCard()
+    );
+    expect(byKey(results, 'power').segments).toEqual([{ text: '3', status: 'correct' }]);
+    expect(byKey(results, 'toughness').segments).toEqual([{ text: '3', status: 'wrong' }]);
   });
 
   it('loyalty marks absentOnTarget when the guessed walker faces a non-walker', () => {
@@ -693,7 +677,8 @@ describe('compareCards — layout', () => {
     });
     const results = compareCards(dfc, other);
     expect(results.some((r) => r.key.startsWith('front:') || r.key.startsWith('back:'))).toBe(false);
-    expect(byKey(results, 'pt')).toMatchObject({ status: 'correct' });
+    expect(byKey(results, 'power')).toMatchObject({ status: 'correct' });
+    expect(byKey(results, 'toughness')).toMatchObject({ status: 'correct' });
     expect(byKey(results, 'type')).toMatchObject({ status: 'correct' });
     // A guessed-only front token that appears only on the target's back face
     // still matches (Scryfall's t:/pow:/tou: operators index any face).
@@ -702,7 +687,8 @@ describe('compareCards — layout', () => {
       dfc,
     );
     expect(byKey(mismatched, 'type')).toMatchObject({ status: 'correct', correct: ['Creature', 'Human'] });
-    expect(byKey(mismatched, 'pt')).toMatchObject({ status: 'correct' });
+    expect(byKey(mismatched, 'power')).toMatchObject({ status: 'correct' });
+    expect(byKey(mismatched, 'toughness')).toMatchObject({ status: 'correct' });
   });
 
   it('guessed tokens from any face are checked against the target face union', () => {
@@ -710,14 +696,16 @@ describe('compareCards — layout', () => {
     // Face-level tokens only: the card-level `type_line` of a multi-faced card
     // is the faces' lines concatenated, so it must not contribute tokens.
     expect(byKey(results, 'type')).toMatchObject({ status: 'wrong', correct: [], wrong: ['Creature', 'Human', 'Beast'] });
-    expect(byKey(results, 'pt')).toMatchObject({ status: 'wrong' });
-    expect(byKey(results, 'pt').segments).toEqual([
-      { text: '2', status: 'wrong' },
-      { slash: true },
+    expect(byKey(results, 'power')).toMatchObject({ status: 'wrong' });
+    expect(byKey(results, 'power').segments).toEqual([
       { text: '2', status: 'wrong' },
       { sep: true, text: '//' },
       { text: '4', status: 'wrong' },
-      { slash: true },
+    ]);
+    expect(byKey(results, 'toughness')).toMatchObject({ status: 'wrong' });
+    expect(byKey(results, 'toughness').segments).toEqual([
+      { text: '2', status: 'wrong' },
+      { sep: true, text: '//' },
       { text: '4', status: 'wrong' },
     ]);
   });

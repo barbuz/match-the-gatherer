@@ -133,19 +133,16 @@ export function gatherHints(guesses, baseHints = []) {
           pushSetValues(r.correct, 'type');
           pushSetValues(r.wrong, 'type', true);
           break;
-        case 'pt': {
-          // Segments run power, slash, toughness per face, with a `//` sep
-          // between faces. Track power/toughness structurally- the old
-          // index-based guess classified the `//` sep as a toughness value and
-          // emitted `tou=//`.
-          let kind = 'power';
-          for (const seg of r.segments ?? []) {
-            if (seg.sep) { kind = 'power'; continue; } // new face: power again
-            if (seg.slash) { kind = 'toughness'; continue; }
-            if (seg.text == null || seg.text === PLACEHOLDER) continue;
-            const value = statValue(seg.text);
-            if (value == null) continue; // no numeric reading (e.g. `∞`)
-            pushValue({ kind, value, negated: seg.status === 'wrong' });
+        case 'power':
+        case 'toughness': {
+          // Power and toughness are separate rows, so the hint kind is the row
+          // key. `statValue` applies Scryfall's own coercion (`1+*` → 1), so a
+          // negated clause can never filter out an answer it should match.
+          for (const v of (r.correct ?? []).map(statValue)) {
+            if (v != null) pushValue({ kind: r.key, value: v });
+          }
+          for (const v of (r.wrong ?? []).map(statValue)) {
+            if (v != null) push(negate({ kind: r.key, value: v }));
           }
           break;
         }
@@ -173,8 +170,23 @@ export function gatherHints(guesses, baseHints = []) {
           // activated ability) stays in the oracle text and is never hinted here.
           // `kw:` matches by canonical keyword name, so the printed span's
           // parameters are irrelevant: the row carries the canonical names.
-          pushSetValues(r.correctNames, 'keyword');
-          pushSetValues(r.wrongNames, 'keyword', true);
+          // The printed span keeps its casing for the feedback card's
+          // dashed "missing" chip; only `value` feeds the `kw:` clause.
+          const printed = new Map();
+          for (const seg of r.segments ?? []) {
+            if (seg.kind !== 'keyword' || seg.name == null) continue;
+            const name = String(seg.name).toLocaleLowerCase();
+            if (!printed.has(name)) printed.set(name, seg.nameText ?? seg.name);
+          }
+          const pushKeywords = (names, negated = false) => {
+            for (const n of names ?? []) {
+              if (!n) continue;
+              const value = String(n).toLocaleLowerCase();
+              push({ kind: 'keyword', value, negated, display: printed.get(value) ?? n });
+            }
+          };
+          pushKeywords(r.correctNames);
+          pushKeywords(r.wrongNames, true);
           break;
         case 'oracle':
           // `o:` indexes the oracle text with reminder `(...)` spans removed and
