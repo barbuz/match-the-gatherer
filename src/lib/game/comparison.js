@@ -632,6 +632,26 @@ function manaLine(key, label, guessCard, targetCard) {
   return { ...line(key, label, segments), mvValues: [mvValue] };
 }
 
+/**
+ * Direction sentence under the release-date row, split into parts (`lead` /
+ * `direction` / `tail` / `date`) so the UI can bold the direction and tint the
+ * guessed date. `null` when the direction or the date is unknown.
+ */
+export function releaseNoteParts(direction, date) {
+  if (!direction || date == null || date === '') return null;
+  return { lead: 'target is ', direction, tail: ' than ', date: String(date) };
+}
+
+function releaseNote(direction, guessDate) {
+  const parts = releaseNoteParts(direction, guessDate);
+  if (!parts) return { note: direction ? `target is ${direction}` : undefined, noteBold: direction };
+  return {
+    note: `${parts.lead}${parts.direction}${parts.tail}${parts.date}`,
+    noteBold: direction,
+    noteParts: parts,
+  };
+}
+
 function statLine(key, label, guessCard, targetCard) {
   if (scalarTokens(guessCard, key).length === 0) return null;
   const tSet = new Set(scalarTokens(targetCard, key).map(statKey));
@@ -683,7 +703,7 @@ export function compareCards(guess, target) {
     line(
       'released', 'First released',
       [{ text: guess.released_at, status: sameDate ? 'correct' : 'wrong' }],
-      { note: direction ? `target is ${direction}` : undefined, noteBold: direction }
+      releaseNote(direction, guess.released_at)
     )
   );
 

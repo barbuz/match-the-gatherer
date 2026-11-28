@@ -102,14 +102,14 @@
             {/if}
           {/each}
         </span>
-        {#if r.note}
-          <span class="note">
-            {#if r.noteBold}
-              {r.note.replace(r.noteBold, '')}<strong>{r.noteBold}</strong>
-            {:else}
-              {r.note}
-            {/if}
-          </span>
+        {#if r.noteParts}
+          <span class="note"
+            >{r.noteParts.lead}<strong>{r.noteParts.direction}</strong>{r.noteParts.tail}<span
+              class="note-date">{r.noteParts.date}</span
+            ></span
+          >
+        {:else if r.note}
+          <span class="note">{r.note}</span>
         {/if}
       </div>
     {/each}
@@ -352,5 +352,10 @@
     font-size: 0.7rem;
     color: var(--muted);
     font-style: italic;
+  }
+
+  .note-date {
+    color: var(--warn-fg);
+    font-style: normal;
   }
 </style>

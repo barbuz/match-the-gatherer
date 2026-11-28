@@ -262,6 +262,13 @@ Pitfalls that make this silently lie:
   builder only describes what it renders. Plain rows (layout, released, rarity, the
   `—` placeholders) are just a single segment per value, so the UI has one render path.
 
+- The **First released** row carries a direction note built by
+  `comparison.js releaseNoteParts()`: `target is older than <guessed date>` (or
+  `newer`), composed from parts so the direction stays bold and the guessed date —
+  the bound the earlier clue implied — renders in the warning accent instead of the
+  note's muted grey. `note` stays the flattened plain-text form (tests pin the
+  recomposition), and `noteBold` is what `hints.js` turns into `date<` / `date>`.
+
 - The **Colors** row is per-face **only when a face carries its own `colors`**.
   Scryfall omits the field from every face of the "combined" layouts (split,
   adventure, flip) and from some transforming back faces, leaving the color only
