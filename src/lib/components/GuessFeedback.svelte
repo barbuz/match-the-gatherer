@@ -89,15 +89,16 @@
           {/if}
           {#each conflictMarks[r.key]?.missing ?? [] as m, mi (`m${mi}`)}
             {#if m.kind === 'mana' && $symbols && manaParts(m.text)}
-              <span class="val mana missing" title="Your guess is missing this clue">
+              <span class="val mana missing" title="Mana cost known from an earlier clue: {m.text}">
                 {#each manaParts(m.text) as p, pi (pi)}
                   <img class="mana-img" src={p.uri} alt={p.token} title={p.token} loading="lazy" />
                 {/each}
               </span>
-            {:else if m.kind === 'manaValue'}
-              <span class="val missing" title="Your guess is missing this clue">MV {m.text}</span>
             {:else}
-              <span class="val missing" title="Your guess is missing this clue">{m.text}</span>
+              <span
+                class="val missing"
+                title="{m.kind === 'manaValue' ? 'Mana value' : 'Value'} known from an earlier clue: {m.text}"
+              >{m.text}</span>
             {/if}
           {/each}
         </span>

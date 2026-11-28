@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { compareCards } from '../src/lib/game/comparison.js';
+import { gatherHints } from '../src/lib/game/hints.js';
 import {
   analyzeGuesses,
   conflictTokens,
@@ -346,5 +347,52 @@ describe('conflictTokens — locate the exact token that broke a clue', () => {
     const guess = card({ type_line: 'Instant' });
     const conflicts = findGuessConflicts(guess, [{ kind: 'type', value: '' }]);
     expect(conflictTokens(compareCards(guess, target), conflicts)).toEqual({});
+  });
+});
+
+describe('release-date bounds', () => {
+  const target = card({ oracle_id: 'o-target', released_at: '1993-08-05' });
+  const guessAt = (released) => {
+    const guessed = card({ oracle_id: `o-${released}`, released_at: released });
+    return { card: guessed, results: compareCards(guessed, target) };
+  };
+  const boundFrom = (released) => gatherHints([guessAt(released)]);
+
+  it('learns a direction, not an exact date', () => {
+    const [hint] = boundFrom('2021-06-18').filter((h) => h.kind === 'released');
+    expect(hint).toMatchObject({ kind: 'released', value: '2021-06-18', dir: '<' });
+  });
+
+  it('excludes a guess released after the bound and invents no value', () => {
+    const hints = boundFrom('2021-06-18');
+    const guess = card({ released_at: '2022-01-01' });
+    const conflicts = findGuessConflicts(guess, hints);
+    expect(conflicts).toMatchObject([{ kind: 'excluded', row: 'released' }]);
+    const tokens = conflictTokens(compareCards(guess, target), conflicts);
+    expect([...tokens.released.segments]).toEqual([0]);
+    expect(tokens.released.missing).toEqual([]);
+  });
+
+  it('accepts the allowed side of the bound, and the bound itself is still excluded', () => {
+    const hints = boundFrom('2021-06-18');
+    expect(findGuessConflicts(card({ released_at: '2020-01-01' }), hints)).toEqual([]);
+    expect(findGuessConflicts(card({ released_at: '2021-06-18' }), hints)[0]?.kind).toBe('excluded');
+  });
+
+  it('counts only the guess that broke the bound', () => {
+    const guesses = ['2021-06-18', '2022-01-01', '2020-01-01'].map(guessAt);
+    expect(countMistakes(guesses, target)).toBe(1);
+  });
+
+  it('turns an exact known date into a missing value instead', () => {
+    const hints = gatherHints([{ card: target, results: compareCards(target, target) }]);
+    expect(hints.filter((h) => h.kind === 'released')).toEqual([
+      expect.objectContaining({ kind: 'released', value: '1993-08-05' }),
+    ]);
+    const guess = card({ released_at: '2022-01-01' });
+    const conflicts = findGuessConflicts(guess, hints);
+    expect(conflicts).toMatchObject([{ kind: 'missing', row: 'released' }]);
+    const tokens = conflictTokens(compareCards(guess, target), conflicts);
+    expect(tokens.released.missing).toEqual([{ kind: 'released', text: '1993-08-05' }]);
   });
 });

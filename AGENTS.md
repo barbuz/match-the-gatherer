@@ -420,8 +420,12 @@ Pitfalls that make this silently lie:
   values the guess **lacks** (`missing`). Excluded tokens keep their
   strike-through but take the warning accent (`--warn-fg`); a missing value is
   drawn as a dashed warning chip at the end of its row (e.g. a revealed
-  `Artifact` under the guess's type line, or `MV 1` beside a different MV), so
-  the row shows *why* it broke the clue. The row and the ⚠️ badge use the same
+  `Artifact` under the guess's type line, or the known mana value beside a
+  different one — the chip is the bare value, the row already prints `MV`), so
+  the row shows *why* it broke the clue. A directional release-date clue is a
+  bound, not a value, so it only ever produces an `excluded` conflict (a guess
+  on the wrong side of it); only an exact known date yields a chip. The row and
+  the ⚠️ badge use the same
   accent, and no wording is added — every shown value came from a green token on
   an earlier card, so nothing leaks. `power` and `toughness` are separate
   comparison rows (each with its own `pow=`/`tou=` hint), so a missing stat
