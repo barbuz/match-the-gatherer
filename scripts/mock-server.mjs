@@ -194,6 +194,24 @@ function statsFor(date) {
  * `compareCards` results, exactly as `addGuess` persists them) and the local
  * stats. Returns `null` while a card is still missing.
  */
+/** A still-playing match whose second guess breaks a release-date bound it was
+ *  given: Kithkin Healer (2007) tells the player the target is older than
+ *  2007-10-12; The Tenth Doctor (2023) contradicts it without any exact date
+ *  being known yet. */
+function boundFixture() {
+  const target = cards.get(PLAYED.target);
+  const sequence = ['kithkin', 'doctor'].map((id) => cards.get(id));
+  if (!target || sequence.some((card) => !card)) return null;
+  const guesses = sequence.map((card) => ({ card, results: compareCards(card, target) }));
+  return {
+    dbName: 'keyval-store',
+    storeName: 'keyval',
+    gameKey: `mtg:game:${activeDate}`,
+    game: { targetName: target.name, guesses, hintsUsed: [], hintCounts: {}, status: 'playing' },
+    stats: { played: 0, won: 0, days: [], results: {} },
+  };
+}
+
 function playedFixture() {
   const target = cards.get(PLAYED.target);
   const sequence = PLAYED.guesses.map((id) => cards.get(id));
@@ -250,6 +268,7 @@ function readBody(req) {
 
 function controlPage() {
   const playedReady = Boolean(playedFixture());
+  const boundReady = Boolean(boundFixture());
   const rows = SCENARIOS.map((s) => {
     const card = cards.get(s.id);
     const reveal = card ? selectReveal(activeDate, card) : null;
@@ -302,6 +321,10 @@ card rather than a cached answer for today.</div>
   ${rows}
 </table>
 <a class="play" href="/#/daily">Play the daily game →</a>
+${boundReady ? `<a class="play" href="/mock/bound">View a match that breaks a date clue →</a>
+<p class="why">Seeds a two-guess match in progress: <code>Kithkin Healer</code> (2007) says the
+target is older, then <code>The Tenth Doctor</code> (2023) breaks that bound with no exact
+date known, so the row names the bound it contradicted.</p>` : ''}
 ${playedReady ? `<a class="play" href="/mock/played">View an already-played match →</a>
 <p class="why">Seeds a won six-guess match for <code>${cards.get(PLAYED.target)?.name}</code>
 (five guesses contradict the revealed clue) into this origin's storage, so the
@@ -352,7 +375,10 @@ function clearingPage(id) {
 
 /** Seeds a finished match into IndexedDB, then loads it. The game (and its
  *  computed results) lives client-side, so a plain 302 cannot do this. */
-function playedPage() {
+/** The fixtures the seeding page can write, by name. */
+const FIXTURES = { played: () => playedFixture(), bound: () => boundFixture() };
+
+function playedPage(kind = 'played') {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Seeding an already-played match…</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -379,7 +405,7 @@ const set = (t) => { document.getElementById('s').textContent = t; };
       for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
     }
     set('Writing the played match…');
-    const fx = await fetch('/mock/fixture/played').then((r) => {
+    const fx = await fetch('/mock/fixture/${kind}').then((r) => {
       if (!r.ok) throw new Error('fixture ' + r.status);
       return r.json();
     });
@@ -428,16 +454,18 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ---- pre-played match fixture
-  if (url.pathname === '/mock/played') {
+  const seed = url.pathname.match(/^\/mock\/(played|bound)$/);
+  if (seed) {
     activeId = PLAYED.target;
-    if (!playedFixture()) return sendJson(res, 503, { error: 'played-match cards not loaded' });
-    return send(res, 200, playedPage(), { 'Content-Type': TYPES['.html'] });
+    if (!FIXTURES[seed[1]]?.()) return sendJson(res, 503, { error: 'fixture cards not loaded' });
+    return send(res, 200, playedPage(seed[1]), { 'Content-Type': TYPES['.html'] });
   }
-  if (url.pathname === '/mock/fixture/played') {
-    const fixture = playedFixture();
+  const fixtureKind = url.pathname.match(/^\/mock\/fixture\/(played|bound)$/);
+  if (fixtureKind) {
+    const fixture = FIXTURES[fixtureKind[1]]?.();
     return fixture
       ? sendJson(res, 200, fixture)
-      : sendJson(res, 503, { error: 'played-match cards not loaded' });
+      : sendJson(res, 503, { error: 'fixture cards not loaded' });
   }
 
   // ---- api

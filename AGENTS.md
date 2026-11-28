@@ -265,12 +265,15 @@ Pitfalls that make this silently lie:
   builder only describes what it renders. Plain rows (layout, released, rarity, the
   `—` placeholders) are just a single segment per value, so the UI has one render path.
 
-- The **First released** row carries a direction note built by
-  `comparison.js releaseNoteParts()`: `target is older than <guessed date>` (or
-  `newer`), composed from parts so the direction stays bold and the guessed date —
-  the bound the earlier clue implied — renders in the warning accent instead of the
-  note's muted grey. `note` stays the flattened plain-text form (tests pin the
-  recomposition), and `noteBold` is what `hints.js` turns into `date<` / `date>`.
+- The **First released** row carries a direction note (`comparison.js`
+  `releaseNote()`): the generic `target is older` / `target is newer`, with the
+  direction bold and no date of its own. The bound is spelled out only when the
+  guess contradicts a clue already known — `GuessFeedback.svelte` finds the
+  excluded `released` conflict and appends ``than <that clue's date>`` (the
+  *earlier guess's* date, i.e. the bound the guess broke), in the warning accent
+  but otherwise the note's italic muted style. Once an earlier guess pinned the
+  exact date, the sentence is dropped altogether — the dashed date chip already
+  says it. `noteBold` is what `hints.js` turns into `date<` / `date>`.
 
 - The **Colors** row is per-face **only when a face carries its own `colors`**.
   Scryfall omits the field from every face of the "combined" layouts (split,

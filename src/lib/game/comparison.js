@@ -633,23 +633,14 @@ function manaLine(key, label, guessCard, targetCard) {
 }
 
 /**
- * Direction sentence under the release-date row, split into parts (`lead` /
- * `direction` / `tail` / `date`) so the UI can bold the direction and tint the
- * guessed date. `null` when the direction or the date is unknown.
+ * Direction sentence under the release-date row. It stays generic — the bound
+ * ("older than 2021-06-18") is only spelled out once a known clue is
+ * contradicted, which the UI learns from the conflicts, not from this
+ * comparison.
  */
-export function releaseNoteParts(direction, date) {
-  if (!direction || date == null || date === '') return null;
-  return { lead: 'target is ', direction, tail: ' than ', date: String(date) };
-}
-
-function releaseNote(direction, guessDate) {
-  const parts = releaseNoteParts(direction, guessDate);
-  if (!parts) return { note: direction ? `target is ${direction}` : undefined, noteBold: direction };
-  return {
-    note: `${parts.lead}${parts.direction}${parts.tail}${parts.date}`,
-    noteBold: direction,
-    noteParts: parts,
-  };
+function releaseNote(direction) {
+  if (!direction) return {};
+  return { note: `target is ${direction}`, noteBold: direction, noteLead: 'target is ' };
 }
 
 function statLine(key, label, guessCard, targetCard) {
@@ -703,7 +694,7 @@ export function compareCards(guess, target) {
     line(
       'released', 'First released',
       [{ text: guess.released_at, status: sameDate ? 'correct' : 'wrong' }],
-      releaseNote(direction, guess.released_at)
+      releaseNote(direction)
     )
   );
 

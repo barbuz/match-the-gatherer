@@ -376,25 +376,20 @@ describe('compareCards — rarity', () => {
 });
 
 describe('compareCards — release date and oracle text', () => {
-  it('same release date is correct; otherwise wrong with direction note', () => {
+  it('same release date is correct; otherwise wrong with a direction note', () => {
     const target = makeCard({ released_at: '2020-06-01' });
-    const older = compareCards(makeCard({ name: 'A', released_at: '2019-01-01' }), target);
-    const row = byKey(older, 'released');
-    expect(row).toMatchObject({ status: 'wrong', note: 'target is newer than 2019-01-01', noteBold: 'newer' });
-    // The component styles `noteParts`; it must recompose into the plain note.
-    expect(`${row.noteParts.lead}${row.noteParts.direction}${row.noteParts.tail}${row.noteParts.date}`).toBe(row.note);
+    const row = byKey(compareCards(makeCard({ name: 'A', released_at: '2019-01-01' }), target), 'released');
+    expect(row).toMatchObject({ status: 'wrong', note: 'target is newer', noteBold: 'newer', noteLead: 'target is ' });
+    // The note stays generic: the bound is only named when a clue is broken.
+    expect(`${row.noteLead}${row.noteBold}`).toBe(row.note);
 
-    const newer = compareCards(makeCard({ name: 'A', released_at: '2021-06-18' }), makeCard({ name: 'T', released_at: '1993-08-05' }));
-    expect(byKey(newer, 'released')).toMatchObject({
-      status: 'wrong',
-      note: 'target is older than 2021-06-18',
-      noteParts: { direction: 'older', date: '2021-06-18' },
-    });
+    const newer = byKey(compareCards(makeCard({ name: 'A', released_at: '2021-06-18' }), makeCard({ name: 'T', released_at: '1993-08-05' })), 'released');
+    expect(newer).toMatchObject({ status: 'wrong', note: 'target is older', noteBold: 'older' });
 
     const same = byKey(compareCards(makeCard({ name: 'A', released_at: '2020-06-01' }), target), 'released');
     expect(same.status).toBe('correct');
     expect(same.note).toBeUndefined();
-    expect(same.noteParts).toBeUndefined();
+    expect(same.noteBold).toBeUndefined();
   });
 
   it('oracle text compares rules clauses as verbatim tokens', () => {

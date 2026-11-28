@@ -16,6 +16,12 @@
   // clue's values the guess lacks (drawn as dashed chips).
   $: conflictMarks = conflictTokens(entry.results, conflicts);
 
+  // A release-date clue that this guess contradicts names its bound
+  // ("older than 2018-04-27"); a satisfied one stays generic.
+  $: releasedBound = conflicts.find((c) => c.kind === 'excluded' && c.hint?.kind === 'released')?.hint ?? null;
+  // Once an earlier guess pinned the exact date, the dashed chip says it all.
+  $: exactReleaseKnown = (conflictMarks.released?.missing ?? []).some((m) => m.kind === 'released');
+
   // `$symbols` is just a reactivity anchor — when the map finishes downloading
   // the store updates and any already-rendered mana rows re-render as images.
 
@@ -102,13 +108,13 @@
             {/if}
           {/each}
         </span>
-        {#if r.noteParts}
+        {#if r.noteBold && !exactReleaseKnown}
           <span class="note"
-            >{r.noteParts.lead}<strong>{r.noteParts.direction}</strong>{r.noteParts.tail}<span
-              class="note-date">{r.noteParts.date}</span
-            ></span
+            >{r.noteLead}<strong>{r.noteBold}</strong>{#if releasedBound} than <span class="note-date"
+                >{releasedBound.value}</span
+              >{/if}</span
           >
-        {:else if r.note}
+        {:else if r.note && !exactReleaseKnown}
           <span class="note">{r.note}</span>
         {/if}
       </div>
@@ -356,6 +362,5 @@
 
   .note-date {
     color: var(--warn-fg);
-    font-style: normal;
   }
 </style>
